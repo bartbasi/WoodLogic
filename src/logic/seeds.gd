@@ -53,6 +53,28 @@ static func day_number(year: int, month: int, day: int) -> int:
 	return _days_from_civil(year, month, day) - _days_from_civil(2000, 1, 1)
 
 
+## The date (as yyyymmdd) of a day number from day_number, by integer arithmetic only.
+static func date_of_day(days: int) -> int:
+	# Howard Hinnant's civil_from_days, counted from 1970-01-01.
+	var z := days + _days_from_civil(2000, 1, 1) + 719468
+	@warning_ignore("integer_division")
+	var era := (z if z >= 0 else z - 146096) / 146097
+	var doe := z - era * 146097
+	@warning_ignore("integer_division")
+	var yoe := (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365
+	var y := yoe + era * 400
+	@warning_ignore("integer_division")
+	var doy := doe - (365 * yoe + yoe / 4 - yoe / 100)
+	@warning_ignore("integer_division")
+	var mp := (5 * doy + 2) / 153
+	@warning_ignore("integer_division")
+	var d := doy - (153 * mp + 2) / 5 + 1
+	var m := mp + 3 if mp < 10 else mp - 9
+	if m <= 2:
+		y += 1
+	return y * 10000 + m * 100 + d
+
+
 ## Howard Hinnant's days_from_civil: days since 1970-01-01 for a proleptic Gregorian date.
 static func _days_from_civil(y: int, m: int, d: int) -> int:
 	if m <= 2:

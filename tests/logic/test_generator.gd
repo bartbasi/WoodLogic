@@ -59,14 +59,30 @@ func test_g7_relaxed_streams_and_the_daily() -> void:
 		check(range_ok, "relaxed %s tiers stay in the band" % band)
 	var recent_days: Array[String] = []
 	for day: int in 400:
-		var date := _date_of(Seeds.day_number(2026, 10, 19) + day)
+		var date := Seeds.date_of_day(Seeds.day_number(2026, 10, 19) + day)
 		var id := _id(LevelData.DAILY, date, "")
 		check(not recent_days.has(id), "daily %d repeats %s" % [date, id])
 		recent_days.append(id)
 		if recent_days.size() > Tuning.recent_blueprints_excluded:
 			recent_days.pop_front()
-	check_eq(_date_of(Seeds.day_number(2026, 10, 19)), 20261019, "the date walk")
-	check_eq(_date_of(Seeds.day_number(2028, 3, 1)), 20280301, "the date walk over a leap day")
+	check_eq(_date_of(Seeds.day_number(2028, 3, 1)), Seeds.date_of_day(Seeds.day_number(2028, 3, 1)), "date_of_day agrees with a walk through the months")
+
+
+func test_6_6_relaxed_bands_give_each_tier_its_share() -> void:
+	_ready_catalog()
+	for band: String in Tuning.BANDS:
+		var span: Vector2i = Tuning.relaxed[band]
+		var count := {}
+		var n := 600
+		for i: int in n:
+			var t := Generator.relaxed_tier(band, i)
+			count[t] = int(count.get(t, 0)) + 1
+			var b := Generator.blueprint_for(LevelData.RELAXED, i, band)
+			check(LevelCatalog.suits[t - 1].has(b), "relaxed %s %d: the blueprint suits its tier" % [band, i])
+		for t: int in range(span.x, span.y + 1):
+			var share := float(count.get(t, 0)) / n
+			check(share >= 0.8 / (span.y - span.x + 1), "relaxed %s: tier %d gets %.0f%% of levels" % [band, t, 100.0 * share])
+		print("        relaxed %s: %s" % [band, str(count)])
 
 
 func test_6_3_plans_follow_the_sawtooth_daily_and_bands() -> void:
@@ -159,6 +175,34 @@ func test_fallback_files_hold_good_levels_for_every_tier() -> void:
 			check(r.fewest_tray_uses >= spec.tray_uses.x and r.fewest_tray_uses <= spec.tray_uses.y, "%s: G3" % level.id)
 			check_eq(_replay(level, stored.solve.solution), r.fewest_tray_uses, "%s: the stored solution replays" % level.id)
 			check_eq(r.novice_won, stored.solve.novice_won, "%s: the stored novice result" % level.id)
+
+
+func test_fallbacks_avoid_their_neighbors_and_are_relabeled() -> void:
+	_ready_catalog()
+	# Levels that fall back: their stored level's blueprint is not planned within five levels,
+	# and the relabeled colors keep the stored solve.
+	for n: int in range(100, 241):
+		var plan := Generator.plan_for(LevelData.NUMBERED, n, "")
+		var g := GeneratedLevel.new()
+		Generator._fall_back(plan, g)
+		var near := Generator.neighbor_blueprints(LevelData.NUMBERED, n, "")
+		var pool_ids := PackedStringArray()
+		for stored: GeneratedLevel in LevelCatalog.fallback[g.level.tier - 1]:
+			if not pool_ids.has(stored.level.blueprint_id):
+				pool_ids.append(stored.level.blueprint_id)
+		var avoidable := false
+		for id: String in pool_ids:
+			avoidable = avoidable or not near.has(id)
+		if avoidable:
+			check(not near.has(g.level.blueprint_id), "level %d: its fallback %s is not planned within five levels" % [n, g.level.blueprint_id])
+		check_eq(_replay(g.level, g.solve.solution), g.solve.fewest_tray_uses, "level %d: the relabeled fallback keeps its solve" % n)
+	var a := Generator.relabeled(LevelCatalog.fallback[7][0].level, 1)
+	var b := Generator.relabeled(LevelCatalog.fallback[7][0].level, 2)
+	check(a.screw_colors != b.screw_colors, "different seeds relabel differently")
+	var r := Solver.solve(a, 400000)
+	check_eq(r.fewest_tray_uses, LevelCatalog.fallback[7][0].solve.fewest_tray_uses, "relabeling keeps the fewest tray uses")
+	check_eq(r.novice_won, LevelCatalog.fallback[7][0].solve.novice_won, "and the novice result")
+	check_eq(r.trap, LevelCatalog.fallback[7][0].solve.trap, "and the trap measure")
 
 
 func test_deal_gives_distinct_blueprints_from_one_half() -> void:

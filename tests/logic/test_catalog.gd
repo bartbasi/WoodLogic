@@ -58,11 +58,34 @@ func test_json_files_lists_json_and_remapped_json_sorted() -> void:
 	DirAccess.remove_absolute(TEMP_DIR)
 
 
+func test_a_broken_fallback_file_makes_loading_fail() -> void:
+	LevelCatalog.load_all()
+	DirAccess.make_dir_recursive_absolute(TEMP_DIR)
+	var good := FileAccess.get_file_as_string(LevelCatalog.FALLBACK_DIR.path_join("tier-01.json"))
+	for pair: Array in [["tier-01.json", good], ["tier-02.json", "{ broken"]]:
+		var f := FileAccess.open(TEMP_DIR.path_join(pair[0]), FileAccess.WRITE)
+		f.store_string(pair[1])
+		f.close()
+	var errors := PackedStringArray()
+	var ok := LevelCatalog.read_fallback(TEMP_DIR, errors)
+	check(not ok and errors.size() == 1 and errors[0].contains("tier-02.json"), "a broken fallback file is reported: %s" % "; ".join(errors))
+	check(LevelCatalog.fallback[0].size() > 0, "the good file still loads")
+	check(LevelCatalog.reload_fallback(), "the shipped fallback files load again")
+	for name: String in DirAccess.get_files_at(TEMP_DIR):
+		DirAccess.remove_absolute(TEMP_DIR.path_join(name))
+	DirAccess.remove_absolute(TEMP_DIR)
+
+
 func test_fallback_file_reader_rejects_bad_files() -> void:
 	var errors := PackedStringArray()
 	check(LevelCatalog.parse_fallback("{", errors).is_empty() and not errors.is_empty(), "not JSON")
 	errors.clear()
-	check(LevelCatalog.parse_fallback('{"format": 1, "levels": [{"level": {}}]}', errors).is_empty() and not errors.is_empty(), "no solve")
+	check(LevelCatalog.parse_fallback('{"format": 1, "tier": 1, "levels": [{"level": {}}]}', errors).is_empty() and not errors.is_empty(), "no solve")
+	errors.clear()
+	var good := FileAccess.get_file_as_string(LevelCatalog.FALLBACK_DIR.path_join("tier-01.json"))
+	check(LevelCatalog.parse_fallback(good.replace('"tier": 1,', '"tier": 2,'), errors).is_empty() and not errors.is_empty(), "levels of another tier than the file's")
+	errors.clear()
+	check(not LevelCatalog.parse_fallback(good, errors).is_empty() and errors.is_empty(), "the shipped file reads")
 
 
 func test_prefetcher_makes_levels_on_worker_threads() -> void:
@@ -84,6 +107,25 @@ func test_prefetcher_makes_levels_on_worker_threads() -> void:
 	check(p.take(key) == null, "taken once")
 	check(not p.is_ready(key), "no longer ready")
 	p.shutdown()
+
+
+func test_prefetcher_urgent_requests_are_made_too() -> void:
+	LevelCatalog.load_all()
+	var p := LevelPrefetcher.new()
+	var later: Array[String] = []
+	for n: int in range(30, 34):
+		later.append(p.request(LevelData.NUMBERED, n, ""))
+	var now := p.request(LevelData.NUMBERED, 41, "", true)
+	check_eq(now, "numbered:41", "the key")
+	var started := Time.get_ticks_msec()
+	while not p.is_ready(now) and Time.get_ticks_msec() - started < 60000:
+		p.poll()
+		await tree.process_frame
+	check(p.is_ready(now), "the urgent level is ready")
+	check(p.take(now).level.number == 41, "and is level 41")
+	p.shutdown()
+	for key: String in later:
+		check(p.is_ready(key), "%s done after shutdown" % key)
 
 
 func test_prefetcher_shutdown_waits_for_running_jobs() -> void:

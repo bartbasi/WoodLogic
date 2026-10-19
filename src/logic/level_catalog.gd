@@ -16,6 +16,8 @@ const COVER_PER_TRAY_USE := 2
 const TUTORIAL_STATES := 100000
 
 static var _loaded := false
+## What the first load_all() returned; later calls return it again.
+static var _load_ok := false
 ## Blueprints sorted by id.
 static var blueprints: Array[LevelData] = []
 ## Tutorial level n at index n - 1.
@@ -29,6 +31,8 @@ static var halves: Array[PackedInt32Array] = []
 ## Tuning.recent_blueprints_excluded + 1, which G7 needs for a one a day cycle) with the
 ## most covered blueprints whose screws and layers suit the tier.
 static var daily_pool := PackedInt32Array()
+## Per Relaxed band: its schedule of [blueprints, tiers] (Generator.relaxed_schedule).
+static var relaxed_schedule := {}
 ## Per tier (index tier - 1): stored fallback levels, each with its stored solve.
 static var fallback: Array[Array] = []
 
@@ -38,11 +42,11 @@ static func is_loaded() -> bool:
 
 
 ## Reads tuning, blueprints, tutorial levels and fallback levels. Main thread only, once at
-## startup (later calls do nothing). Logs and returns false if anything is broken; what did
-## load stays usable.
+## startup; later calls do nothing and return the first call's answer. Logs and returns false
+## if anything is broken; what did load stays usable.
 static func load_all() -> bool:
 	if _loaded:
-		return true
+		return _load_ok
 	var ok := Tuning.load_file()
 	blueprints.clear()
 	for path: String in json_files(BLUEPRINT_DIR):
@@ -61,9 +65,17 @@ static func load_all() -> bool:
 			ok = false
 			continue
 		tutorials.append(level)
-	_load_fallback()
+	if not reload_fallback():
+		ok = false
 	_sort_blueprints()
+	relaxed_schedule.clear()
+	for band: String in Tuning.BANDS:
+		relaxed_schedule[band] = Generator.relaxed_schedule(band)
+		if (relaxed_schedule[band][0] as PackedInt32Array).is_empty():
+			push_error("no Relaxed schedule for the %s band (too few blueprints for G7)" % band)
+			ok = false
 	_loaded = true
+	_load_ok = ok
 	return ok
 
 
@@ -122,25 +134,37 @@ static func read_text(path: String) -> String:
 
 
 ## Reads the fallback files again (for tools/levels after it writes them). Main thread only,
-## with no level being made.
-static func reload_fallback() -> void:
-	_load_fallback()
+## with no level being made. False (and logged) if a file is broken.
+static func reload_fallback(dir: String = FALLBACK_DIR) -> bool:
+	var errors := PackedStringArray()
+	var ok := read_fallback(dir, errors)
+	for e: String in errors:
+		push_error(e)
+	return ok
 
 
 ## Fallback files: src/logic/fallback/tier-<t>.json, each
-## {"format": 1, "tier": t, "levels": [{"level": {...}, "solve": {...}}, ...]}.
-static func _load_fallback() -> void:
+## {"format": 1, "tier": t, "levels": [{"level": {...}, "solve": {...}}, ...]}. Replaces the
+## loaded fallback levels with the folder's. False if any file is broken (its problems go in
+## errors, quietly); the good files still load.
+static func read_fallback(dir: String, errors: PackedStringArray) -> bool:
+	var ok := true
 	fallback.clear()
 	for t: int in Tuning.tiers.size():
 		fallback.append([])
-	for path: String in json_files(FALLBACK_DIR):
-		var errors := PackedStringArray()
-		var list := parse_fallback(read_text(path), errors)
-		if not errors.is_empty():
-			push_error("fallback file %s: %s" % [path, "; ".join(errors)])
+	for path: String in json_files(dir):
+		var file_errors := PackedStringArray()
+		var list := parse_fallback(read_text(path), file_errors)
+		for g: GeneratedLevel in list:
+			if g.level.tier < 1 or g.level.tier > fallback.size():
+				file_errors.append("%s has tier %d" % [g.level.id, g.level.tier])
+		if not file_errors.is_empty():
+			errors.append("fallback file %s: %s" % [path, "; ".join(file_errors)])
+			ok = false
 			continue
 		for g: GeneratedLevel in list:
 			fallback[g.level.tier - 1].append(g)
+	return ok
 
 
 ## Reads a fallback file. Quiet: problems go in errors.
@@ -152,9 +176,10 @@ static func parse_fallback(text: String, errors: PackedStringArray) -> Array[Gen
 		return out
 	var d: Dictionary = json.data
 	var levels: Variant = d.get("levels")
-	if not (d.get("format") is float and float(d.get("format")) == 1.0 and levels is Array):
-		errors.append("format 1 with a list of levels expected")
+	if not (d.get("format") is float and float(d.get("format")) == 1.0 and levels is Array and d.get("tier") is float):
+		errors.append("format 1 with a tier and a list of levels expected")
 		return out
+	var file_tier := int(d["tier"])
 	for item: Variant in levels:
 		if not (item is Dictionary and (item as Dictionary).get("level") is Dictionary and (item as Dictionary).get("solve") is Dictionary):
 			errors.append("each entry needs level and solve")
@@ -177,6 +202,9 @@ static func parse_fallback(text: String, errors: PackedStringArray) -> Array[Gen
 		if r.solution.size() != level.screw_count():
 			errors.append("the stored solution must have one tap per screw")
 		if not errors.is_empty():
+			return out
+		if level.tier != file_tier:
+			errors.append("%s has tier %d in a tier %d file" % [level.id, level.tier, file_tier])
 			return out
 		var g := GeneratedLevel.new()
 		g.level = level

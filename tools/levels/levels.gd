@@ -19,7 +19,8 @@ extends SceneTree
 const GOLDEN_PATH := "res://tests/logic/golden_levels.json"
 const FALLBACK_DIR := "res://src/logic/fallback"
 const FALLBACK_ATTEMPTS := 160
-## The golden set: numbered 9 to 40, three dailies, two Relaxed levels per band.
+## The golden set (see golden_requests): three dailies and two Relaxed levels per band, besides
+## numbered levels.
 const GOLDEN_DAILIES := [20261019, 20261020, 20270101]
 const GOLDEN_RELAXED := 2
 ## Pixels per grid unit in the pictures.
@@ -43,9 +44,10 @@ func _main(args: PackedStringArray) -> int:
 	var failed := 0
 	if opt["fallback"] > 0:
 		failed += _write_fallback(opt["fallback"])
-		LevelCatalog.reload_fallback()
-	if opt["golden"]:
-		_write_golden()
+		if not LevelCatalog.reload_fallback():
+			failed += 1
+	if opt["golden"] and not _write_golden():
+		failed += 1
 	var requests := _requests(opt)
 	var rows: Array[Dictionary] = []
 	var started := Time.get_ticks_msec()
@@ -162,6 +164,7 @@ func _row(req: Array, g: GeneratedLevel) -> Dictionary:
 		"fingerprint": level.fingerprint(),
 		"rejections": g.rejections(),
 		"pressure": g.pressure,
+		"g5": _first_tap_fits(level),
 	}
 
 
@@ -219,14 +222,17 @@ func _report(rows: Array[Dictionary], opt: Dictionary, total_ms: int) -> String:
 	for r: Dictionary in rows:
 		unsolved += 0 if r["solved"] else 1
 		repeats += 0 if r["repeat_ok"] else 1
-	lines.append("Solved with a complete search: %d of %d.%s" % [rows.size() - unsolved, rows.size(), (" Made twice: %d differed." % repeats) if opt["repeat"] else ""])
+	var g5_missing := 0
+	for r: Dictionary in rows:
+		g5_missing += 0 if r["g5"] else 1
+	lines.append("Solved with a complete search: %d of %d.%s First tap fits a box (G5): %d of %d." % [rows.size() - unsolved, rows.size(), (" Made twice: %d differed." % repeats) if opt["repeat"] else "", rows.size() - g5_missing, rows.size()])
 	lines.append("")
 	lines.append("## Levels")
 	lines.append("")
-	lines.append("| Level | Kind | Tier | Blueprint | Variation | Screws | Colors | Layers | Covered % | Fewest tray uses | Tray par | Novice | Trap | Attempts | Fallback | Generation ms | Solve ms | States | Turned down | Picture |")
-	lines.append("|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|")
+	lines.append("| Level | Kind | Tier | Blueprint | Variation | Screws | Colors | Layers | Covered % | First tap fits a box (G5) | Fewest tray uses | Tray par | Novice | Trap | Attempts | Fallback | Generation ms | Solve ms | States | Turned down | Picture |")
+	lines.append("|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|")
 	for r: Dictionary in rows:
-		lines.append("| %s | %s | %d | %s | %s | %d | %d | %d | %d | %d | %d | %s | %.2f | %d | %s | %d | %d | %d | %s | %s |" % [r["key"], r["kind"], r["tier"], r["blueprint"], r["variation"], r["screws"], r["colors"], r["layers"], r["covered"], r["fewest"], r["tray_par"], r["novice"], r["trap"], r["attempts"], "yes" if r["fell_back"] else "", r["gen_ms"], r["solve_ms"], r["states"], r["rejections"], "png/%s.png" % str(r["key"]).replace(":", "-")])
+		lines.append("| %s | %s | %d | %s | %s | %d | %d | %d | %d | %s | %d | %d | %s | %.2f | %d | %s | %d | %d | %d | %s | %s |" % [r["key"], r["kind"], r["tier"], r["blueprint"], r["variation"], r["screws"], r["colors"], r["layers"], r["covered"], "yes" if r["g5"] else "NO", r["fewest"], r["tray_par"], r["novice"], r["trap"], r["attempts"], "yes" if r["fell_back"] else "", r["gen_ms"], r["solve_ms"], r["states"], r["rejections"], "png/%s.png" % str(r["key"]).replace(":", "-")])
 	return "\n".join(lines) + "\n"
 
 
@@ -244,6 +250,15 @@ func _median(sorted: PackedInt32Array) -> int:
 
 func _pct(sorted: PackedInt32Array, p: float) -> int:
 	return sorted[mini(sorted.size() - 1, int(sorted.size() * p))] if not sorted.is_empty() else 0
+
+
+## G5: at the start some free screw fits an open box.
+func _first_tap_fits(level: LevelData) -> bool:
+	var state := PlayState.start(level)
+	for s: int in level.screw_count():
+		if state.is_free(s) and state.destination(s).x == PlayState.BOX:
+			return true
+	return false
 
 
 ## A small picture of the level as it starts: planks back to front, then the screws (covered
@@ -335,7 +350,7 @@ func _write_fallback(count: int) -> int:
 					"fewest": g.solve.fewest_tray_uses,
 					"states": g.solve.states,
 					"novice_won": g.solve.novice_won,
-					"trap": snappedf(g.solve.trap, 0.001),
+					"trap": g.solve.trap,
 					"solution": Array(g.solve.solution),
 					"variation": g.variation,
 				},
@@ -353,20 +368,46 @@ func _write_fallback(count: int) -> int:
 	return missing
 
 
-func _write_golden() -> void:
+## Writes the golden fingerprints. Refuses if the file already holds this GENERATOR_VERSION:
+## changed fingerprints at the same version mean levels changed without a new version.
+func _write_golden() -> bool:
+	var existing: Variant = JSON.parse_string(FileAccess.get_file_as_string(GOLDEN_PATH)) if FileAccess.file_exists(GOLDEN_PATH) else null
+	if existing is Dictionary and int((existing as Dictionary).get("generator_version", 0)) == Generator.GENERATOR_VERSION:
+		print("Not writing %s: it already holds GENERATOR_VERSION %d. Raise the version first if the levels are meant to change." % [GOLDEN_PATH, Generator.GENERATOR_VERSION])
+		return false
 	var levels := []
 	for req: Array in golden_requests():
 		var g := LevelCatalog.get_level(req[0], req[1], req[2])
-		levels.append({"key": LevelPrefetcher.key_for(req[0], req[1], req[2]), "fingerprint": g.level.fingerprint()})
+		levels.append({"key": LevelPrefetcher.key_for(req[0], req[1], req[2]), "fingerprint": g.level.fingerprint(), "tier": g.level.tier, "fell_back": g.fell_back, "pressure": g.pressure})
 	var file := FileAccess.open(GOLDEN_PATH, FileAccess.WRITE)
-	file.store_string(JSON.stringify({"generator_version": Generator.GENERATOR_VERSION, "levels": levels}, "  ") + "\n")
+	file.store_string(JSON.stringify({"generator_version": Generator.GENERATOR_VERSION, "levels": levels}, "  ") + "
+")
 	file.close()
 	print("Wrote %s (%d levels)." % [GOLDEN_PATH, levels.size()])
+	return true
 
 
-static func golden_requests() -> Array[Array]:
+## Numbered 9 to 40, a spread of 100 to 160 (tiers 7 to 10, with deep openings, and the first
+## levels there that fall back), three dailies and two Relaxed levels per band.
+func golden_requests() -> Array[Array]:
 	var out: Array[Array] = []
 	for n: int in range(9, 41):
+		out.append([LevelData.NUMBERED, n, ""])
+	var picked := PackedInt32Array([104, 105, 115, 155, 160])
+	var fallbacks := 0
+	var deep := 0
+	for n: int in range(100, 161):
+		if fallbacks >= 2 and deep >= 1:
+			break
+		var g := LevelCatalog.get_level(LevelData.NUMBERED, n, "")
+		if g.fell_back and fallbacks < 2 and not picked.has(n):
+			picked.append(n)
+			fallbacks += 1
+		elif g.pressure >= 2 and g.pressure % 2 == 0 and deep < 1 and not picked.has(n):
+			picked.append(n)
+			deep += 1
+	picked.sort()
+	for n: int in picked:
 		out.append([LevelData.NUMBERED, n, ""])
 	for d: int in GOLDEN_DAILIES:
 		out.append([LevelData.DAILY, d, ""])

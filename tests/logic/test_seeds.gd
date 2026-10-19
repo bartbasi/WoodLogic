@@ -30,12 +30,12 @@ func test_seeds_pinned_values() -> void:
 	check_eq(Seeds.mix(0, 0), _mix_reference(0, 0), "mix(0, 0) matches the reference steps")
 	check_eq(Seeds.mix(123456789, 987654321), _mix_reference(123456789, 987654321), "mix matches the reference steps")
 	check_eq(Seeds.numbered(9), Seeds.mix(Seeds.mix(Seeds.mix(Seeds.NUMBERED, Generator.GENERATOR_VERSION), 9), 0), "numbered(9) is built from mix")
-	# Values worked out separately (a Python copy of the hash) for GENERATOR_VERSION 1.
-	if Generator.GENERATOR_VERSION == 1:
-		check_eq(Seeds.numbered(9), 484898590, "numbered(9)")
-		check_eq(Seeds.numbered(100), 1905511875, "numbered(100)")
-		check_eq(Seeds.daily(2026, 10, 19), 425146653, "daily(2026, 10, 19)")
-		check_eq(Seeds.relaxed("easy", 7), 3003406026, "relaxed(easy, 7)")
+	# Values worked out separately (a Python copy of the hash) for GENERATOR_VERSION 2.
+	check_eq(Generator.GENERATOR_VERSION, 2, "these pins are for version 2 (work them out again for a new version)")
+	check_eq(Seeds.numbered(9), 691160853, "numbered(9)")
+	check_eq(Seeds.numbered(100), 4135155353, "numbered(100)")
+	check_eq(Seeds.daily(2026, 10, 19), 1142917782, "daily(2026, 10, 19)")
+	check_eq(Seeds.relaxed("easy", 7), 4234717603, "relaxed(easy, 7)")
 
 
 func test_day_number_counts_days_from_2000() -> void:
@@ -44,6 +44,17 @@ func test_day_number_counts_days_from_2000() -> void:
 	check_eq(Seeds.day_number(2026, 10, 19), 9788, "2026-10-19")
 	check_eq(Seeds.day_number(1999, 12, 31), -1, "1999-12-31")
 	check_eq(Seeds.day_number(2100, 3, 1), 36584, "2100-03-01 (2100 is not a leap year)")
+	for date: int in [20000101, 20000229, 20000301, 19991231, 20261019, 20270101, 20280229, 21000301, 19700101]:
+		@warning_ignore("integer_division")
+		var dn := Seeds.day_number(date / 10000, (date / 100) % 100, date % 100)
+		check_eq(Seeds.date_of_day(dn), date, "date_of_day undoes day_number for %d" % date)
+	var last := Seeds.date_of_day(-400)
+	for dn: int in range(-399, 40000):
+		var date := Seeds.date_of_day(dn)
+		if date <= last:
+			check(false, "dates rise day by day (%d after %d)" % [date, last])
+			break
+		last = date
 
 
 ## The hash written out step by step, to pin Seeds.mix.

@@ -21,7 +21,7 @@ extends RefCounted
 ##
 ## Every number here counts toward GENERATOR_VERSION: changing one changes levels.
 
-const GENERATOR_VERSION := 1
+const GENERATOR_VERSION := 2
 ## Seed purposes for Seeds.derive.
 const DEAL := 11
 const VARY := 12
@@ -29,6 +29,10 @@ const COLOR := 13
 const TIER := 14
 const PICK := 15
 const DAILY_ORDER := 16
+const SCHEDULE := 17
+const RELABEL := 18
+## Length of a Relaxed band's schedule, in levels.
+const RELAXED_SCHEDULE := 60
 const FALLBACK_STREAM := 0x66616C6C
 const VARIATIONS := 12
 const COLORINGS := 5
@@ -132,30 +136,79 @@ static func plan_for(kind: int, number: int, band: String) -> Plan:
 	return plan
 
 
-## The tier of a Relaxed level (GDD 6.6): a seeded pick among the band's tiers that its
-## blueprint suits.
+## The tier of a Relaxed level (GDD 6.6), from the band's schedule (see relaxed_schedule).
 static func relaxed_tier(band: String, index: int) -> int:
-	var span: Vector2i = Tuning.relaxed.get(band, Vector2i(1, 3))
-	var b := blueprint_for(LevelData.RELAXED, index, band)
-	var options := PackedInt32Array()
-	for t: int in range(span.x, span.y + 1):
-		if b >= 0 and LevelCatalog.suits[t - 1].has(b):
-			options.append(t)
-	if options.is_empty():
+	var schedule: Array = LevelCatalog.relaxed_schedule.get(band, [])
+	if schedule.is_empty() or (schedule[1] as PackedInt32Array).is_empty():
+		var span: Vector2i = Tuning.relaxed.get(band, Vector2i(1, 3))
 		return span.x
-	return options[Seeds.derive(Seeds.relaxed(band, index), TIER, 0) % options.size()]
+	var tiers: PackedInt32Array = schedule[1]
+	return tiers[posmod(index, tiers.size())]
 
 
-## The blueprints of a Relaxed band: every blueprint that suits one of its tiers, by index.
-static func relaxed_pool(band: String) -> PackedInt32Array:
+## A Relaxed band's schedule, built once by LevelCatalog.load_all(): [blueprints, tiers], one
+## entry per stream index, repeating every RELAXED_SCHEDULE levels. Built by a seeded walk:
+## at each index the tier picked so far the least often comes first (a seeded tie break, so
+## every tier of the band gets its share), then the blueprint for that tier used the least
+## that is not among the last R; a tier with no such blueprint gives way to the next. The walk
+## is kept only if it also holds G7 where the schedule wraps round, else the next seed is
+## tried.
+static func relaxed_schedule(band: String) -> Array:
 	var span: Vector2i = Tuning.relaxed.get(band, Vector2i(1, 3))
-	var pool := PackedInt32Array()
-	for t: int in range(span.x, span.y + 1):
-		for b: int in LevelCatalog.suits[t - 1]:
-			if not pool.has(b):
-				pool.append(b)
-	pool.sort()
-	return pool
+	var r := maxi(Tuning.recent_blueprints_excluded, 1)
+	var length := RELAXED_SCHEDULE
+	for attempt: int in 64:
+		var rng := RandomNumberGenerator.new()
+		rng.seed = Seeds.derive(Seeds.relaxed(band, -1), SCHEDULE, attempt)
+		var blueprints := PackedInt32Array()
+		var tiers := PackedInt32Array()
+		var tier_count := {}
+		var use_count := {}
+		var ok := true
+		for i: int in length:
+			var order: Array[int] = []
+			for t: int in range(span.x, span.y + 1):
+				order.append(t)
+			var ties := {}
+			for t: int in order:
+				ties[t] = rng.randi()
+			order.sort_custom(func(a: int, b: int) -> bool:
+				var ca: int = tier_count.get(a, 0)
+				var cb: int = tier_count.get(b, 0)
+				return ca < cb if ca != cb else int(ties[a]) < int(ties[b]))
+			var chosen := -1
+			var chosen_tier := -1
+			for t: int in order:
+				var best := -1
+				var best_key := 0
+				for b: int in LevelCatalog.suits[t - 1]:
+					var recent := false
+					for k: int in range(maxi(0, i - r), i):
+						recent = recent or blueprints[k] == b
+					if recent:
+						continue
+					var key: int = int(use_count.get(b, 0)) * 1000000 + rng.randi_range(0, 999999)
+					if best < 0 or key < best_key:
+						best = b
+						best_key = key
+				if best >= 0:
+					chosen = best
+					chosen_tier = t
+					break
+			if chosen < 0:
+				ok = false
+				break
+			blueprints.append(chosen)
+			tiers.append(chosen_tier)
+			tier_count[chosen_tier] = int(tier_count.get(chosen_tier, 0)) + 1
+			use_count[chosen] = int(use_count.get(chosen, 0)) + 1
+		if ok:
+			for i: int in length:
+				for k: int in range(1, r + 1):
+					ok = ok and blueprints[i] != blueprints[(i + k) % length]
+		if ok:
+			return [blueprints, tiers]
+	return [PackedInt32Array(), PackedInt32Array()]
 
 
 ## G7 as a pure function of (kind, number, version), with no other level generated.
@@ -168,10 +221,10 @@ static func relaxed_pool(band: String) -> PackedInt32Array:
 ## in a row span at most two blocks: within a block they differ, and two neighboring blocks
 ## draw from different halves. Hence no blueprint repeats within R levels.
 ##
-## The daily walks one seeded order of LevelCatalog.daily_pool, one per day, and each Relaxed
-## band one seeded order of relaxed_pool(band), one per stream index; so they repeat only after
-## that many levels, which needs pools of at least R + 1 (the tests check the shipped data).
-## The numbered stream needs the halves because its tiers change from level to level.
+## The daily walks one seeded order of LevelCatalog.daily_pool, one per day, so it repeats only
+## after that many days, which needs a pool of at least R + 1. Each Relaxed band follows its
+## schedule (relaxed_schedule), which holds G7 by construction, wrap included. The tests check
+## both with the shipped data.
 static func blueprint_for(kind: int, number: int, band: String) -> int:
 	if kind == LevelData.DAILY:
 		var list := LevelCatalog.daily_pool
@@ -182,11 +235,11 @@ static func blueprint_for(kind: int, number: int, band: String) -> int:
 		var day := Seeds.day_number(number / 10000, (number / 100) % 100, number % 100)
 		return order[posmod(day, order.size())]
 	if kind == LevelData.RELAXED:
-		var pool := relaxed_pool(band)
-		if pool.is_empty():
+		var schedule: Array = LevelCatalog.relaxed_schedule.get(band, [])
+		if schedule.is_empty() or (schedule[0] as PackedInt32Array).is_empty():
 			return -1
-		var order := _shuffled(pool, Seeds.relaxed(band, -1))
-		return order[posmod(number, order.size())]
+		var blueprints: PackedInt32Array = schedule[0]
+		return blueprints[posmod(number, blueprints.size())]
 	var first := Tuning.tutorial_levels + 1
 	return _stream_pick(Seeds.mix(Seeds.NUMBERED, GENERATOR_VERSION), maxi(number - first, 0), func(i: int) -> int: return Tuning.tier_for_level(first + i))
 
@@ -728,6 +781,13 @@ static func build_fallback(tier: int, count: int, max_attempts: int) -> Array[Ge
 ## (solved and proven, but outside the tier's ranges). If there was no such try either, a
 ## stored fallback level of the nearest tier that has one. Only with no fallback files at all
 ## and no solved try does the level stay null (and an error is logged).
+##
+## A stored level is picked (seeded) among those whose blueprint is not planned for the R
+## levels either side in the same stream, so a fallback does not repeat its neighbors (a
+## neighbor that itself falls back can still match; that needs both to fall back). Its colors
+## are then relabeled by a seeded permutation, the same on screws and queue, so two levels that
+## use the same stored level look different while every rule outcome (and so the stored solve)
+## stays exactly the same.
 static func _fall_back(plan: Plan, out: GeneratedLevel) -> void:
 	var pool: Array = LevelCatalog.fallback[plan.tier - 1] if plan.tier >= 1 and plan.tier <= LevelCatalog.fallback.size() else []
 	if pool.is_empty() and out.closest != null:
@@ -743,8 +803,15 @@ static func _fall_back(plan: Plan, out: GeneratedLevel) -> void:
 	if pool.is_empty():
 		push_error("no fallback level for tier %d" % plan.tier)
 		return
-	var stored: GeneratedLevel = pool[Seeds.derive(plan.seed_value, PICK, 0) % pool.size()]
-	var level := stored.level
+	var nearby := neighbor_blueprints(plan.kind, plan.number, plan.band)
+	var choices: Array = []
+	for g: GeneratedLevel in pool:
+		if not nearby.has(g.level.blueprint_id):
+			choices.append(g)
+	if choices.is_empty():
+		choices = pool
+	var stored: GeneratedLevel = choices[Seeds.derive(plan.seed_value, PICK, 0) % choices.size()]
+	var level := relabeled(stored.level, Seeds.derive(plan.seed_value, RELABEL, 0))
 	var fallback_plan := Plan.new()
 	fallback_plan.kind = plan.kind
 	fallback_plan.number = plan.number
@@ -756,3 +823,51 @@ static func _fall_back(plan: Plan, out: GeneratedLevel) -> void:
 	out.solve = stored.solve
 	out.fell_back = true
 	out.variation = "fallback " + stored.variation
+
+
+## The blueprint ids planned for the R levels before and after this one in its stream (numbered
+## levels after the tutorial, days, or a Relaxed band's indices).
+static func neighbor_blueprints(kind: int, number: int, band: String) -> PackedStringArray:
+	var out := PackedStringArray()
+	var r := maxi(Tuning.recent_blueprints_excluded, 1)
+	for k: int in range(-r, r + 1):
+		if k == 0:
+			continue
+		var b := -1
+		match kind:
+			LevelData.DAILY:
+				@warning_ignore("integer_division")
+				var day := Seeds.day_number(number / 10000, (number / 100) % 100, number % 100) + k
+				b = blueprint_for(LevelData.DAILY, Seeds.date_of_day(day), "")
+			LevelData.RELAXED:
+				if number + k >= 0:
+					b = blueprint_for(LevelData.RELAXED, number + k, band)
+			_:
+				if number + k > Tuning.tutorial_levels:
+					b = blueprint_for(LevelData.NUMBERED, number + k, "")
+		if b >= 0 and not out.has(LevelCatalog.blueprints[b].id):
+			out.append(LevelCatalog.blueprints[b].id)
+	return out
+
+
+## The same level with its colors renamed by a seeded permutation of the colors it uses (on
+## screws and queue alike). Colors only matter by being equal or not, so every rule outcome is
+## unchanged.
+static func relabeled(level: LevelData, seed_value: int) -> LevelData:
+	var used := PackedInt32Array()
+	for c: int in level.queue:
+		if not used.has(c):
+			used.append(c)
+	used.sort()
+	var to := _shuffled(used, seed_value)
+	var map := {}
+	for i: int in used.size():
+		map[used[i]] = to[i]
+	var colors := PackedInt32Array()
+	for c: int in level.screw_colors:
+		colors.append(map[c])
+	var queue := PackedInt32Array()
+	for c: int in level.queue:
+		queue.append(map[c])
+	var errors := PackedStringArray()
+	return level.with_colors(colors, queue, errors)

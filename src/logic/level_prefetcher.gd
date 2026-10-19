@@ -34,7 +34,10 @@ static func key_for(kind: int, number: int, band: String) -> String:
 
 
 ## Starts making a level unless that key is already done or running. Returns the key.
-func request(kind: int, number: int, band: String) -> String:
+## urgent: the player is waiting for this one, so it goes on WorkerThreadPool as high
+## priority, ahead of low priority jobs that have not started. A job already running keeps
+## its priority; asking again with urgent while it runs changes nothing.
+func request(kind: int, number: int, band: String, urgent: bool = false) -> String:
 	var key := key_for(kind, number, band)
 	if _ready.has(key) or _tasks.has(key):
 		return key
@@ -43,7 +46,7 @@ func request(kind: int, number: int, band: String) -> String:
 	job.number = number
 	job.band = band
 	_jobs[key] = job
-	_tasks[key] = WorkerThreadPool.add_task(job.run, false, "WoodLogic level " + key)
+	_tasks[key] = WorkerThreadPool.add_task(job.run, urgent, "WoodLogic level " + key)
 	return key
 
 
