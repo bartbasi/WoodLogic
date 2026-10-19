@@ -380,8 +380,7 @@ func _write_golden() -> bool:
 		var g := LevelCatalog.get_level(req[0], req[1], req[2])
 		levels.append({"key": LevelPrefetcher.key_for(req[0], req[1], req[2]), "fingerprint": g.level.fingerprint(), "tier": g.level.tier, "fell_back": g.fell_back, "pressure": g.pressure})
 	var file := FileAccess.open(GOLDEN_PATH, FileAccess.WRITE)
-	file.store_string(JSON.stringify({"generator_version": Generator.GENERATOR_VERSION, "levels": levels}, "  ") + "
-")
+	file.store_string(JSON.stringify({"generator_version": Generator.GENERATOR_VERSION, "levels": levels}, "  ") + "\n")
 	file.close()
 	print("Wrote %s (%d levels)." % [GOLDEN_PATH, levels.size()])
 	return true

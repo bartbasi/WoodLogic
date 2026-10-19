@@ -5,6 +5,9 @@ extends TestCase
 
 const TEMP_DIR := "user://test_catalog_files"
 
+## Set while a test has replaced LevelCatalog's fallback levels; cleanup() reloads them.
+var _fallback_replaced := false
+
 
 func test_load_all_reads_tuning_blueprints_tutorials_and_fallbacks() -> void:
 	check(LevelCatalog.load_all(), "loads cleanly")
@@ -67,10 +70,12 @@ func test_a_broken_fallback_file_makes_loading_fail() -> void:
 		f.store_string(pair[1])
 		f.close()
 	var errors := PackedStringArray()
+	_fallback_replaced = true
 	var ok := LevelCatalog.read_fallback(TEMP_DIR, errors)
 	check(not ok and errors.size() == 1 and errors[0].contains("tier-02.json"), "a broken fallback file is reported: %s" % "; ".join(errors))
 	check(LevelCatalog.fallback[0].size() > 0, "the good file still loads")
 	check(LevelCatalog.reload_fallback(), "the shipped fallback files load again")
+	_fallback_replaced = false
 	for name: String in DirAccess.get_files_at(TEMP_DIR):
 		DirAccess.remove_absolute(TEMP_DIR.path_join(name))
 	DirAccess.remove_absolute(TEMP_DIR)
@@ -137,3 +142,13 @@ func test_prefetcher_shutdown_waits_for_running_jobs() -> void:
 	p.shutdown()
 	for key: String in keys:
 		check(p.is_ready(key) and not p.is_running(key), "%s is done after shutdown" % key)
+
+
+func cleanup() -> void:
+	if _fallback_replaced:
+		LevelCatalog.reload_fallback()
+		_fallback_replaced = false
+	for name: String in DirAccess.get_files_at(TEMP_DIR) if DirAccess.dir_exists_absolute(TEMP_DIR) else PackedStringArray():
+		DirAccess.remove_absolute(TEMP_DIR.path_join(name))
+	DirAccess.remove_absolute(TEMP_DIR)
+	await super()

@@ -21,7 +21,7 @@ extends RefCounted
 ##
 ## Every number here counts toward GENERATOR_VERSION: changing one changes levels.
 
-const GENERATOR_VERSION := 2
+const GENERATOR_VERSION := 3
 ## Seed purposes for Seeds.derive.
 const DEAL := 11
 const VARY := 12
@@ -750,7 +750,7 @@ static func build_fallback(tier: int, count: int, max_attempts: int) -> Array[Ge
 	var list := LevelCatalog.suits[tier - 1]
 	var used := PackedStringArray()
 	var stream := Seeds.mix(FALLBACK_STREAM, GENERATOR_VERSION)
-	for k: int in list.size() * 4:
+	for k: int in maxi(list.size() * 12, count * 8):
 		if out.size() >= count:
 			break
 		var b := list[k % list.size()]
@@ -782,9 +782,11 @@ static func build_fallback(tier: int, count: int, max_attempts: int) -> Array[Ge
 ## stored fallback level of the nearest tier that has one. Only with no fallback files at all
 ## and no solved try does the level stay null (and an error is logged).
 ##
-## A stored level is picked (seeded) among those whose blueprint is not planned for the R
-## levels either side in the same stream, so a fallback does not repeat its neighbors (a
-## neighbor that itself falls back can still match; that needs both to fall back). Its colors
+## A stored level is picked (seeded) among those whose blueprint's nearest planned use in the
+## same stream is farthest away: not within R levels either side when the pool allows, and
+## otherwise as far as it can be, so never next to a level of the same blueprint while another
+## blueprint is stored. (A neighbor that itself falls back can still match; that needs both
+## to fall back.) Its colors
 ## are then relabeled by a seeded permutation, the same on screws and queue, so two levels that
 ## use the same stored level look different while every rule outcome (and so the stored solve)
 ## stays exactly the same.
@@ -803,13 +805,19 @@ static func _fall_back(plan: Plan, out: GeneratedLevel) -> void:
 	if pool.is_empty():
 		push_error("no fallback level for tier %d" % plan.tier)
 		return
-	var nearby := neighbor_blueprints(plan.kind, plan.number, plan.band)
+	# Among the stored levels, those whose blueprint's nearest planned use is farthest away
+	# (R + 1 means not within R either side), then a seeded pick among them.
+	var nearest := neighbor_distances(plan.kind, plan.number, plan.band)
+	var far := maxi(Tuning.recent_blueprints_excluded, 1) + 1
+	var best := -1
 	var choices: Array = []
 	for g: GeneratedLevel in pool:
-		if not nearby.has(g.level.blueprint_id):
+		var d: int = nearest.get(g.level.blueprint_id, far)
+		if d > best:
+			best = d
+			choices = []
+		if d == best:
 			choices.append(g)
-	if choices.is_empty():
-		choices = pool
 	var stored: GeneratedLevel = choices[Seeds.derive(plan.seed_value, PICK, 0) % choices.size()]
 	var level := relabeled(stored.level, Seeds.derive(plan.seed_value, RELABEL, 0))
 	var fallback_plan := Plan.new()
@@ -828,25 +836,30 @@ static func _fall_back(plan: Plan, out: GeneratedLevel) -> void:
 ## The blueprint ids planned for the R levels before and after this one in its stream (numbered
 ## levels after the tutorial, days, or a Relaxed band's indices).
 static func neighbor_blueprints(kind: int, number: int, band: String) -> PackedStringArray:
-	var out := PackedStringArray()
+	return PackedStringArray(neighbor_distances(kind, number, band).keys())
+
+
+## For each blueprint planned within R levels either side of this one in its stream, how many
+## levels away its nearest planned use is (1 to R). Pure: only blueprint choices, no levels.
+static func neighbor_distances(kind: int, number: int, band: String) -> Dictionary:
+	var out := {}
 	var r := maxi(Tuning.recent_blueprints_excluded, 1)
-	for k: int in range(-r, r + 1):
-		if k == 0:
-			continue
-		var b := -1
-		match kind:
-			LevelData.DAILY:
-				@warning_ignore("integer_division")
-				var day := Seeds.day_number(number / 10000, (number / 100) % 100, number % 100) + k
-				b = blueprint_for(LevelData.DAILY, Seeds.date_of_day(day), "")
-			LevelData.RELAXED:
-				if number + k >= 0:
-					b = blueprint_for(LevelData.RELAXED, number + k, band)
-			_:
-				if number + k > Tuning.tutorial_levels:
-					b = blueprint_for(LevelData.NUMBERED, number + k, "")
-		if b >= 0 and not out.has(LevelCatalog.blueprints[b].id):
-			out.append(LevelCatalog.blueprints[b].id)
+	for distance: int in range(1, r + 1):
+		for k: int in [-distance, distance]:
+			var b := -1
+			match kind:
+				LevelData.DAILY:
+					@warning_ignore("integer_division")
+					var day := Seeds.day_number(number / 10000, (number / 100) % 100, number % 100) + k
+					b = blueprint_for(LevelData.DAILY, Seeds.date_of_day(day), "")
+				LevelData.RELAXED:
+					if number + k >= 0:
+						b = blueprint_for(LevelData.RELAXED, number + k, band)
+				_:
+					if number + k > Tuning.tutorial_levels:
+						b = blueprint_for(LevelData.NUMBERED, number + k, "")
+			if b >= 0 and not out.has(LevelCatalog.blueprints[b].id):
+				out[LevelCatalog.blueprints[b].id] = distance
 	return out
 
 

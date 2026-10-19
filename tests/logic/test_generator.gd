@@ -205,6 +205,37 @@ func test_fallbacks_avoid_their_neighbors_and_are_relabeled() -> void:
 	check_eq(r.trap, LevelCatalog.fallback[7][0].solve.trap, "and the trap measure")
 
 
+func test_a_fallback_is_never_next_to_its_own_blueprint_when_the_pool_allows() -> void:
+	_ready_catalog()
+	# For every numbered level from 9 to 400, every day of a year and 300 Relaxed levels per band,
+	# the fallback it would use: never the blueprint planned one level before or after while the
+	# pool has another, and always one whose nearest planned use is as far as the pool allows.
+	var requests: Array[Array] = []
+	for n: int in range(FIRST, 401):
+		requests.append([LevelData.NUMBERED, n, ""])
+	for day: int in 365:
+		requests.append([LevelData.DAILY, Seeds.date_of_day(Seeds.day_number(2026, 10, 19) + day), ""])
+	for band: String in Tuning.BANDS:
+		for i: int in 300:
+			requests.append([LevelData.RELAXED, i, band])
+	var bad := 0
+	for req: Array in requests:
+		var plan := Generator.plan_for(req[0], req[1], req[2])
+		var g := GeneratedLevel.new()
+		Generator._fall_back(plan, g)
+		var nearest := Generator.neighbor_distances(req[0], req[1], req[2])
+		var far := Tuning.recent_blueprints_excluded + 1
+		var best := 0
+		for stored: GeneratedLevel in LevelCatalog.fallback[g.level.tier - 1]:
+			best = maxi(best, int(nearest.get(stored.level.blueprint_id, far)))
+		var got := int(nearest.get(g.level.blueprint_id, far))
+		if got != best or (best >= 2 and got == 1):
+			bad += 1
+			if bad <= 5:
+				check(false, "%s: fallback %s is %d away from a planned use; the pool allows %d" % [LevelPrefetcher.key_for(req[0], req[1], req[2]), g.level.blueprint_id, got, best])
+	check_eq(bad, 0, "fallbacks closer to their own blueprint than the pool needs, of %d" % requests.size())
+
+
 func test_deal_gives_distinct_blueprints_from_one_half() -> void:
 	_ready_catalog()
 	for block: int in 400:

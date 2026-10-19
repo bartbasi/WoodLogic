@@ -303,7 +303,7 @@ milliseconds are measured only for reports.
   With `max_tray_uses` set (the tier's top count), the search stops once that count is
   passed and `over_cap` is true. `Solver.explore`, `Solver.search_only` and `Solver.measure`
   are for tests and tools only.
-- `Generator.GENERATOR_VERSION: int` (started at 1; 2 since Phase 2's review fixes).
+- `Generator.GENERATOR_VERSION: int` (started at 1; 3 since Phase 2's review fixes).
   `Generator.make(kind: int, number: int, band: String) -> GeneratedLevel`: `level`, `solve`,
   `attempts: int`, `fell_back: bool`, `gen_ms: int` (report only). It tries a fixed sequence
   of attempts derived from the seed, each solved with a fixed `max_states`, and falls back
@@ -341,12 +341,14 @@ milliseconds are measured only for reports.
   and stored as JSON in `src/logic/fallback/tier-NN.json` (up to 8 per tier, one per line;
   level-engine-dev; format in 3.5). When a level's attempts run out the order is: the tier's
   own stored levels, then the closest attempt that was solved, then a neighboring tier's
-  stored levels. A stored level is picked among those whose blueprint isn't planned for the
-  5 levels either side in the same stream, and its colors are relabeled by a permutation
-  seeded from the level's seed (the same map on screws and queue, so every rule outcome is
-  unchanged). Fallback levels are otherwise exempt from G7: two neighbors that both fall back
-  can still share a blueprint. `LevelCatalog.read_fallback(dir, errors) -> bool` reads them
-  quietly; a file that is broken or holds levels of another tier makes `load_all()` fail.
+  stored levels. A stored level is picked among those whose blueprint's nearest planned use in
+  the same stream is farthest away (beyond 5 either side whenever the pool allows;
+  `Generator.neighbor_distances(kind, number, band)` plans blueprints only and makes no
+  levels), and its colors are relabeled by a permutation seeded from the level's seed (the
+  same map on screws and queue, so every rule outcome is unchanged). Two neighbors that both
+  fall back can still share a blueprint. `LevelCatalog.read_fallback(dir, errors) -> bool`
+  reads them quietly; a file that is broken or holds levels of another tier makes
+  `load_all()` fail.
 - `LevelCatalog.load_all() -> bool` reads `Tuning`, every blueprint, every tutorial level and
   the fallback levels, on the main thread at startup (the app flow's boot, and the test
   runner, which stops if it returns false or logs an error). A second call returns the
