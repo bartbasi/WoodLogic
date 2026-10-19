@@ -1,0 +1,17 @@
+{
+  "format": 1,
+  "id": "tutorial-5",
+  "name": "A plank falls",
+  "kind": "tutorial",
+  "board": [86, 90],
+  "planks": [
+    {"layer": 0, "shape": "poly", "points": [[23, 28], [63, 28], [63, 66], [23, 66]], "holes": [[29, 34], [57, 34], [43, 60]], "colors": [0, 0, 0]},
+    {"layer": 1, "shape": "bar", "path": [[11, 47], [75, 47]], "width": 10, "holes": [[13, 47], [31, 47], [43, 47], [55, 47], [73, 47]], "colors": [2, 1, 1, 1, 2]},
+    {"layer": 0, "shape": "disc", "center": [13, 80], "radius": 6, "holes": [[13, 80]], "colors": [2]}
+  ],
+  "queue": [0, 2, 1],
+  "tray_par": 2,
+  "par_time": 65,
+  "line": "Take out every screw and the plank falls.",
+  "hint": [[0, 0], [0, 1], [0, 2]]
+}

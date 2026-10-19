@@ -1,0 +1,14 @@
+{
+  "format": 1,
+  "id": "mushroom",
+  "name": "Mushroom",
+  "kind": "silhouette",
+  "board": [86, 90],
+  "planks": [
+    {"layer": 1, "shape": "poly", "points": [[7, 50], [9, 36], [16, 23], [28, 13], [43, 9], [58, 13], [70, 23], [77, 36], [79, 50]], "holes": [[19, 43], [43, 19], [67, 43]]},
+    {"layer": 0, "shape": "disc", "center": [31, 31], "radius": 5, "holes": [[31, 31]]},
+    {"layer": 0, "shape": "disc", "center": [55, 31], "radius": 5, "holes": [[55, 31]]},
+    {"layer": 0, "shape": "disc", "center": [43, 43], "radius": 5, "holes": [[43, 43]]},
+    {"layer": 1, "shape": "poly", "points": [[32, 53], [54, 53], [57, 88], [29, 88]], "holes": [[43, 59], [43, 71], [43, 83]]}
+  ]
+}

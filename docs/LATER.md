@@ -25,3 +25,11 @@ Look (graphic-designer):
 - Birch plywood and painted boards as unlockable wood themes.
 - The screw finishes from the other directions (enamel, powder coat, candy gloss) as metal themes.
 - A falling plank tumbling in 3D for its last second.
+
+## From Phase 2 (19 October 2026)
+
+Levels (game-designer):
+
+- Add the blueprint house rules to the engine validator as warnings: a one-hole plank hangs
+  straight below its hole, and a covered screw sits at least 8 units under its wood.
+- A block-built picture style (like Cat and Step temple) for future themed packs.

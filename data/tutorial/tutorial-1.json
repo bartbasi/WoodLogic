@@ -1,0 +1,15 @@
+{
+  "format": 1,
+  "id": "tutorial-1",
+  "name": "Tap a screw",
+  "kind": "tutorial",
+  "board": [86, 90],
+  "planks": [
+    {"layer": 0, "shape": "bar", "path": [[25, 45], [61, 45]], "width": 12, "holes": [[25, 45], [43, 45], [61, 45]], "colors": [0, 0, 0]}
+  ],
+  "queue": [0],
+  "tray_par": 2,
+  "par_time": 30,
+  "line": "",
+  "hint": [[0, 0], [0, 2], [0, 1]]
+}

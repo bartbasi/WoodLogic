@@ -1,0 +1,20 @@
+{
+  "format": 1,
+  "id": "flower",
+  "name": "Flower",
+  "kind": "silhouette",
+  "board": [86, 90],
+  "planks": [
+    {"layer": 0, "shape": "disc", "center": [43, 31], "radius": 8, "holes": [[43, 31]]},
+    {"layer": 1, "shape": "disc", "center": [57, 31], "radius": 6, "holes": [[57, 31]]},
+    {"layer": 1, "shape": "disc", "center": [50, 19], "radius": 6, "holes": [[50, 19]]},
+    {"layer": 1, "shape": "disc", "center": [36, 19], "radius": 6, "holes": [[36, 19]]},
+    {"layer": 1, "shape": "disc", "center": [29, 31], "radius": 6, "holes": [[29, 31]]},
+    {"layer": 1, "shape": "disc", "center": [36, 43], "radius": 6, "holes": [[36, 43]]},
+    {"layer": 1, "shape": "disc", "center": [50, 43], "radius": 6, "holes": [[50, 43]]},
+    {"layer": 0, "shape": "bar", "path": [[43, 54], [43, 70]], "width": 10, "holes": [[43, 58], [43, 70]]},
+    {"layer": 1, "shape": "poly", "points": [[20, 68], [30, 62], [40, 68], [30, 74]], "holes": [[30, 68]]},
+    {"layer": 1, "shape": "poly", "points": [[46, 68], [56, 62], [66, 68], [56, 74]], "holes": [[56, 68]]},
+    {"layer": 1, "shape": "poly", "points": [[29, 76], [57, 76], [53, 89], [33, 89]], "holes": [[43, 82]]}
+  ]
+}

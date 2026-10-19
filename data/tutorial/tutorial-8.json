@@ -1,0 +1,22 @@
+{
+  "format": 1,
+  "id": "tutorial-8",
+  "name": "Undo",
+  "kind": "tutorial",
+  "board": [86, 90],
+  "planks": [
+    {"layer": 0, "shape": "bar", "path": [[25, 21], [25, 69]], "width": 10, "holes": [[25, 21], [25, 69]], "colors": [0, 1]},
+    {"layer": 0, "shape": "bar", "path": [[61, 21], [61, 69]], "width": 10, "holes": [[61, 21], [61, 69]], "colors": [1, 0]},
+    {"layer": 1, "shape": "bar", "path": [[13, 45], [73, 45]], "width": 10, "holes": [[25, 45], [43, 45], [61, 45]], "colors": [2, 2, 2]},
+    {"layer": 0, "shape": "disc", "center": [43, 21], "radius": 6, "holes": [[43, 21]], "colors": [3]},
+    {"layer": 0, "shape": "disc", "center": [43, 69], "radius": 6, "holes": [[43, 69]], "colors": [3]},
+    {"layer": 0, "shape": "disc", "center": [43, 84], "radius": 6, "holes": [[43, 84]], "colors": [3]},
+    {"layer": 0, "shape": "disc", "center": [73, 84], "radius": 6, "holes": [[73, 84]], "colors": [0]},
+    {"layer": 0, "shape": "disc", "center": [13, 84], "radius": 6, "holes": [[13, 84]], "colors": [1]}
+  ],
+  "queue": [0, 1, 2, 3],
+  "tray_par": 1,
+  "par_time": 85,
+  "line": "Tapped the wrong one? Try Undo.",
+  "hint": []
+}

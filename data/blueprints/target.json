@@ -1,0 +1,12 @@
+{
+  "format": 1,
+  "id": "target",
+  "name": "Target",
+  "kind": "pattern",
+  "board": [86, 90],
+  "planks": [
+    {"layer": 0, "shape": "ring", "center": [43, 45], "radius": 34, "inner": 24, "holes": [[14, 45], [72, 45], [43, 16], [43, 74], [64, 65], [22, 65], [64, 25], [22, 25]]},
+    {"layer": 0, "shape": "ring", "center": [43, 45], "radius": 18, "inner": 8, "holes": [[43, 32], [54, 52], [32, 52]]},
+    {"layer": 0, "shape": "disc", "center": [43, 45], "radius": 6, "holes": [[43, 45]]}
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "format": 1,
+  "id": "train",
+  "name": "Train",
+  "kind": "silhouette",
+  "board": [86, 90],
+  "planks": [
+    {"layer": 1, "shape": "poly", "points": [[4, 30], [28, 30], [28, 18], [40, 18], [40, 64], [4, 64]], "holes": [[11, 40], [23, 52], [34, 26], [11, 56]]},
+    {"layer": 2, "shape": "bar", "path": [[14, 6], [14, 28]], "width": 10, "holes": [[14, 9], [14, 24]]},
+    {"layer": 1, "shape": "poly", "points": [[46, 34], [82, 34], [82, 64], [46, 64]], "holes": [[53, 41], [65, 48], [77, 41], [57, 57], [76, 57]]},
+    {"layer": 0, "shape": "disc", "center": [14, 70], "radius": 7, "holes": [[14, 70]]},
+    {"layer": 0, "shape": "disc", "center": [32, 70], "radius": 7, "holes": [[32, 70]]},
+    {"layer": 0, "shape": "disc", "center": [56, 70], "radius": 7, "holes": [[56, 70]]},
+    {"layer": 0, "shape": "disc", "center": [72, 70], "radius": 7, "holes": [[72, 70]]},
+    {"layer": 2, "shape": "bar", "path": [[6, 82], [80, 82]], "width": 10, "holes": [[8, 82], [23, 82], [43, 82], [64, 82], [80, 82]]},
+    {"layer": 0, "shape": "bar", "path": [[36, 56], [46, 56]], "width": 10, "holes": [[41, 56]]}
+  ]
+}

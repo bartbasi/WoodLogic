@@ -1,0 +1,19 @@
+{
+  "format": 1,
+  "id": "steamboat",
+  "name": "Steamboat",
+  "kind": "silhouette",
+  "board": [86, 90],
+  "planks": [
+    {"layer": 3, "shape": "poly", "points": [[2, 72], [84, 72], [84, 89], [2, 89]], "holes": [[8, 84], [22, 84], [35, 84], [49, 84], [64, 84], [78, 84]]},
+    {"layer": 1, "shape": "poly", "points": [[4, 52], [82, 52], [72, 75], [14, 75]], "holes": [[12, 57], [74, 57], [34, 70], [52, 70]]},
+    {"layer": 2, "shape": "poly", "points": [[14, 34], [68, 34], [68, 54], [14, 54]], "holes": [[30, 39], [52, 39], [20, 46], [41, 46], [62, 46]]},
+    {"layer": 1, "shape": "bar", "path": [[30, 10], [30, 40]], "width": 12, "holes": [[30, 14], [30, 27]]},
+    {"layer": 1, "shape": "bar", "path": [[52, 10], [52, 40]], "width": 12, "holes": [[52, 14], [52, 27]]},
+    {"layer": 0, "shape": "disc", "center": [26, 61], "radius": 5, "holes": [[26, 61]]},
+    {"layer": 0, "shape": "disc", "center": [43, 61], "radius": 5, "holes": [[43, 61]]},
+    {"layer": 0, "shape": "disc", "center": [60, 61], "radius": 5, "holes": [[60, 61]]},
+    {"layer": 0, "shape": "disc", "center": [18, 7], "radius": 5, "holes": [[18, 7]]},
+    {"layer": 0, "shape": "disc", "center": [66, 8], "radius": 5, "holes": [[66, 8]]}
+  ]
+}

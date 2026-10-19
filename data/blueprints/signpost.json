@@ -1,0 +1,13 @@
+{
+  "format": 1,
+  "id": "signpost",
+  "name": "Signpost",
+  "kind": "silhouette",
+  "board": [86, 90],
+  "planks": [
+    {"layer": 1, "shape": "bar", "path": [[43, 8], [43, 84]], "width": 10, "holes": [[43, 12], [43, 55], [43, 72]]},
+    {"layer": 0, "shape": "poly", "points": [[36, 18], [64, 18], [74, 27], [64, 36], [36, 36]], "holes": [[55, 27], [67, 27]]},
+    {"layer": 0, "shape": "poly", "points": [[50, 46], [22, 46], [12, 55], [22, 64], [50, 64]], "holes": [[31, 55], [19, 55]]},
+    {"layer": 0, "shape": "bar", "path": [[8, 84], [78, 84]], "width": 10, "holes": [[20, 84], [66, 84]]}
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "format": 1,
+  "id": "car",
+  "name": "Car",
+  "kind": "silhouette",
+  "board": [86, 90],
+  "planks": [
+    {"layer": 2, "shape": "poly", "points": [[20, 46], [28, 14], [58, 14], [66, 46]], "holes": [[37, 24], [51, 24], [31, 40], [55, 40]]},
+    {"layer": 1, "shape": "poly", "points": [[6, 40], [12, 34], [74, 34], [80, 40], [80, 60], [6, 60]], "holes": [[19, 50], [43, 48], [67, 50]]},
+    {"layer": 0, "shape": "disc", "center": [9, 42], "radius": 5, "holes": [[9, 42]]},
+    {"layer": 0, "shape": "disc", "center": [77, 42], "radius": 5, "holes": [[77, 42]]},
+    {"layer": 0, "shape": "disc", "center": [24, 65], "radius": 9, "holes": [[24, 65]]},
+    {"layer": 0, "shape": "disc", "center": [62, 65], "radius": 9, "holes": [[62, 65]]},
+    {"layer": 2, "shape": "bar", "path": [[6, 82], [80, 82]], "width": 10, "holes": [[8, 82], [31, 82], [55, 82], [78, 82]]}
+  ]
+}

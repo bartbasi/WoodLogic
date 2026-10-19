@@ -1,0 +1,17 @@
+{
+  "format": 1,
+  "id": "tutorial-3",
+  "name": "The tray",
+  "kind": "tutorial",
+  "board": [86, 90],
+  "planks": [
+    {"layer": 0, "shape": "bar", "path": [[19, 25], [19, 65]], "width": 10, "holes": [[19, 25], [19, 45], [19, 65]], "colors": [0, 2, 1]},
+    {"layer": 0, "shape": "bar", "path": [[43, 25], [43, 65]], "width": 10, "holes": [[43, 25], [43, 45], [43, 65]], "colors": [2, 0, 2]},
+    {"layer": 0, "shape": "bar", "path": [[67, 25], [67, 65]], "width": 10, "holes": [[67, 25], [67, 45], [67, 65]], "colors": [1, 1, 0]}
+  ],
+  "queue": [0, 1, 2],
+  "tray_par": 3,
+  "par_time": 65,
+  "line": "No open box? The screw waits in the tray.",
+  "hint": [[0, 1]]
+}

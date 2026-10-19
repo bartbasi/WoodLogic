@@ -1,0 +1,18 @@
+{
+  "format": 1,
+  "id": "tutorial-7",
+  "name": "The box queue",
+  "kind": "tutorial",
+  "board": [86, 90],
+  "planks": [
+    {"layer": 0, "shape": "bar", "path": [[13, 25], [13, 65]], "width": 10, "holes": [[13, 25], [13, 45], [13, 65]], "colors": [2, 0, 3]},
+    {"layer": 0, "shape": "bar", "path": [[33, 25], [33, 65]], "width": 10, "holes": [[33, 25], [33, 45], [33, 65]], "colors": [1, 3, 0]},
+    {"layer": 0, "shape": "bar", "path": [[53, 25], [53, 65]], "width": 10, "holes": [[53, 25], [53, 45], [53, 65]], "colors": [0, 2, 1]},
+    {"layer": 0, "shape": "bar", "path": [[73, 25], [73, 65]], "width": 10, "holes": [[73, 25], [73, 45], [73, 65]], "colors": [3, 1, 2]}
+  ],
+  "queue": [0, 1, 2, 3],
+  "tray_par": 1,
+  "par_time": 85,
+  "line": "The next boxes are shown. Plan ahead.",
+  "hint": []
+}

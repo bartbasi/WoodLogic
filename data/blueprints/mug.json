@@ -1,0 +1,13 @@
+{
+  "format": 1,
+  "id": "mug",
+  "name": "Mug",
+  "kind": "silhouette",
+  "board": [86, 90],
+  "planks": [
+    {"layer": 0, "shape": "poly", "points": [[20, 34], [58, 34], [56, 82], [22, 82]], "holes": [[30, 44], [47, 44], [39, 56], [30, 72], [48, 72]]},
+    {"layer": 1, "shape": "ring", "center": [60, 56], "radius": 15, "inner": 5, "holes": [[66, 48], [66, 64]]},
+    {"layer": 0, "shape": "bar", "path": [[30, 6], [27, 11], [30, 16], [33, 21], [30, 26]], "width": 10, "holes": [[30, 6]]},
+    {"layer": 0, "shape": "bar", "path": [[46, 6], [43, 11], [46, 16], [49, 21], [46, 26]], "width": 10, "holes": [[46, 6]]}
+  ]
+}

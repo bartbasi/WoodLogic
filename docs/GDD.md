@@ -1,10 +1,13 @@
 # WoodLogic game design document
 
-Owner: game-designer. Status: Approved by Bart at Hard Stop 1, 19 October 2026.
+Owner: game-designer. Status: Approved by Bart at Hard Stop 1, 19 October 2026. Phase 2 updates:
+the library of 40 blueprints (section 10), the tutorial files (section 8), data/tuning.json
+(section 9.4), rule B13 (section 9.2), and wider layer ranges and new covering targets for the
+tiers (section 6.1). Each change says why.
 
 Board sizes come from docs/UX.md (section 3.2.1). The layout counts are the brief's defaults
-and are unchanged. Section 9 is a draft data format for the lead to take into
-docs/ARCHITECTURE.md.
+and are unchanged. The data formats in section 9 are the ones docs/ARCHITECTURE.md section 3
+points to.
 
 ## 0. One-page summary
 
@@ -39,11 +42,11 @@ first appears (Undo on level 8, Extra slot on 15, Screwdriver on 25). A player w
 reasonably well earns about 19 to 25 stars per ten levels, which buys a helper every 2 to 3
 levels. A careless player earns about 15, a helper every 3 to 4 levels.
 
-**Difficulty.** Ten tiers, from 9 screws in 3 colors on 1 or 2 layers up to 36 screws in 8
-colors on 5 layers. Each level's tier is a base for its level range plus a five step sawtooth:
-breather, three climbing steps, then a hard level on every fifth level (10, 15, 20, ...). The
-base rises from level 9 to level 151 and then stays put. The daily is tier 6 for everyone.
-Relaxed offers easy (tiers 1 to 3), medium (4 to 6) and hard (7 and 8).
+**Difficulty.** Ten tiers, from 9 screws in 2 or 3 colors on 1 or 2 layers up to 36 screws in
+8 colors on 4 or 5 layers. Each level's tier is a base for its level range plus a five step
+sawtooth: breather, three climbing steps, then a hard level on every fifth level (10, 15, 20,
+...). The base rises from level 9 to level 151 and then stays put. The daily is tier 6 for
+everyone. Relaxed offers easy (tiers 1 to 3), medium (4 to 6) and hard (7 and 8).
 
 **Themes.** Unlocked by playing, never by stars: walnut at level 10, brass screws at 25, maple
 at 50, cherry at 100, ebony at 150, copper screws at a 3 day daily streak, black screws at 7.
@@ -368,21 +371,37 @@ Arithmetic, first row: 1 + 0.8 + 0.7 = 2.5 stars per level, 25 per ten; 25 / 4 =
 
 ### 6.1 Tiers
 
-| Tier | Group | Screws | Colors | Layers in use | Fewest tray uses (solver) | Novice policy (6.4) | Covered at start (soft target) |
+| Tier | Group | Screws | Colors | Layers in use | Fewest tray uses (solver) | Novice policy (6.4) | Covered at start (reported, not a rule) |
 |-|-|-|-|-|-|-|-|
 | 1 | Easy | 9 to 12 | 2 to 3 | 1 to 2 | 0 | must win | 0 to 20 percent |
-| 2 | Easy | 12 to 15 | 3 | 2 | 0 to 1 | must win | 10 to 25 |
-| 3 | Easy | 15 to 18 | 3 to 4 | 2 to 3 | 0 to 1 | must win | 15 to 30 |
-| 4 | Medium | 18 to 21 | 4 | 3 | 1 to 2 | either | 20 to 35 |
-| 5 | Medium | 21 to 24 | 4 to 5 | 3 | 1 to 2 | either | 20 to 40 |
-| 6 | Medium | 24 to 27 | 5 | 3 to 4 | 1 to 3 | either | 25 to 45 |
-| 7 | Hard | 27 to 30 | 5 to 6 | 4 | 2 to 3 | must lose | 30 to 50 |
-| 8 | Hard | 30 to 33 | 6 to 7 | 4 | 2 to 4 | must lose | 30 to 50 |
-| 9 | Expert | 33 to 36 | 7 | 4 to 5 | 3 to 4 | must lose | 35 to 55 |
-| 10 | Expert | 33 to 36 | 7 to 8 | 5 | 3 to 5 | must lose | 40 to 60 |
+| 2 | Easy | 12 to 15 | 3 | 2 to 3 | 0 to 1 | must win | 0 to 30 |
+| 3 | Easy | 15 to 18 | 3 to 4 | 2 to 4 | 0 to 1 | must win | 0 to 35 |
+| 4 | Medium | 18 to 21 | 4 | 3 to 4 | 1 to 2 | either | 0 to 35 |
+| 5 | Medium | 21 to 24 | 4 to 5 | 3 to 5 | 1 to 2 | either | 0 to 50 |
+| 6 | Medium | 24 to 27 | 5 | 3 to 5 | 1 to 3 | either | 5 to 50 |
+| 7 | Hard | 27 to 30 | 5 to 6 | 4 to 5 | 2 to 3 | must lose | 14 to 50 |
+| 8 | Hard | 30 to 33 | 6 to 7 | 4 to 5 | 2 to 4 | must lose | 25 to 50 |
+| 9 | Expert | 33 to 36 | 7 | 4 to 5 | 3 to 4 | must lose | 25 to 55 |
+| 10 | Expert | 33 to 36 | 7 to 8 | 4 to 5 | 3 to 5 | must lose | 25 to 60 |
 
 Colors never exceed screws / 3. "Tray pressure" is the fewest tray uses column together with
-the novice policy column: a careless order must be able to fail from tier 7 up.
+the novice policy column: a careless order must be able to fail from tier 7 up. The same numbers
+are in data/tuning.json (section 9.4).
+
+**Phase 2 changes, and why.**
+
+- **Layers are wider ranges.** With the Hard Stop 1 ranges (tier 2 exactly 2 layers, tiers 4 and
+  5 exactly 3, tiers 7 and 8 exactly 4, tier 10 exactly 5), half of the first ten blueprints
+  suited no tier at all (windmill, bridge, lighthouse, rings and lattice). Layers are a weak
+  lever on their own: what makes a level hard is how many screws are covered, how deep, and the
+  coloring. So each tier now takes one more layer count, and tier 10 takes 4 or 5 like tier 9.
+  Tier 10 still differs from tier 9 by colors (up to 8) and tray uses (up to 5). With 5 layers
+  only, tier 10 had three blueprints; with 4 or 5 it has six.
+- **Covered at start is reported, not a rule.** It is not one of G1 to G7, and the generator's
+  variations (a changed layer order, a dropped plank) move it a lot. tools/levels reports it per
+  level so we can see the spread. The ranges now match what the 40 blueprints give as authored
+  (section 10, where percentages are rounded; castle and crates cover 4 of 27, 14.8 percent), so a report outside them means the variation changed the board a lot, which is
+  worth a look but is not a reason to reject the level.
 
 ### 6.2 Readability caps (every tier, every level)
 
@@ -396,6 +415,11 @@ the novice policy column: a careless order must be able to fail from tier 7 up.
 
 tier(N) = clamp(base(N) + step(N mod 5), 1, 10), for numbered levels N from 9 (1 to 8 are the
 tutorial).
+
+In data/tuning.json, `sawtooth.steps` lists the steps in the order of this table, so the step
+for level N is `steps[(N - 1) mod 5]`: level 11 gets -2, level 15 gets +2. `sawtooth.bases`
+lists [first level, base] pairs: base(N) is the base of the last pair whose first level is at
+most N.
 
 | N mod 5 | 1 | 2 | 3 | 4 | 0 |
 |-|-|-|-|-|-|
@@ -414,8 +438,9 @@ Every hard level (10, 15, 20, ...) is followed by a breather four tiers lower. T
 milestones (10, 25, 50, 100, 150) all land on hard levels, so the reward follows the effort.
 From level 151 the tiers cycle 6, 7, 8, 9, 10 for good.
 
-Mid game levels (tiers 5 to 7, 21 to 30 screws) at 3.5 to 4.5 seconds a screw take about 75
-to 135 seconds: inside the checklist's 1 to 3 minutes.
+Mid game levels (tiers 5 to 7, 21 to 30 screws) at 3.5 seconds a screw (Medium, tiers 5 and 6)
+or 4.0 (Hard, tier 7) take about 85 to 130 seconds (21 x 3.5 + 10 = 83.5, so 85; 30 x 4.0 + 10 =
+130): inside the checklist's 1 to 3 minutes.
 
 ### 6.4 Generator acceptance rules
 
@@ -423,7 +448,7 @@ A variation is shown only if all of these hold. Otherwise the generator tries th
 
 - **G1.** Screws, colors and layers in use are inside the tier's ranges. Every color count is a
   multiple of 3.
-- **G2.** The varied layout still passes every blueprint rule (B4 to B12), after mirroring,
+- **G2.** The varied layout still passes every blueprint rule (B4 to B13), after mirroring,
   shifts, swapped shapes, dropped or added planks and a changed layer order.
 - **G3.** The solver solved it, and its fewest tray uses is inside the tier's range.
 - **G4.** The novice policy's result matches the tier (must win, either, must lose).
@@ -489,22 +514,33 @@ Relaxed are not timed in Stats.
   reset clears them.
 - If the graphic designer ships more themes, the next milestones are levels 200 and 300 and
   best streaks of 14 and 30.
+- In data/tuning.json, `unlocks` lists the themes (oak and steel with `"level": 0`, meaning from
+  the start; the rest with the level or best streak above), `helpers` gives each helper's first
+  level and its 2 free, and `modes_open_after_level` is 8.
 
 ## 8. Tutorial levels
 
-Levels 1 to 8, written by hand as data in Phase 2 (data/tutorial/). Colors are shown as A, B,
-C, D (the first four palette colors). Coordinates are grid units (section 1.1). Every one was
-solved by full search in the scratch model, and none of them can be lost, so a new player
-can only fail to get a star. Lines are UX's (UX 5.3), unchanged.
+Levels 1 to 8, written by hand as data in data/tutorial/tutorial-1.json to tutorial-8.json.
+Colors are shown as A, B, C, D: palette indices 0 to 3, which in DESIGN.md's order are red,
+yellow, sky and blue. That is the order DESIGN.md picked so the first four are the most distinct
+set (worst pair 0.221 in OKLab), and sky and blue also differ strongly in lightness and have
+different symbols (diamond and cross). Levels 2 to 6 use only red, yellow and sky; blue first
+appears in level 7. Coordinates are grid units (section 1.1).
+
+Every one was solved by full search in my scratch model (every reachable state visited) and by
+the engine's solver in src/logic, and both agree. None of them has a reachable losing state, so
+a new player can only fail to get a star. No plank in a tutorial ever hangs across a screw of
+its own layer, so a screw the player can tap is never drawn under a hanging plank. Lines are
+UX's (UX 5.3), unchanged.
 
 | Level | Idea | Line | Board | Queue | Tray par / par time | Fewest tray uses | Hand points at |
 |-|-|-|-|-|-|-|-|
 | 1 | Tap a screw | none (UX: "Tap a screw." after 8 s idle) | one bar (25, 45) to (61, 45), width 12, screws A A A | A | 2 / 30 s | 0 | the left, right, then middle screw, so the bar never swings and falls at the end |
 | 2 | Screws go to their box | "Screws fly to the box of their color." | two upright bars at x 25 and x 61, screws at y 25, 45, 65: A B A and B A B | A B | 2 / 50 s | 0 | the first screw |
-| 3 | The tray | "No open box? The screw waits in the tray." | three bars at y 25, 45, 65, screws at x 19, 43, 67: A C B, C A B, B C A | A B C | 3 / 65 s | 0 | a C screw (it goes to the tray, then jumps to C's box) |
+| 3 | The tray | "No open box? The screw waits in the tray." | three upright bars at x 19, 43, 67 (y 25 to 65), screws at y 25, 45, 65: A C B, C A C, B B A | A B C | 3 / 65 s | 0 | the C screw at (19, 45) (it goes to the tray, then jumps to C's box) |
 | 4 | Covered screws | "Covered screws are stuck. Free the plank on top." | back bar (layer 1) at y 45 with A A B at x 19, 43, 67; front upright bar (layer 0) from (43, 21) to (43, 69), width 12, screws A and B, covering the middle back screw; a B disc at (67, 21) | A B | 2 / 50 s | 0 | the covered screw (wiggle), then the front bar's screws |
-| 5 | A plank falls | "Take out every screw and the plank falls." | front plate (layer 0) 23 to 63 by 28 to 66 with three A screws; back bar (layer 1) at y 47 with C B B B C, the three B under the plate; a C disc at (43, 80) | A C B | 2 / 65 s | 0 | the plate's three screws |
-| 6 | A plank swings | "With one screw left, a plank swings." | two front bars at y 30 and y 62 (x 19 to 67), screws A A and B B at the ends; behind each bar's middle a disc: B at (43, 30), A at (43, 62) | A B | 2 / 50 s | 0 | the right screw of the top bar (it swings away and frees the B disc) |
+| 5 | A plank falls | "Take out every screw and the plank falls." | front plate (layer 0) 23 to 63 by 28 to 66 with three A screws; back bar (layer 1) at y 47 with C B B B C, the three B under the plate; a C disc at (13, 80) | A C B | 2 / 65 s | 0 | the plate's three screws |
+| 6 | A plank swings | "With one screw left, a plank swings." | two front bars at y 24 and y 76 (x 25 to 61), screws A A and B B at the ends; behind each bar's middle a disc: B at (43, 24), A at (43, 76) | A B | 2 / 50 s | 0 | the right screw of the top bar (it swings down from (25, 24) and frees the B disc) |
 | 7 | The box queue | "The next boxes are shown. Plan ahead." | four upright bars at x 13, 33, 53, 73, screws at y 25, 45, 65: C A D, B D A, A C B, D B C | A B C D | 1 / 85 s | 0 | none (a steady ring on the preview) |
 | 8 | Undo | "Tapped the wrong one? Try Undo." | front uprights at x 25 (A top, B bottom) and x 61 (B top, A bottom), y 21 and 69; back bar (layer 1) at y 45 with C at x 25, 43, 61 (the outer two covered); D discs at (43, 21), (43, 69), (43, 84); an A disc at (73, 84) and a B disc at (13, 84) | A B C D | 1 / 85 s | 0 | none (the ring on Undo, after the helper sheet) |
 
@@ -513,11 +549,34 @@ can only fail to get a star. Lines are UX's (UX 5.3), unchanged.
 - Level 7's tray par of 1 is the point of the level: the Clean star asks the player to use the
   preview. Level 8 gives 2 Undos; using one costs the Clean star (decision 1).
 - Hint lists name screws as [plank, hole] in file order (UX's `hint` field, section 9.3).
+- **Phase 2 changes, and why.** Level 3's bars stand upright instead of lying flat: a flat bar
+  left on its end screw swung down across the bars below it and was drawn over their free
+  screws. An upright bar only ever hangs straight down or flips below its last screw. Level 5's
+  C disc moved from just below the plate to the bottom left corner: the plate, left on its
+  bottom screw, turned over and hung across the disc. Level 6's bars are shorter and further
+  apart for the same reason. The ideas, lines, counts and par numbers are unchanged.
+- Each file's `name` is the Idea column.
 
-## 9. Draft data formats
+**Checks on the files** (from my scratch model, which counts states its own way; the engine's
+solver counts fewer on the levels that use the tray, 512, 192, 4047 and 2295 for levels 3, 5, 7
+and 8, but gives the same fewest tray uses and novice result on all eight):
 
-The lead will turn this into docs/ARCHITECTURE.md in Phase 2. Plain JSON, no comments, integers
-only, coordinates in grid units (4 du).
+| Level | Screws | Reachable states | Fewest tray uses | Losing states | First tap fits a box (G5) | Novice policy |
+|-|-|-|-|-|-|-|
+| 1 | 3 | 8 | 0 | 0 | yes | wins |
+| 2 | 6 | 64 | 0 | 0 | yes | wins |
+| 3 | 9 | 708 | 0 | 0 | yes | wins |
+| 4 | 6 | 48 | 0 | 0 | yes | wins |
+| 5 | 9 | 318 | 0 | 0 | yes | wins |
+| 6 | 6 | 49 | 0 | 0 | yes | wins |
+| 7 | 12 | 16191 | 0 | 0 | yes | wins |
+| 8 | 12 | 8079 | 0 | 0 | yes | wins |
+
+## 9. Data formats
+
+docs/ARCHITECTURE.md section 3 points here for blueprints and tutorial levels. Plain JSON, no
+comments, integers only (the tuning file has a few decimal seconds), coordinates in grid units
+(4 du).
 
 ### 9.1 Blueprint
 
@@ -564,6 +623,15 @@ An example showing all four shapes (data/blueprints/ holds the real files):
   pivot, in the rest pose (R16), every screw behind it has |d - 3.5| of at least 0.25 units.
   (Rest poses are fixed per plank and pivot, so this is a finite, static check.)
 - **B12.** At most 24 screws free at the start; at most 3 planks over any screw.
+- **B13.** The margin around R16's cutoff (ARCHITECTURE.md section 2): for every plank and every
+  one of its holes as pivot, the distance r from the pivot to the centroid is below 0.25 or
+  above 0.75 units, never in between, so no phone can disagree about whether it turns.
+
+**House rules I hold my own blueprints to** (stricter than B1 to B13, not checked by the game):
+a one hole plank has its centroid exactly on the vertical through its hole (or on the hole), and
+a covered screw is at least 2 units (8 du) under the wood that covers it. The Phase 1 ten keep
+their shallower covered screws (fish, tree, rings, sailboat and windmill), which Bart saw at
+Hard Stop 1.
 
 ### 9.3 Tutorial level
 
@@ -589,42 +657,137 @@ A blueprint plus play data. `kind` is `tutorial`.
 }
 ```
 
-- `colors` lists each hole's color as a palette index (0 to 7), in hole order.
+- `colors` lists each hole's color as a palette index (0 to 7; DESIGN.md section 3.2 has the
+  order), in hole order.
 - `queue` lists the boxes in order by color index; each color appears (its screws / 3) times.
 - `par_time` in seconds, `tray_par` in tray uses, `line` may be "" (no line), `hint` is the
   order of screws the hand points at, as [plank, hole].
-- Tutorial levels pass B1 to B12 except the 9 screw minimum (level 1 has 3, levels 2, 4 and 6
+- Tutorial levels pass B1 to B13 except the 9 screw minimum (level 1 has 3, levels 2, 4 and 6
   have 6).
 
-## 10. The first ten blueprints
+### 9.4 Tuning: data/tuning.json
 
-All ten are in data/blueprints/. I checked every rule B1 to B12 with a scratch validator
-(Python, outside the repo), looked at a drawing of each, and checked B11 for every possible
-rest pose.
+ARCHITECTURE.md section 3.3 gives the format. Every number in it is in this document, and this
+document wins if they ever differ:
 
-| Blueprint | Kind | Screws | Planks | Layers | Free at start | Closest two screws (du) | Thinnest wood rim (du) | Screw centers span (du) |
-|-|-|-|-|-|-|-|-|-|
-| house | silhouette | 15 | 6 | 2 | 12 | 48.0 | 20.0 | x 56 to 288, y 32 to 328 |
-| sailboat | silhouette | 15 | 7 | 3 | 13 | 48.0 | 19.5 | x 76 to 268, y 32 to 316 |
-| windmill | silhouette | 15 | 7 | 4 | 10 | 50.9 | 20.0 | x 88 to 256, y 36 to 336 |
-| fish | silhouette | 15 | 9 | 3 | 11 | 48.0 | 18.6 | x 40 to 308, y 32 to 272 |
-| tree | silhouette | 18 | 7 | 3 | 15 | 48.0 | 19.3 | x 40 to 304, y 40 to 336 |
-| bridge | silhouette | 18 | 5 | 4 | 14 | 56.0 | 18.6 | x 32 to 312, y 48 to 328 |
-| lighthouse | silhouette | 18 | 9 | 4 | 16 | 48.0 | 18.2 | x 32 to 312, y 36 to 336 |
-| rings | pattern | 21 | 10 | 5 | 17 | 48.0 | 20.0 | x 40 to 304, y 24 to 336 |
-| bricks | pattern | 24 | 10 | 4 | 12 | 48.8 | 20.0 | x 40 to 304, y 24 to 316 |
-| lattice | pattern | 33 | 7 | 3 | 24 | 48.0 | 20.0 | x 56 to 288, y 24 to 336 |
+| Key | Section here |
+|-|-|
+| `tray_size`, `open_boxes`, `box_slots`, `preview`, `tutorial_levels` | 3 |
+| `tiers` (screws, colors, layers, tray uses, novice policy, covered at start) | 6.1 |
+| `sawtooth` | 6.3 |
+| `tray_par_slack`, `par_time` | 3, 4 (S7, S8) |
+| `daily`, `relaxed` | 6.6 |
+| `helpers` | 5 |
+| `unlocks`, `modes_open_after_level` | 7 |
+| `recent_blueprints_excluded` | 6.4 (G7) |
 
-- Every screw center lies inside 24 to 320 by 24 to 336 du, within UX's inset of 22 to 322 by
-  22 to 338. No two screws are closer than 48 du, so no two touch targets (radius 24) overlap.
-- Covered screws at the start have their centers at least 2.8 du inside the wood that covers
-  them (the shallowest case is in the fish). Free screws have their centers at least 24 du from
-  any wood in front of them, which leaves a 10 du gap at the head.
-- In every rest pose, no screw comes within 1.3 du of the covering threshold.
-- **Gaps for Phase 2.** These ten sit mostly in tiers 2 to 6. Only lattice reaches tier 8 and
-  above. The next thirty need: about ten dense blueprints with 30 to 36 screws and 4 or 5
-  layers, about eight small ones with 9 to 12 screws for breathers, and more covering at the
-  start (most of these ten cover 11 to 33 percent; bricks covers 50).
+## 10. The blueprint library
+
+Forty blueprints in data/blueprints/: the ten from Phase 1 and thirty added in Phase 2, each an
+original picture or pattern. "Suits tiers" means the blueprint as authored has a screw count and
+a layer count inside that tier's ranges (section 6.1); the generator's variations (a dropped or
+added plank) can reach a neighboring tier too. The table is sorted by screws.
+
+| Blueprint | Picture | Kind | Screws | Planks | Layers | Free at start | Covered at start | Suits tiers | Added |
+|-|-|-|-|-|-|-|-|-|-|
+| heart | Heart | silhouette | 9 | 2 | 2 | 9 | 0 (0%) | 1 | Phase 2 |
+| kite | Kite | silhouette | 9 | 4 | 2 | 9 | 0 (0%) | 1 | Phase 2 |
+| mug | Mug | silhouette | 9 | 4 | 2 | 9 | 0 (0%) | 1 | Phase 2 |
+| mushroom | Mushroom | silhouette | 9 | 5 | 2 | 9 | 0 (0%) | 1 | Phase 2 |
+| signpost | Signpost | silhouette | 9 | 4 | 2 | 8 | 1 (11%) | 1 | Phase 2 |
+| target | Target | pattern | 12 | 3 | 1 | 12 | 0 (0%) | 1 | Phase 2 |
+| flower | Flower | silhouette | 12 | 11 | 2 | 12 | 0 (0%) | 1, 2 | Phase 2 |
+| house | House | silhouette | 15 | 6 | 2 | 12 | 3 (20%) | 2, 3 | Phase 1 |
+| car | Car | silhouette | 15 | 7 | 3 | 13 | 2 (13%) | 2, 3 | Phase 2 |
+| fish | Fish | silhouette | 15 | 9 | 3 | 11 | 4 (27%) | 2, 3 | Phase 1 |
+| sailboat | Sailboat | silhouette | 15 | 7 | 3 | 13 | 2 (13%) | 2, 3 | Phase 1 |
+| snowman | Snowman | silhouette | 15 | 9 | 3 | 14 | 1 (7%) | 2, 3 | Phase 2 |
+| windmill | Windmill | silhouette | 15 | 7 | 4 | 10 | 5 (33%) | 3 | Phase 1 |
+| rocket | Rocket | silhouette | 18 | 15 | 3 | 17 | 1 (6%) | 3, 4 | Phase 2 |
+| tree | Tree | silhouette | 18 | 7 | 3 | 15 | 3 (17%) | 3, 4 | Phase 1 |
+| bridge | Bridge | silhouette | 18 | 5 | 4 | 14 | 4 (22%) | 3, 4 | Phase 1 |
+| lighthouse | Lighthouse | silhouette | 18 | 9 | 4 | 16 | 2 (11%) | 3, 4 | Phase 1 |
+| owl | Owl | silhouette | 18 | 7 | 4 | 17 | 1 (6%) | 3, 4 | Phase 2 |
+| pagoda | Pagoda | silhouette | 18 | 9 | 4 | 15 | 3 (17%) | 3, 4 | Phase 2 |
+| train | Train | silhouette | 21 | 9 | 3 | 21 | 0 (0%) | 4, 5 | Phase 2 |
+| balloon | Hot air balloon | silhouette | 21 | 9 | 4 | 21 | 0 (0%) | 4, 5 | Phase 2 |
+| barn | Barn | silhouette | 21 | 10 | 4 | 17 | 4 (19%) | 4, 5 | Phase 2 |
+| robot | Robot | silhouette | 21 | 12 | 4 | 21 | 0 (0%) | 4, 5 | Phase 2 |
+| rings | Rings | pattern | 21 | 10 | 5 | 17 | 4 (19%) | 5 | Phase 1 |
+| weave | Weave | pattern | 24 | 8 | 3 | 20 | 4 (17%) | 5, 6 | Phase 2 |
+| bricks | Brick wall | pattern | 24 | 10 | 4 | 12 | 12 (50%) | 5, 6 | Phase 1 |
+| butterfly | Butterfly | silhouette | 24 | 8 | 4 | 22 | 2 (8%) | 5, 6 | Phase 2 |
+| steamboat | Steamboat | silhouette | 24 | 10 | 4 | 22 | 2 (8%) | 5, 6 | Phase 2 |
+| crane | Tower crane | silhouette | 24 | 8 | 5 | 21 | 3 (12%) | 5, 6 | Phase 2 |
+| castle | Castle | silhouette | 27 | 10 | 4 | 23 | 4 (15%) | 6, 7 | Phase 2 |
+| crates | Crates | pattern | 27 | 9 | 5 | 23 | 4 (15%) | 6, 7 | Phase 2 |
+| skyline | City skyline | silhouette | 30 | 6 | 4 | 22 | 8 (27%) | 7, 8 | Phase 2 |
+| dominoes | Dominoes | pattern | 30 | 14 | 5 | 20 | 10 (33%) | 7, 8 | Phase 2 |
+| ziggurat | Step temple | silhouette | 30 | 5 | 5 | 21 | 9 (30%) | 7, 8 | Phase 2 |
+| bookshelf | Bookshelf | silhouette | 33 | 16 | 4 | 22 | 11 (33%) | 8, 9, 10 | Phase 2 |
+| catface | Cat | silhouette | 33 | 7 | 4 | 23 | 10 (30%) | 8, 9, 10 | Phase 2 |
+| lattice | Lattice | pattern | 33 | 7 | 4 | 24 | 9 (27%) | 8, 9, 10 | Phase 1 |
+| jellyfish | Jellyfish | silhouette | 33 | 11 | 5 | 24 | 9 (27%) | 8, 9, 10 | Phase 2 |
+| falling-blocks | Falling blocks | pattern | 33 | 13 | 5 | 23 | 10 (30%) | 8, 9, 10 | Phase 2 |
+| tiles | Tiles | pattern | 36 | 9 | 5 | 20 | 16 (44%) | 9, 10 | Phase 2 |
+
+**How many blueprints each tier can use, as authored:**
+
+| Tier | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 |
+|-|-|-|-|-|-|-|-|-|-|-|
+| Blueprints | 7 | 6 | 12 | 10 | 10 | 7 | 5 | 8 | 6 | 6 |
+
+G7 needs at least two per tier, and in the cycle after level 151 tiers 6 to 10 come once every
+five levels, so the five hardest tiers share 16 different blueprints. Tier 7 is the thinnest
+(castle, crates, dominoes, skyline, step temple).
+
+**What I checked, and how.** Every file was checked by my scratch validator (Python, outside the
+repo) against B1 to B13 and my house rules (section 9.2), and drawn and looked at. B11 and B13
+were checked for every plank and every hole as pivot. The engine's validator in
+src/logic/blueprint_validator.gd, run headless on the same files, also passes all forty and all
+eight tutorials.
+
+- No two screws closer than 48 du anywhere in the library; the thinnest wood rim around a hole is
+  18 du (B6's minimum).
+- In the thirty new blueprints, every covered screw is at least 8 du under its wood and every
+  one hole plank hangs exactly on the vertical through its hole. The Phase 1 ten keep their
+  shallower covered screws (fish 2.8 du, tree 2.9, rings and sailboat 4.0, windmill 5.1).
+- B11: in every rest pose of the new blueprints, no screw comes within 1.4 du (0.36 units) of
+  the covering threshold; across the whole library the closest is 1.3 du (windmill).
+- B13: the closest r to the forbidden band is 0.79 units (the car body hanging on its middle
+  hole). Bars with three or more points that hang near their centroid (the kite's tail, the
+  barn's Z braces) are point symmetric about their hole, so r is exactly 0 however the arcs are
+  flattened.
+
+**Changes to the Phase 1 ten.** Free screws at the start are unchanged for all ten.
+
+- fish: the bottom fin's top edge moved up one unit, so its one hole sits on the centroid. Before,
+  r was 0.667, inside B13's band.
+- bricks: the four side bricks are 18 wide and centered on their holes. Before, the centroid was
+  half a unit to the side of the hole: B9 allowed it, but the plank was not truly at rest.
+- lattice: the middle cross bar moved to its own layer, so lattice has four layers and suits
+  tiers 8 to 10. With three layers it suited no tier.
+
+**What the engine and the tiers will find hard.**
+
+- **Tray pressure must come from coloring.** The new dense blueprints cover 27 to 44 percent of
+  their screws at the start (most of the mid ones 0 to 20). That is enough for order to matter,
+  but tiers 7 to 10 ("must lose" for the novice, 2 to 5 fewest tray uses) will mostly come from
+  coloring with intent: early free screws in colors late in the queue (section 6.5).
+- **Search size.** Tiles (36 screws), bookshelf (33 screws on 16 planks) and the other 33 screw
+  blueprints are the largest searches. They are where `max_states` will bite first.
+- **A hanging plank can be drawn over a free screw of its own layer.** Same layer planks never
+  cover each other (R8), but after a swing a plank can hang across another plank's screw on the
+  same layer. 19 blueprints have at least one such pose (target 12, bricks 10, balloon 8,
+  bookshelf 8, skyline 6, sailboat 5, and fewer in the rest); no tutorial has one. The renderer
+  should draw every screw above every plank of its own layer, so the screw stays visible and
+  tappable, as the rules say.
+- **Hanging planks reach below the core.** Most blueprints have a pose (a long bar flipping
+  under its last screw) that hangs below the bottom edge of the core. That is drawing only (UX
+  3.2.1), but the board view must not clip it oddly.
+- **Few planks, many holes.** Step temple has 5 planks (one with 12 holes) and the cat 7 (its
+  head has 14), so those planks only swing near the end. That is fine for play, but a generator
+  variation that drops such a plank removes many screws at once and leaves its tier.
 
 ## 11. Fun checklist
 
@@ -688,9 +851,10 @@ Walk these on Windows (tests and bots) and on the phone. Each item names how to 
 
 **Data**
 
-14. Every file in data/blueprints/ passes B1 to B12.
-15. Every tutorial level passes its rules, is solvable, and its fewest tray uses matches
-    section 8.
+14. Every file in data/blueprints/ passes B1 to B13, and its id is its file name.
+15. Every tutorial level passes B1 to B13 except the 9 screw minimum, is solvable, has no
+    reachable losing state, and its fewest tray uses matches section 8 (0 for all eight).
+15a. data/tuning.json loads, and every number in it matches section 9.4's sections.
 
 **Stars and economy**
 
@@ -735,9 +899,14 @@ Walk these on Windows (tests and bots) and on the phone. Each item names how to 
   level 8 (they need a short note on the title buttons), the `hint` field is in 9.3, and the out of room sheet now lists every owned, usable helper
   (R37), not only Undo.
 - **level-engine-dev.** Rules R1 to R38, worked examples E1 to E7, generator rules G1 to G7,
-  the novice policy, and B1 to B12 for variations. Please round turned vertices to a fixed
-  precision (R17 note). Higher tiers will need coloring with intent (section 6.5).
+  the novice policy, and B1 to B13 for variations. Please round turned vertices to a fixed
+  precision (R17 note). Higher tiers will need coloring with intent (section 6.5). Phase 2:
+  the tier layer ranges changed (6.1), covered at start is a report, not a filter, the
+  sawtooth steps are indexed by (N - 1) mod 5 (6.3), and tutorials 3, 5 and 6 moved some planks
+  (8). Tutorial `hint` entries are [plank, hole] in the file.
 - **graphic-designer.** The palette needs at least 8 screw colors usable in one level. Plank
-  outlines drawn by the renderer must match the logic outline (section 1.2).
+  outlines drawn by the renderer must match the logic outline (section 1.2). Please draw every
+  screw above every plank of its own layer: after a swing, a plank can hang across a free screw
+  of the same layer (section 10).
 - **qa-tester.** Section 12, and bot reports per tier group so section 5's table can be
   checked.

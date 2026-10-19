@@ -1,0 +1,16 @@
+{
+  "format": 1,
+  "id": "tutorial-2",
+  "name": "Screws go to their box",
+  "kind": "tutorial",
+  "board": [86, 90],
+  "planks": [
+    {"layer": 0, "shape": "bar", "path": [[25, 25], [25, 65]], "width": 10, "holes": [[25, 25], [25, 45], [25, 65]], "colors": [0, 1, 0]},
+    {"layer": 0, "shape": "bar", "path": [[61, 25], [61, 65]], "width": 10, "holes": [[61, 25], [61, 45], [61, 65]], "colors": [1, 0, 1]}
+  ],
+  "queue": [0, 1],
+  "tray_par": 2,
+  "par_time": 50,
+  "line": "Screws fly to the box of their color.",
+  "hint": [[0, 0]]
+}

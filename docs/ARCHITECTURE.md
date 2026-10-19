@@ -1,7 +1,7 @@
 # WoodLogic architecture
 
 The contract every area builds against. The rules themselves are in docs/GDD.md (rule ids R1
-to R38, B1 to B12, G1 to G7, S1 to S9); screens, sizes and words are in docs/UX.md; the look
+to R38, B1 to B13, G1 to G7, S1 to S9); screens, sizes and words are in docs/UX.md; the look
 and motion timings are in docs/DESIGN.md. Where UX.md and DESIGN.md give different numbers,
 UX.md wins for sizes and layout and DESIGN.md wins for motion and color. If you need something
 here changed, ask the lead. Status: Phase 2.
@@ -71,7 +71,7 @@ also `.json.remap` with the suffix removed), sorted by name.
 
 ### 3.1 Blueprints: `data/blueprints/<id>.json`
 
-Exactly GDD 9.1, checked by rules B1 to B12 (a test in tests/logic runs the validator on every
+Exactly GDD 9.1, checked by rules B1 to B13 (a test in tests/logic runs the validator on every
 file). Adding, removing or changing a blueprint changes which level a number gives, so after
 the first release it needs a new `GENERATOR_VERSION` (section 5).
 

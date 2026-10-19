@@ -1,0 +1,18 @@
+{
+  "format": 1,
+  "id": "tutorial-6",
+  "name": "A plank swings",
+  "kind": "tutorial",
+  "board": [86, 90],
+  "planks": [
+    {"layer": 0, "shape": "bar", "path": [[25, 24], [61, 24]], "width": 10, "holes": [[25, 24], [61, 24]], "colors": [0, 0]},
+    {"layer": 1, "shape": "disc", "center": [43, 24], "radius": 6, "holes": [[43, 24]], "colors": [1]},
+    {"layer": 0, "shape": "bar", "path": [[25, 76], [61, 76]], "width": 10, "holes": [[25, 76], [61, 76]], "colors": [1, 1]},
+    {"layer": 1, "shape": "disc", "center": [43, 76], "radius": 6, "holes": [[43, 76]], "colors": [0]}
+  ],
+  "queue": [0, 1],
+  "tray_par": 2,
+  "par_time": 50,
+  "line": "With one screw left, a plank swings.",
+  "hint": [[0, 1], [1, 0]]
+}

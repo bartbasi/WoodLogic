@@ -1,0 +1,13 @@
+{
+  "format": 1,
+  "id": "kite",
+  "name": "Kite",
+  "kind": "silhouette",
+  "board": [86, 90],
+  "planks": [
+    {"layer": 0, "shape": "poly", "points": [[43, 7], [66, 31], [43, 62], [20, 31]], "holes": [[43, 19], [31, 31], [55, 31], [43, 43], [43, 31]]},
+    {"layer": 1, "shape": "bar", "path": [[43, 56], [31, 64], [55, 76], [43, 84]], "width": 10, "holes": [[43, 70], [43, 84]]},
+    {"layer": 0, "shape": "disc", "center": [31, 64], "radius": 5, "holes": [[31, 64]]},
+    {"layer": 0, "shape": "disc", "center": [55, 76], "radius": 5, "holes": [[55, 76]]}
+  ]
+}
