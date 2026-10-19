@@ -1,0 +1,15 @@
+{
+  "format": 1,
+  "id": "house",
+  "name": "House",
+  "kind": "silhouette",
+  "board": [86, 90],
+  "planks": [
+    {"layer": 0, "shape": "poly", "points": [[3, 42], [43, 6], [83, 42]], "holes": [[43, 18], [29, 34], [57, 34]]},
+    {"layer": 0, "shape": "poly", "points": [[35, 58], [51, 58], [51, 88], [35, 88]], "holes": [[43, 73]]},
+    {"layer": 0, "shape": "disc", "center": [20, 58], "radius": 7, "holes": [[20, 58]]},
+    {"layer": 0, "shape": "disc", "center": [66, 58], "radius": 7, "holes": [[66, 58]]},
+    {"layer": 1, "shape": "poly", "points": [[8, 34], [78, 34], [78, 88], [8, 88]], "holes": [[14, 40], [72, 40], [14, 82], [72, 82], [43, 61], [28, 82], [58, 82]]},
+    {"layer": 1, "shape": "bar", "path": [[68, 6], [68, 20]], "width": 10, "holes": [[68, 8], [68, 20]]}
+  ]
+}

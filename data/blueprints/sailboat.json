@@ -1,0 +1,16 @@
+{
+  "format": 1,
+  "id": "sailboat",
+  "name": "Sailboat",
+  "kind": "silhouette",
+  "board": [86, 90],
+  "planks": [
+    {"layer": 0, "shape": "bar", "path": [[43, 6], [43, 64]], "width": 10, "holes": [[43, 8], [43, 38], [43, 62]]},
+    {"layer": 0, "shape": "disc", "center": [31, 76], "radius": 5, "holes": [[31, 76]]},
+    {"layer": 0, "shape": "disc", "center": [55, 76], "radius": 5, "holes": [[55, 76]]},
+    {"layer": 1, "shape": "poly", "points": [[4, 66], [82, 66], [70, 86], [16, 86]], "holes": [[19, 74], [43, 79], [67, 74]]},
+    {"layer": 1, "shape": "poly", "points": [[50, 0], [68, 8], [50, 16]], "holes": [[56, 8]]},
+    {"layer": 2, "shape": "poly", "points": [[39, 6], [39, 58], [80, 58]], "holes": [[46, 23], [47, 50], [64, 50]]},
+    {"layer": 2, "shape": "poly", "points": [[37, 14], [37, 58], [8, 58]], "holes": [[31, 40], [31, 52], [19, 52]]}
+  ]
+}

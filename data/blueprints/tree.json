@@ -1,0 +1,16 @@
+{
+  "format": 1,
+  "id": "tree",
+  "name": "Tree",
+  "kind": "silhouette",
+  "board": [86, 90],
+  "planks": [
+    {"layer": 0, "shape": "disc", "center": [43, 22], "radius": 17, "holes": [[43, 10], [31, 20], [55, 20]]},
+    {"layer": 0, "shape": "disc", "center": [12, 48], "radius": 5, "holes": [[12, 48]]},
+    {"layer": 0, "shape": "disc", "center": [74, 48], "radius": 5, "holes": [[74, 48]]},
+    {"layer": 0, "shape": "bar", "path": [[8, 84], [78, 84]], "width": 10, "holes": [[10, 84], [26, 84], [60, 84], [76, 84]]},
+    {"layer": 1, "shape": "disc", "center": [25, 42], "radius": 17, "holes": [[15, 36], [31, 33], [25, 54]]},
+    {"layer": 1, "shape": "disc", "center": [61, 42], "radius": 17, "holes": [[71, 36], [55, 33], [61, 54]]},
+    {"layer": 2, "shape": "bar", "path": [[43, 44], [43, 82]], "width": 14, "holes": [[43, 58], [43, 70], [43, 82]]}
+  ]
+}

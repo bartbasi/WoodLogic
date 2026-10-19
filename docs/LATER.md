@@ -2,3 +2,26 @@
 
 Ideas beyond the v1 brief, kept for Bart to decide on. Nothing here gets built without his
 go-ahead.
+
+## From Phase 1 (19 October 2026)
+
+Screens and accessibility (ux-designer):
+
+- A text size setting, a reduced motion setting and a high contrast mode.
+- A left-handed mirror for the pause button.
+- A way to reread the helper explanations, for example from Pause.
+- Levels list: a jump to level field and a filter for levels under three stars.
+- A screen reader description of the board.
+- A "peek at the board" handle on the Out of room sheet.
+- A hint button for stuck players.
+
+Play (game-designer):
+
+- Show the rest of the box queue as small colored dots after the two previewed boxes.
+- If hard levels feel too soft at Gate 1, try a 4 slot tray as a second lever, after smarter coloring.
+
+Look (graphic-designer):
+
+- Birch plywood and painted boards as unlockable wood themes.
+- The screw finishes from the other directions (enamel, powder coat, candy gloss) as metal themes.
+- A falling plank tumbling in 3D for its last second.

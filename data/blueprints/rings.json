@@ -1,0 +1,19 @@
+{
+  "format": 1,
+  "id": "rings",
+  "name": "Rings",
+  "kind": "pattern",
+  "board": [86, 90],
+  "planks": [
+    {"layer": 0, "shape": "ring", "center": [29, 31], "radius": 17, "inner": 6, "holes": [[17, 31], [29, 19]]},
+    {"layer": 1, "shape": "ring", "center": [57, 31], "radius": 17, "inner": 6, "holes": [[45, 31], [57, 19], [69, 31]]},
+    {"layer": 2, "shape": "ring", "center": [29, 59], "radius": 17, "inner": 6, "holes": [[29, 47], [17, 59], [29, 71]]},
+    {"layer": 3, "shape": "ring", "center": [57, 59], "radius": 17, "inner": 6, "holes": [[45, 59], [57, 47], [69, 59]]},
+    {"layer": 1, "shape": "disc", "center": [29, 31], "radius": 6, "holes": [[29, 31]]},
+    {"layer": 2, "shape": "disc", "center": [57, 31], "radius": 6, "holes": [[57, 31]]},
+    {"layer": 3, "shape": "disc", "center": [29, 59], "radius": 6, "holes": [[29, 59]]},
+    {"layer": 4, "shape": "disc", "center": [57, 59], "radius": 6, "holes": [[57, 59]]},
+    {"layer": 0, "shape": "bar", "path": [[8, 6], [78, 6]], "width": 10, "holes": [[10, 6], [43, 6], [76, 6]]},
+    {"layer": 0, "shape": "bar", "path": [[8, 84], [78, 84]], "width": 10, "holes": [[10, 84], [43, 84], [76, 84]]}
+  ]
+}

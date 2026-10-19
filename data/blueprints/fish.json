@@ -1,0 +1,18 @@
+{
+  "format": 1,
+  "id": "fish",
+  "name": "Fish",
+  "kind": "silhouette",
+  "board": [86, 90],
+  "planks": [
+    {"layer": 0, "shape": "disc", "center": [20, 42], "radius": 5, "holes": [[20, 42]]},
+    {"layer": 0, "shape": "bar", "path": [[37, 28], [37, 58]], "width": 10, "holes": [[37, 30], [37, 58]]},
+    {"layer": 0, "shape": "bar", "path": [[52, 26], [52, 58]], "width": 10, "holes": [[52, 28], [52, 58]]},
+    {"layer": 0, "shape": "disc", "center": [10, 14], "radius": 5, "holes": [[10, 14]]},
+    {"layer": 0, "shape": "disc", "center": [22, 8], "radius": 5, "holes": [[22, 8]]},
+    {"layer": 1, "shape": "poly", "points": [[4, 45], [20, 28], [46, 21], [66, 32], [66, 58], [46, 69], [20, 62]], "holes": [[37, 45], [52, 45], [22, 54]]},
+    {"layer": 2, "shape": "poly", "points": [[52, 45], [83, 20], [83, 70]], "holes": [[77, 34], [77, 56], [64, 45]]},
+    {"layer": 2, "shape": "poly", "points": [[28, 26], [44, 8], [60, 26]], "holes": [[44, 15]]},
+    {"layer": 2, "shape": "poly", "points": [[30, 62], [45, 82], [60, 62]], "holes": [[45, 68]]}
+  ]
+}
