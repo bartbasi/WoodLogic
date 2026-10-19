@@ -1,0 +1,30 @@
+# Godot cache and import data.
+# Also holds export_credentials.cfg, where Godot keeps export passwords.
+.godot/
+export_credentials.cfg
+
+# Generated Android build template (only used for the release AAB)
+/android/
+
+# Build output
+/build/
+*.apk
+*.aab
+*.idsig
+
+# Signing keys and their passwords never go in git
+*.keystore
+*.jks
+*-password.txt
+
+# Personal Claude Code settings (the agent files in .claude/agents/ are committed)
+.claude/settings.local.json
+
+# OS and editor clutter
+Thumbs.db
+.DS_Store
+desktop.ini
+*.tmp
+
+# Python bytecode
+__pycache__/
