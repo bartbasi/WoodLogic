@@ -7,6 +7,9 @@ extends TestCase
 const Kit := preload("res://tests/logic/kit.gd")
 const MAX_STATES := 200000
 
+## Set while a test has changed Tuning.open_boxes; cleanup() puts it back.
+var _saved_open_boxes := -1
+
 ## Nine screws. A big C disc in front covers one A and one B, so with A and B open first the
 ## C must wait in the tray once: the answer is 1.
 const ONE_TRAY_USE := [
@@ -156,28 +159,38 @@ func test_solver_safe_move_rule_never_changes_the_answer() -> void:
 
 func test_solver_general_path_with_three_open_boxes() -> void:
 	# The search has a fast path for two open boxes and a general one for other counts
-	# (data/tuning.json could change it). Tuning is set only around the calls that read it.
+	# (data/tuning.json could change it). Tuning is changed only around the calls that read it,
+	# and cleanup() puts it back even if one of them fails.
 	var rng := _rng(31)
-	var compared := 0
+	var levels: Array[LevelData] = []
 	for id: String in ["house", "windmill", "fish", "bridge", "rings"]:
 		for colors: int in [4, 5]:
-			var level := Kit.random_colors(Kit.blueprint(id), colors, rng)
-			Tuning.open_boxes = 3
-			var r := Solver.solve(level, MAX_STATES)
-			var replay := PlayState.start(level)
-			var search := PlayState.start(level)
-			Tuning.open_boxes = 2
-			check(r.solved and r.complete, "%s with %d colors and three open boxes solved" % [id, colors])
-			for t: int in r.solution:
-				replay.tap(t)
-			check(replay.status() == PlayState.WON and replay.tray_uses() == r.fewest_tray_uses, "%s: the solution replays with three open boxes" % id)
-			var k := r.fewest_tray_uses
-			if k >= 1:
-				check(not _reach(search, k - 1, {}, level.screw_count(), 3), "%s: no win with %d tray uses" % [id, k - 1])
-			check(_reach(search, k, {}, level.screw_count(), 3), "%s: a win with %d tray uses" % [id, k])
-			compared += 1
+			levels.append(Kit.random_colors(Kit.blueprint(id), colors, rng))
+	var results: Array[SolveResult] = []
+	var replays: Array[PlayState] = []
+	var searches: Array[PlayState] = []
+	_saved_open_boxes = Tuning.open_boxes
+	Tuning.open_boxes = 3
+	for level: LevelData in levels:
+		results.append(Solver.solve(level, MAX_STATES))
+		replays.append(PlayState.start(level))
+		searches.append(PlayState.start(level))
+	Tuning.open_boxes = _saved_open_boxes
+	_saved_open_boxes = -1
+	for i: int in levels.size():
+		var level := levels[i]
+		var r := results[i]
+		check(r.solved and r.complete, "%s with three open boxes solved" % level.id)
+		for t: int in r.solution:
+			replays[i].tap(t)
+		check(replays[i].status() == PlayState.WON and replays[i].tray_uses() == r.fewest_tray_uses, "%s: the solution replays with three open boxes" % level.id)
+		var k := r.fewest_tray_uses
+		# _reach undoes every move it tries, so one three box state serves both searches.
+		if k >= 1:
+			check(not _reach(searches[i], k - 1, {}, level.screw_count(), 3), "%s: no win with %d tray uses" % [level.id, k - 1])
+		check(_reach(searches[i], k, {}, level.screw_count(), 3), "%s: a win with %d tray uses" % [level.id, k])
 	check_eq(Tuning.open_boxes, 2, "Tuning is back to two open boxes")
-	check_eq(compared, 10, "levels compared")
+	check_eq(results.size(), 10, "levels compared")
 
 
 func test_solver_solutions_replay_in_play_state_on_every_blueprint() -> void:
@@ -315,6 +328,13 @@ func test_solver_timing_table_for_the_shipped_blueprints() -> void:
 	for l: String in lines:
 		print(l)
 	print("        %d solves, %d games per row, max_states %d: median %d ms, 95th percentile %d ms, worst %d ms" % [all_ms.size(), games, budget, all_ms[all_ms.size() >> 1], all_ms[int(all_ms.size() * 0.95)], all_ms[-1]])
+
+
+func cleanup() -> void:
+	if _saved_open_boxes >= 0:
+		Tuning.open_boxes = _saved_open_boxes
+		_saved_open_boxes = -1
+	await super()
 
 
 func _color_counts(boxes: int) -> Array[int]:

@@ -25,15 +25,24 @@ extends RefCounted
 ## already arrived (none is left in the queue), and taking it can never cover anything (its
 ## plank covers nothing in any pose, or it is the plank's last screw, so the plank falls).
 ## Then some best solution takes it next, so the search takes it and tries nothing else from
-## that state. Why: number each color's screws from 1 in the order they leave the board. Screw
-## k of a color belongs to that color's box number (k + 2) / 3, rounded down, and it costs a
-## tray use exactly when that box has not arrived when it is taken. Taking the safe screw early leaves that
-## numbering alone for every other color, and its own color's boxes have all arrived, so its
-## color costs nothing either way. A box closes when it has arrived and its three screws are
-## out, so moving one screw earlier makes boxes close, and later boxes arrive, no later than
-## before. So no screw costs more and the tray never holds more. On the board the only change
-## is a plank that covered nothing, or is gone sooner. Tests check the answer against a search
-## without this rule and against a brute force search over PlayState.
+## that state.
+##
+## The proof rests on two rules, so a change to either must send someone back here:
+## - R12 (and R20): a screw goes to the fullest open box of its color, and tray screws jump into
+##   a box only when it arrives. So a color's boxes fill in queue order, each with the next
+##   three of that color's screws to leave the board.
+## - I1 (no tray screw ever matches an open box with room). So a color's tray count is the
+##   screws of that color off the board less those in its arrived boxes, at most three each.
+## Why the move is safe: number each color's screws from 1 in the order they leave the board.
+## By R12, screw k of a color belongs to that color's box number (k + 2) / 3, rounded down,
+## and by I1 it costs a tray use exactly when that box has not arrived when it is taken.
+## Taking the safe screw early leaves that numbering alone for every other color, and its own
+## color's boxes have all arrived, so its color costs nothing either way. A box closes when it
+## has arrived and its three screws are out, so moving one screw earlier makes boxes close,
+## and later boxes arrive, no later than before. So no screw costs more and the tray never
+## holds more. On the board the only change is a plank that covered nothing, or is gone
+## sooner. Tests check the answer against a search without this rule and against a brute force
+## search over PlayState.
 ##
 ## The trap measure. The share of TRAP_PLAYOUTS careless playouts that end lost. A careless
 ## player taps a random free screw that fits an open box when there is one, and otherwise a
@@ -102,37 +111,53 @@ var _child_tray: bool
 
 
 ## Solves a level: the fewest tray uses, a solution, the novice result and the trap measure.
-static func solve(level: LevelData, max_states: int) -> SolveResult:
+## With max_tray_uses at 0 or more, the search stops (over_cap) once every solution is known
+## to need more than that, which is all the generator needs to reject a level.
+static func solve(level: LevelData, max_states: int, max_tray_uses: int = -1) -> SolveResult:
 	var started := Time.get_ticks_usec()
 	var result := SolveResult.new()
 	var solver := Solver.new()
 	if solver._setup(level):
-		solver._search(max_states, result)
-		result.novice_won = solver._playout(null)
-		var rng := RandomNumberGenerator.new()
-		rng.seed = TRAP_SEED
-		var lost := 0
-		for _i: int in TRAP_PLAYOUTS:
-			if not solver._playout(rng):
-				lost += 1
-		result.trap = float(lost) / TRAP_PLAYOUTS
+		solver._search(max_states, result, max_tray_uses)
+		solver._measure(result)
 	@warning_ignore("integer_division")
 	result.ms = (Time.get_ticks_usec() - started) / 1000
 	return result
 
 
 ## Only the search for the fewest tray uses (no novice or trap), with or without the safe move
-## rule. For tests and tools that check the rule.
-static func search_only(level: LevelData, max_states: int, prune: bool) -> SolveResult:
+## rule and the cap. For the generator, and for tests and tools that check the rule.
+static func search_only(level: LevelData, max_states: int, prune: bool = true, max_tray_uses: int = -1) -> SolveResult:
 	var started := Time.get_ticks_usec()
 	var result := SolveResult.new()
 	var solver := Solver.new()
 	solver._prune = prune
 	if solver._setup(level):
-		solver._search(max_states, result)
+		solver._search(max_states, result, max_tray_uses)
 	@warning_ignore("integer_division")
 	result.ms = (Time.get_ticks_usec() - started) / 1000
 	return result
+
+
+## Adds the novice result and the trap measure to a result from search_only.
+static func measure(level: LevelData, result: SolveResult) -> void:
+	var started := Time.get_ticks_usec()
+	var solver := Solver.new()
+	if solver._setup(level):
+		solver._measure(result)
+	@warning_ignore("integer_division")
+	result.ms += (Time.get_ticks_usec() - started) / 1000
+
+
+func _measure(result: SolveResult) -> void:
+	result.novice_won = _playout(null)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = TRAP_SEED
+	var lost := 0
+	for _i: int in TRAP_PLAYOUTS:
+		if not _playout(rng):
+			lost += 1
+	result.trap = float(lost) / TRAP_PLAYOUTS
 
 
 ## Every state reachable from the start, for tests: {"states", "won", "lost", "complete"}.
@@ -294,7 +319,7 @@ func _setup(level: LevelData) -> bool:
 
 
 ## The layered search described at the top.
-func _search(max_states: int, result: SolveResult) -> void:
+func _search(max_states: int, result: SolveResult, max_tray_uses: int = -1) -> void:
 	# Locals are faster than members in GDScript's inner loops.
 	var n := _n
 	var ob_mask := _ob_mask
@@ -335,7 +360,10 @@ func _search(max_states: int, result: SolveResult) -> void:
 	var win := -1
 	if _start_key & ob_mask == 0:
 		win = _start_key
+	# On the last tray use count the cap allows, tray moves are not followed at all.
+	var skipped := false
 	while win < 0:
+		var last_layer := max_tray_uses >= 0 and cost >= max_tray_uses
 		while not stack.is_empty() and win < 0:
 			var top := stack.size()
 			var key := stack[top - 2]
@@ -413,6 +441,9 @@ func _search(max_states: int, result: SolveResult) -> void:
 						if child < 0 or visited.has(child):
 							continue
 						if to_tray:
+							if last_layer:
+								skipped = true
+								continue
 							if not pending.has(child):
 								pending[child] = link_base | s
 								later.append(child)
@@ -434,6 +465,7 @@ func _search(max_states: int, result: SolveResult) -> void:
 		if later.is_empty():
 			result.states = visited.size()
 			result.complete = true
+			result.over_cap = skipped
 			return
 		cost += 1
 		for i: int in range(0, later.size(), 2):

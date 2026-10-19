@@ -145,6 +145,15 @@ not unlocked (after a progress reset) reads as the default.
 - `Save` reads its files only when the app flow calls `Save.load_all()` at boot, never in
   `_ready`, so the test runner can point it elsewhere first.
 
+### 3.5 Stored levels: `src/logic/fallback/tier-<NN>.json`
+
+A stored level is `LevelData.to_dict()`: the tutorial format of GDD 9.3 (planks with
+`colors`, `queue`, `tray_par`, `par_time`, `line`, `hint`) with `kind` "numbered", "daily" or
+"relaxed", plus `number`, `tier`, `group`, `blueprint`, `generator` (the version that made
+it) and `band`. A fallback file is `{"format": 1, "tier": t, "levels": [{"level": {...},
+"solve": {...}}, ...]}`, one level per line, where `solve` is the stored `SolveResult`. The
+test suite solves every stored level again and replays its solution.
+
 ## 4. The logic model (src/logic/)
 
 Plain classes (`RefCounted`), statically typed, with `class_name`. Names below are the
@@ -224,7 +233,8 @@ func level() -> LevelData
 - `cover_plank()` picks the frontmost layer; within one layer, the lowest plank index.
 - `snapshot()` holds everything an undo restores, including the tray's length, and leaves
   out helpers used and the Extra slot flag, which undo never takes back (R27). So a tap then
-  an undo gives back an equal snapshot.
+  an undo gives back an equal snapshot, unless the Extra slot opened in between: then the
+  tray keeps its sixth slot, and a loss in the earlier snapshot may now be cleared.
 - Relaxed uses the same `PlayState`. "Can't be lost" is the screens' job: on `LOST` they offer
   the free Undo instead of the out of room sheet.
 
@@ -278,7 +288,8 @@ An Extra slot is `TRAY_EXTENDED`, then `RESUMED` or `LOST` if it started at `LOS
 **Nothing that decides what a level is may depend on time.** Budgets are counts. Wall-clock
 milliseconds are measured only for reports.
 
-- `Solver.solve(level: LevelData, max_states: int) -> SolveResult`: `solved: bool`,
+- `Solver.solve(level: LevelData, max_states: int, max_tray_uses := -1) -> SolveResult`:
+  `solved: bool`,
   `complete: bool` (false if it stopped at `max_states`), `fewest_tray_uses: int`,
   `solution: PackedInt32Array` (screw ids), `states: int`, `novice_won: bool` (GDD 6.4),
   `trap: float` (the engine's trap measure), `ms: int` (report only). A level whose search
@@ -289,13 +300,22 @@ milliseconds are measured only for reports.
   counts per color follow from the key, same-colored tray screws are interchangeable, and
   R12's tie between two boxes only happens when they are identical. A rule that makes slots
   or positions matter must change the key too.
-  `Solver.explore` and `Solver.search_only` are for tests and tools only.
+  With `max_tray_uses` set (the tier's top count), the search stops once that count is
+  passed and `over_cap` is true. `Solver.explore`, `Solver.search_only` and `Solver.measure`
+  are for tests and tools only.
 - `Generator.GENERATOR_VERSION: int` (starts at 1).
   `Generator.make(kind: int, number: int, band: String) -> GeneratedLevel`: `level`, `solve`,
   `attempts: int`, `fell_back: bool`, `gen_ms: int` (report only). It tries a fixed sequence
   of attempts derived from the seed, each solved with a fixed `max_states`, and falls back
   after a fixed number of failed attempts. The same kind, number, band and version give the
-  same level on every phone and PC.
+  same level on every phone and PC. Budgets are per tier: `max_states` per attempt is 20k for
+  tiers 1 to 3, 30k for 4 and 5, 40k for 6, 60k for 7 and 8 and 80k for 9 and 10; a level gets
+  at most 60 attempts and 1.2M states in all, then falls back. Hard tiers color with intent:
+  a planned solution that sends key screws to the tray (solvable by construction), or a deep
+  opening (made safe only by the solver). Either way only a complete, solved search accepts a
+  level, and it proves the fewest tray uses. A tier needing k tray uses only takes blueprints
+  with at least 2k + 1 screws covered at the start (pending the designer's and Bart's sign-off
+  at Hard Stop 2). `level` is never null once `LevelCatalog.load_all()` has succeeded.
 - **Blueprint choice (G7) is a pure function** of (kind, number, version): computing level N
   never needs any other level to be generated. For numbered levels it guarantees no blueprint
   repeats within 5 levels (for example a seeded deal per block of levels, arranged so the
@@ -309,15 +329,22 @@ milliseconds are measured only for reports.
   value in 32 bits: it multiplies only by constants below 2^31 (so a product stays below
   2^63) and masks with `& 0xFFFFFFFF` after every step, so it never overflows and never uses
   `hash()`. Randomness only through a `RandomNumberGenerator` with its `seed` set from these.
-- **A golden test** in tests/logic pins a fingerprint (blueprint, colors, queue, tier) of a
+- **A golden test** in tests/logic pins `LevelData.fingerprint()` (whole numbers only:
+  blueprint, tier, tray par, par time, colors, queue and every plank field; never an angle) of a
   fixed set of levels (numbered 9 to 40, a few dailies and relaxed levels). Any change that
   alters them fails the test until `GENERATOR_VERSION` goes up and the fingerprints are
   renewed.
 - **Fallback levels** are known-good levels per tier, generated by the engine developer's tool
-  and stored as JSON in `src/logic/fallback/` (level-engine-dev).
-- `LevelCatalog.load_all()` reads `Tuning`, every blueprint and every tutorial level, on the
-  main thread at startup (the app flow's boot, and the test runner). After that they are
-  read-only, so worker threads can read them freely.
+  and stored as JSON in `src/logic/fallback/tier-NN.json` (8 per tier, one per line;
+  level-engine-dev; format in 3.5). When a level's attempts run out the order is: the tier's
+  own stored levels, then the closest attempt that was solved, then a neighboring tier's
+  stored levels.
+- `LevelCatalog.load_all() -> bool` reads `Tuning`, every blueprint, every tutorial level and
+  the fallback levels, on the main thread at startup (the app flow's boot, and the test
+  runner, which stops if it returns false or logs an error). A second call returns the
+  first call's result without loading again. After that they are
+  read-only, so worker threads can read them freely. Reading files goes through
+  `LevelCatalog.read_text` and `json_files`, which handle exported `.remap` names.
   `LevelCatalog.get_level(kind, number, band) -> GeneratedLevel`: the tutorial file for
   numbered levels 1 to 8, otherwise the generator.
 - `LevelPrefetcher` (owned by the app flow, which polls it every frame):
@@ -329,13 +356,22 @@ milliseconds are measured only for reports.
   - `is_ready(key) -> bool`, `take(key) -> GeneratedLevel` (removes it from the cache; null
     if not ready, and the app flow shows the board a moment later when it is).
   - `shutdown()` waits for every running task; the app flow calls it before quitting.
-  - The app flow asks for level N+1 as soon as level N starts.
+  - The app flow asks for level N+1 as soon as level N starts. At boot it also asks for the
+    Play level, today's daily and the next Relaxed level of each band, since those can't be
+    fetched during an earlier level. Worst case on this PC is 1.5 s for a numbered level.
 - `Stars.award(level: LevelData, won: bool, elapsed_ms: int, tray_uses: int, helpers_used:
   PackedStringArray) -> Vector3i` (cleared, fast, clean as 0 or 1), per GDD S1 to S8, and
   `Stars.par_time`.
 - `Tuning`: `data/tuning.json`, validated, loaded by `LevelCatalog.load_all()`. Its values are
   static and written only then, at boot; after that everyone, worker threads included, only
-  reads them.
+  reads them. For the app flow it offers `TierSpec`, `tier_for_level`, `slack_for_level`,
+  `par_time_for`, and the helper and unlock numbers.
+- `LevelData.with_colors(colors, queue, errors, play := {})`: `play` sets the play fields
+  (kind, number, band, tier, group, tray par, par time, line, hint, generator, blueprint, id,
+  name) and shares the planks and geometry. Also `LevelData.from_planks`, `fingerprint`,
+  `is_id`, and `PlankData.transformed` for variations. The other public helpers in
+  `Generator`, `LevelCatalog`, `GeneratedLevel` (report-only fields) and `LevelPrefetcher`
+  (`key_for`, `is_running`) are for tests and tools.
 
 ### 4.5 tools/levels
 
@@ -343,7 +379,11 @@ milliseconds are measured only for reports.
 res://tools/levels/levels.gd -- --from=1 --to=100 [--daily=2026-10-19] [--out=build/levels]`
 writes `report.md` (per level: kind, tier, blueprint, screws, colors, layers, fewest tray
 uses, novice result, trap, attempts, fallback, generation ms, solve ms) and one small PNG per
-level drawn into an `Image`, plus a timing summary (median, 95th percentile, worst).
+level drawn into an `Image`, plus a timing summary (median, 95th percentile, worst). Other
+options: `--days`, `--relaxed`, `--no-png`, `--repeat` (make every level twice and compare).
+Two options write into the repo, for the engine developer only: `--fallback=K` rewrites
+`src/logic/fallback/`, and `--golden` rewrites `tests/logic/golden_levels.json` (only after
+`GENERATOR_VERSION` goes up). `--out` takes any path; keep it under `build/`.
 
 ## 5. Rules that keep logic and view in step
 

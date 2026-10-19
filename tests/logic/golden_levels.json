@@ -1,0 +1,169 @@
+{
+  "generator_version": 1,
+  "levels": [
+    {
+      "fingerprint": "car t3 p2 s55 c010211010101022 q12010 g975bc39c",
+      "key": "numbered:9"
+    },
+    {
+      "fingerprint": "tree t4 p3 s75 c301011332200110210 q012013 gdb3baf1f",
+      "key": "numbered:10"
+    },
+    {
+      "fingerprint": "mug t1 p2 s40 c010010100 q010 gf5cc3385",
+      "key": "numbered:11"
+    },
+    {
+      "fingerprint": "target t1 p2 s50 c000111010011 q1010 ge494f858",
+      "key": "numbered:12"
+    },
+    {
+      "fingerprint": "house t2 p2 s55 c001210100021112 q20101 g19e79b3a",
+      "key": "numbered:13"
+    },
+    {
+      "fingerprint": "windmill t3 p2 s55 c332033323010112 q30132 g49d942e4",
+      "key": "numbered:14"
+    },
+    {
+      "fingerprint": "pagoda t4 p3 s75 c231211133313200301 q301321 g81e4d783",
+      "key": "numbered:15"
+    },
+    {
+      "fingerprint": "signpost t1 p2 s40 c101010000 q010 g249de85a",
+      "key": "numbered:16"
+    },
+    {
+      "fingerprint": "heart t1 p2 s40 c100000101 q010 gcceb7002",
+      "key": "numbered:17"
+    },
+    {
+      "fingerprint": "sailboat t2 p2 s55 c220101100100112 q21010 gc04ac630",
+      "key": "numbered:18"
+    },
+    {
+      "fingerprint": "rocket t3 p2 s65 c122202210121120212 q212012 g974f0afa",
+      "key": "numbered:19"
+    },
+    {
+      "fingerprint": "tree t4 p3 s75 c102111302312012232 q121203 g50c5365e",
+      "key": "numbered:20"
+    },
+    {
+      "fingerprint": "flower t1 p2 s50 c010011101100 q1010 g4444bd57",
+      "key": "numbered:21"
+    },
+    {
+      "fingerprint": "snowman t2 p2 s55 c210221101111101 q12101 g7c675687",
+      "key": "numbered:22"
+    },
+    {
+      "fingerprint": "owl t3 p2 s65 c022011022331113212 q021231 g6b14b282",
+      "key": "numbered:23"
+    },
+    {
+      "fingerprint": "bridge t4 p3 s75 c131101212322001232 q102123 g2675e228",
+      "key": "numbered:24"
+    },
+    {
+      "fingerprint": "bricks t5 p4 s95 c031331021212133312122011 q32121031 gaaf62c77",
+      "key": "numbered:25"
+    },
+    {
+      "fingerprint": "signpost t1 p2 s40 c201201120 q102 g249de85a",
+      "key": "numbered:26"
+    },
+    {
+      "fingerprint": "sailboat t2 p2 s55 c200120122222221 q21202 gc04ac630",
+      "key": "numbered:27"
+    },
+    {
+      "fingerprint": "pagoda t3 p2 s65 c211211222122020021 q201212 g1a38d650",
+      "key": "numbered:28"
+    },
+    {
+      "fingerprint": "tree t4 p3 s75 c232312011321201201 q131202 g4fb2b3c4",
+      "key": "numbered:29"
+    },
+    {
+      "fingerprint": "crane t5 p3 s95 c110223321004420002000342 q01032024 g261bb598",
+      "key": "numbered:30"
+    },
+    {
+      "fingerprint": "target t1 p1 s50 c202211222010 q2021 ge494f858",
+      "key": "numbered:31"
+    },
+    {
+      "fingerprint": "flower t2 p1 s50 c212120202201 q2120 gcd5ead90",
+      "key": "numbered:32"
+    },
+    {
+      "fingerprint": "car t3 p1 s55 c202211123230203 q23012 g18173bc2",
+      "key": "numbered:33"
+    },
+    {
+      "fingerprint": "pagoda t4 p2 s75 c230012311220220030 q030212 g1a38d650",
+      "key": "numbered:34"
+    },
+    {
+      "fingerprint": "weave t5 p3 s95 c404231004243111412113114 q02143141 g721bef24",
+      "key": "numbered:35"
+    },
+    {
+      "fingerprint": "fish t2 p1 s55 c001211122121202 q02121 gadc2c491",
+      "key": "numbered:36"
+    },
+    {
+      "fingerprint": "windmill t3 p1 s55 c001310123312121 q12031 g49d942e4",
+      "key": "numbered:37"
+    },
+    {
+      "fingerprint": "bridge t4 p2 s75 c330022022200310211 q210230 gbf577af1",
+      "key": "numbered:38"
+    },
+    {
+      "fingerprint": "crane t5 p2 s95 c424442100043303011200400 q02041043 g41542296",
+      "key": "numbered:39"
+    },
+    {
+      "fingerprint": "crates t6 p4 s105 c303022124331222203240432001 q010243232 g8b77f523",
+      "key": "numbered:40"
+    },
+    {
+      "fingerprint": "crates t6 p2 s95 c003212024322344431243341 q02142343 g1a08d41b",
+      "key": "daily:20261019"
+    },
+    {
+      "fingerprint": "bricks t6 p4 s95 c313143002312042222422323 q32432012 g360227d9",
+      "key": "daily:20261020"
+    },
+    {
+      "fingerprint": "castle t6 p2 s95 c404110222422312342403224 q10324242 g2500f34b",
+      "key": "daily:20270101"
+    },
+    {
+      "fingerprint": "signpost t1 p0 s40 c211021020 q012 g249de85a",
+      "key": "relaxed:easy:0"
+    },
+    {
+      "fingerprint": "heart t1 p0 s40 c100210221 q210 g9e483958",
+      "key": "relaxed:easy:1"
+    },
+    {
+      "fingerprint": "pagoda t4 p2 s75 c212121312001223031 q302121 g6513674f",
+      "key": "relaxed:medium:0"
+    },
+    {
+      "fingerprint": "barn t5 p1 s85 c220234333403031100401 q0130342 g5264b102",
+      "key": "relaxed:medium:1"
+    },
+    {
+      "fingerprint": "lattice t8 p3 s145 c422354521442353400505501041552025 q30542425150 g9125c10f",
+      "key": "relaxed:hard:0"
+    },
+    {
+      "fingerprint": "dominoes t7 p2 s130 c324044133554451054404413525233 q5125403434 g28298ab4",
+      "key": "relaxed:hard:1"
+    }
+  ]
+}

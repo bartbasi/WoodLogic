@@ -93,6 +93,35 @@ func copy() -> PlankData:
 	return p
 
 
+## A varied copy for the generator: mirrored left to right across the board (x becomes
+## 86 - x), then shifted by (dx, dy), on another layer. Holes keep their order, so screw ids
+## keep theirs. Built and ready.
+func transformed(mirror: bool, dx: int, dy: int, new_layer: int) -> PlankData:
+	var p := PlankData.new()
+	p.layer = new_layer
+	p.shape = shape
+	p.width = width
+	p.radius = radius
+	p.inner = inner
+	p.path = _moved(path, mirror, dx, dy)
+	p.points = _moved(points, mirror, dx, dy)
+	p.holes = _moved(holes, mirror, dx, dy)
+	var c := _moved(PackedVector2Array([center]), mirror, dx, dy)
+	p.center = c[0]
+	p.build()
+	return p
+
+
+static func _moved(list: PackedVector2Array, mirror: bool, dx: int, dy: int) -> PackedVector2Array:
+	var out := PackedVector2Array()
+	out.resize(list.size())
+	for i: int in list.size():
+		var x := int(list[i].x)
+		var y := int(list[i].y)
+		out[i] = Vector2((LevelData.BOARD_W - x if mirror else x) + dx, y + dy)
+	return out
+
+
 ## The plank as GDD 9.1 writes it (without colors).
 func to_dict() -> Dictionary:
 	var d := {"layer": layer, "shape": SHAPE_NAMES[shape]}

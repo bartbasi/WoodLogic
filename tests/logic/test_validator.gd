@@ -41,9 +41,15 @@ func _json_files(dir: String) -> PackedStringArray:
 
 
 func test_b12_shipped_blueprints_free_at_start_match_the_gdd() -> void:
-	# GDD section 10's table.
-	var expected := {"house": 12, "sailboat": 13, "windmill": 10, "fish": 11, "tree": 15, "bridge": 14, "lighthouse": 16, "rings": 17, "bricks": 12, "lattice": 24}
-	for id: String in Kit.BLUEPRINTS:
+	# GDD section 10's table: screws, layers and free at the start, for every blueprint.
+	var expected := {"balloon": [21, 4, 21], "barn": [21, 4, 17], "bookshelf": [33, 4, 22], "bricks": [24, 4, 12], "bridge": [18, 4, 14], "butterfly": [24, 4, 22], "car": [15, 3, 13], "castle": [27, 4, 23], "catface": [33, 4, 23], "crane": [24, 5, 21], "crates": [27, 5, 23], "dominoes": [30, 5, 20], "falling-blocks": [33, 5, 23], "fish": [15, 3, 11], "flower": [12, 2, 12], "heart": [9, 2, 9], "house": [15, 2, 12], "jellyfish": [33, 5, 24], "kite": [9, 2, 9], "lattice": [33, 4, 24], "lighthouse": [18, 4, 16], "mug": [9, 2, 9], "mushroom": [9, 2, 9], "owl": [18, 4, 17], "pagoda": [18, 4, 15], "rings": [21, 5, 17], "robot": [21, 4, 21], "rocket": [18, 3, 17], "sailboat": [15, 3, 13], "signpost": [9, 2, 8], "skyline": [30, 4, 22], "snowman": [15, 3, 14], "steamboat": [24, 4, 22], "target": [12, 1, 12], "tiles": [36, 5, 20], "train": [21, 3, 21], "tree": [18, 3, 15], "weave": [24, 3, 20], "windmill": [15, 4, 10], "ziggurat": [30, 5, 21]}
+	var files := _json_files(Kit.BLUEPRINT_DIR)
+	check_eq(files.size(), expected.size(), "blueprints in the folder and in the GDD table")
+	for file: String in files:
+		var id := file.get_basename()
+		check(expected.has(id), "%s is in the GDD table" % id)
+		if not expected.has(id):
+			continue
 		var level := Kit.blueprint(id)
 		var all := (1 << level.screw_count()) - 1
 		var covered := level.geometry.covered(all)
@@ -51,7 +57,10 @@ func test_b12_shipped_blueprints_free_at_start_match_the_gdd() -> void:
 		for s: int in level.screw_count():
 			if covered & (1 << s) == 0:
 				free_count += 1
-		check_eq(free_count, expected[id], "%s free at start" % id)
+		var row: Array = expected[id]
+		check_eq(level.screw_count(), row[0], "%s screws" % id)
+		check_eq(level.layer_count(), row[1], "%s layers" % id)
+		check_eq(free_count, row[2], "%s free at start" % id)
 
 
 func test_b1_format_and_board() -> void:

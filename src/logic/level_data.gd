@@ -88,9 +88,12 @@ func color_count() -> int:
 
 
 ## A playable copy of this board with these colors and this queue. It shares the planks and
-## geometry (both read-only). The caller fills in the other play fields before handing it on.
-## Returns null and adds to errors if the colors break R3.
-func with_colors(colors: PackedInt32Array, box_queue: PackedInt32Array, errors: PackedStringArray) -> LevelData:
+## geometry (both read-only), so nothing is rebuilt. `play` may set the play fields in one go:
+## "kind" (an int such as NUMBERED), "number", "band", "tier", "group", "tray_par",
+## "par_time" (seconds), "line", "hint" (screw ids), "generator", "blueprint", "id", "name".
+## Fields it leaves out keep this level's values (play fields are 0 or empty on a blueprint).
+## Returns null and adds to errors if the colors break R3 or a play field is wrong.
+func with_colors(colors: PackedInt32Array, box_queue: PackedInt32Array, errors: PackedStringArray, play: Dictionary = {}) -> LevelData:
 	var level := LevelData.new()
 	level.id = id
 	level.name = name
@@ -102,8 +105,70 @@ func with_colors(colors: PackedInt32Array, box_queue: PackedInt32Array, errors: 
 	level.tray_size = tray_size
 	level.kind = NUMBERED if kind == BLUEPRINT else kind
 	level.blueprint_id = blueprint_id
-	if not _colors_fit(level, errors):
+	level.number = number
+	level.band = band
+	level.tier = tier
+	level.group = group
+	level.tray_par = tray_par
+	level.par_time_s = par_time_s
+	level.line = line
+	level.hint = hint
+	level.generator_version = generator_version
+	var before := errors.size()
+	var keys: Array[String] = ["kind", "number", "band", "tier", "group", "tray_par", "par_time", "line", "hint", "generator", "blueprint", "id", "name"]
+	for k: Variant in play.keys():
+		if not (k is String and keys.has(k)):
+			errors.append("with_colors: unknown play field %s" % str(k))
+	if play.has("kind"):
+		level.kind = _whole(play["kind"], TUTORIAL, RELAXED, -1)
+		if level.kind < 0:
+			errors.append("with_colors: kind must be TUTORIAL, NUMBERED, DAILY or RELAXED")
+	level.number = _whole(play.get("number", level.number), 0, 99999999, -1)
+	level.tier = _whole(play.get("tier", level.tier), 0, 10, -1)
+	level.tray_par = _whole(play.get("tray_par", level.tray_par), 0, 100, -1)
+	level.par_time_s = _whole(play.get("par_time", level.par_time_s), 0, 3600, -1)
+	level.generator_version = _whole(play.get("generator", level.generator_version), 0, 1000000, -1)
+	if level.number < 0 or level.tier < 0 or level.tray_par < 0 or level.par_time_s < 0 or level.generator_version < 0:
+		errors.append("with_colors: number, tier, tray_par, par_time and generator must be whole numbers in range")
+	for k: String in ["band", "group", "line", "blueprint", "id", "name"]:
+		if play.has(k) and not play[k] is String:
+			errors.append("with_colors: %s must be text" % k)
+	level.band = str(play.get("band", level.band))
+	level.group = str(play.get("group", level.group))
+	level.line = str(play.get("line", level.line))
+	level.blueprint_id = str(play.get("blueprint", level.blueprint_id))
+	level.id = str(play.get("id", level.id))
+	level.name = str(play.get("name", level.name))
+	if play.has("hint"):
+		var h: Variant = play["hint"]
+		if h is PackedInt32Array:
+			level.hint = h
+		else:
+			errors.append("with_colors: hint must be a PackedInt32Array of screw ids")
+	if errors.size() > before or not _colors_fit(level, errors):
 		return null
+	return level
+
+
+## A bare board from planks (built ones, in screw id order): gives the screws their ids and
+## works out the geometry. For the generator's variations.
+static func from_planks(board_id: String, board_name: String, kind_text: String, list: Array[PlankData]) -> LevelData:
+	var level := LevelData.new()
+	level.id = board_id
+	level.name = board_name
+	level.blueprint_kind = kind_text
+	level.blueprint_id = board_id
+	level.kind = BLUEPRINT
+	level.tray_size = Tuning.tray_size
+	var next := 0
+	for p: PlankData in list:
+		var ids := PackedInt32Array()
+		for h: int in p.hole_count():
+			ids.append(next)
+			next += 1
+		p.screws = ids
+		level.planks.append(p)
+	level.geometry = BoardGeometry.build(level.planks)
 	return level
 
 
@@ -155,7 +220,7 @@ static func from_dict(d: Dictionary, errors: PackedStringArray) -> LevelData:
 	if not (board is Array and (board as Array).size() == 2 and _whole((board as Array)[0], BOARD_W, BOARD_W, -1) == BOARD_W and _whole((board as Array)[1], BOARD_H, BOARD_H, -1) == BOARD_H):
 		errors.append("B1: board must be [86, 90]")
 	var id_value: Variant = d.get("id")
-	if not (id_value is String and _is_id(id_value)):
+	if not (id_value is String and is_id(id_value)):
 		errors.append("id must be lowercase letters, digits and hyphens")
 	else:
 		level.id = id_value
@@ -238,6 +303,22 @@ static func from_dict(d: Dictionary, errors: PackedStringArray) -> LevelData:
 	if errors.size() > errors_before:
 		return null
 	return level
+
+
+## A short text that changes whenever anything that decides the level changes: blueprint,
+## tier, tray par, par time, colors, queue, and a hash of every plank field and hole. Only whole
+## numbers go in (no angles or other floats, whose last bits can differ between phones). For
+## the golden test and tools/levels.
+func fingerprint() -> String:
+	var h := 0x57D1
+	for p: PlankData in planks:
+		h = Seeds.mix(h, p.layer * 16 + p.shape)
+		for list: PackedVector2Array in [p.path, p.points, p.holes, PackedVector2Array([p.center])]:
+			h = Seeds.mix(h, list.size())
+			for v: Vector2 in list:
+				h = Seeds.mix(h, int(v.x) * 1000 + int(v.y))
+		h = Seeds.mix(h, p.width * 10000 + p.radius * 100 + p.inner)
+	return "%s t%d p%d s%d c%s q%s g%08x" % [blueprint_id, tier, tray_par, par_time_s, "".join(Array(screw_colors).map(func(c: int) -> String: return str(c))), "".join(Array(queue).map(func(c: int) -> String: return str(c))), h]
 
 
 ## The level in the file format from_json reads.
@@ -342,7 +423,8 @@ static func _whole(v: Variant, low: int, high: int, fallback: int) -> int:
 	return fallback
 
 
-static func _is_id(text: String) -> bool:
+## True for lowercase letters, digits and hyphens (ids and file names).
+static func is_id(text: String) -> bool:
 	if text.is_empty():
 		return false
 	for ch: String in text:

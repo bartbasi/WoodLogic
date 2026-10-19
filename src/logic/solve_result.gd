@@ -14,6 +14,9 @@ var complete: bool = false
 var fewest_tray_uses: int = -1
 ## A solution with that many tray uses: screw ids in tap order.
 var solution := PackedInt32Array()
+## The search stopped because every solution needs more tray uses than the cap it was given
+## (complete is true then: that much is proven).
+var over_cap: bool = false
 ## Distinct states the search reached.
 var states: int = 0
 ## Whether the novice policy (GDD 6.4) wins.

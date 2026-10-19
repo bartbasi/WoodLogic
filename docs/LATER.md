@@ -39,3 +39,11 @@ Tools and help (level-engine-dev):
 - A designer preview tool that runs the validator and the solver while a blueprint is edited,
   and shows where careless players lose.
 - Use each level's stored solution as the move behind the "hint button for stuck players" idea.
+- A generator variation that adds a covering plank, to give boards with little covering some
+  tray pressure.
+- A lower-bound (A*) solver, if much denser boards arrive.
+
+Testing (qa-tester):
+
+- A bot that spends and buys helpers, to check the star economy.
+- A time model for the bots where thinking time grows with the number of free choices.

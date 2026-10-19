@@ -54,6 +54,15 @@ func _initialize() -> void:
 func _run() -> void:
 	var args := OS.get_cmdline_user_args()
 	var only: String = args[0] if args.size() > 0 else ""
+	# The game data loads once, on the main thread, as the app does at boot.
+	var loaded := LevelCatalog.load_all()
+	var load_errors := _errors.take()
+	if not loaded or not load_errors.is_empty():
+		for error: String in load_errors:
+			print(error)
+		print("\nThe game data failed to load.")
+		quit(1)
+		return
 	var files: Array[String] = []
 	_find_suites(TESTS_ROOT, files)
 	files.sort()

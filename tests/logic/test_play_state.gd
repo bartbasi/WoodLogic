@@ -281,7 +281,11 @@ func test_r14_a_double_tap_finds_the_screw_gone() -> void:
 	var r := state.tap(8)
 	check(not r.ok and r.reason == TapResult.GONE, "second tap: GONE")
 	check_eq(state.snapshot(), before, "nothing changed")
-	check_eq(state.tap(99).reason, TapResult.GONE, "a screw that does not exist")
+	check_eq(state.tap(99).reason, TapResult.GONE, "a screw id past the end")
+	check_eq(state.tap(-1).reason, TapResult.GONE, "a negative screw id")
+	check_eq(state.use_screwdriver(-1).reason, TapResult.GONE, "a Screwdriver on a negative id")
+	check(not state.is_on_board(-1) and not state.is_free(-1) and state.cover_plank(-1) == -1, "queries on a bad id")
+	check_eq(state.destination(-1), Vector2i(PlayState.NONE, -1), "no destination for a bad id")
 
 
 func test_r15_a_plank_with_two_screws_left_does_not_move() -> void:
@@ -417,6 +421,35 @@ func test_e6_r25_with_one_fitting_free_screw_play_goes_on_and_other_taps_are_ref
 	check_eq(state.snapshot(), before, "nothing changed")
 	check_eq(state.tray_uses(), 5, "not a tray use")
 	check(state.tap(5).ok, "the B can still go")
+
+
+func test_r25_a_refused_tap_leaves_the_undo_history_alone() -> void:
+	var colors := E6_COLORS.duplicate()
+	colors[5] = 1
+	colors[8] = 5
+	var state := _bricks(colors)
+	_play(state, E6_TAPS)
+	check_eq(state.tap(0).reason, TapResult.REFUSED, "a free D is refused")
+	var r := state.undo()
+	check(r.ok and r.events[0].screw == 16, "the next undo takes back the last real tap (16), not the refused one")
+	check(state.is_on_board(16) and state.is_on_board(0), "16 is back and 0 never left")
+
+
+func test_r20_the_tray_holds_more_of_the_arriving_color_than_the_box_takes() -> void:
+	# House with two C boxes: queue A B C D C. Four C wait in the tray; when C arrives it takes
+	# the three leftmost, closes, and D arrives; the fourth C keeps its slot.
+	var colors := [0, 0, 0, 3, 2, 2, 3, 3, 2, 1, 2, 1, 1, 2, 2]
+	var state := _house(colors, [0, 1, 2, 3, 2])
+	_play(state, [13, 4, 5, 8, 9, 11])
+	check_eq(state.tray(), PackedInt32Array([13, 4, 5, 8, -1]), "four C in the tray")
+	var r := state.tap(12)
+	check_eq(_kinds(r), ["SCREW_TO_BOX", "BOX_CLOSED", "BOX_ARRIVED", "TRAY_TO_BOX", "TRAY_TO_BOX", "TRAY_TO_BOX", "BOX_CLOSED", "BOX_ARRIVED"], "three jump, C closes, D arrives: %s" % r.describe())
+	var jumps := r.of_kind(LogicEvent.TRAY_TO_BOX)
+	if jumps.size() == 3:
+		check(jumps[0].slot == 0 and jumps[1].slot == 1 and jumps[2].slot == 2, "slots 0, 1 and 2, in tray order")
+	check_eq(state.tray(), PackedInt32Array([-1, -1, -1, 8, -1]), "the fourth C stays in slot 3")
+	check_eq(state.open_box(1), Vector2i(3, 0), "D is open at position 1")
+	check_eq(state.preview(), PackedInt32Array([2]), "the second C box is next")
 
 
 func test_4_2_which_calls_work_when() -> void:
