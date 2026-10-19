@@ -33,3 +33,9 @@ Levels (game-designer):
 - Add the blueprint house rules to the engine validator as warnings: a one-hole plank hangs
   straight below its hole, and a covered screw sits at least 8 units under its wood.
 - A block-built picture style (like Cat and Step temple) for future themed packs.
+
+Tools and help (level-engine-dev):
+
+- A designer preview tool that runs the validator and the solver while a blueprint is edited,
+  and shows where careless players lose.
+- Use each level's stored solution as the move behind the "hint button for stuck players" idea.

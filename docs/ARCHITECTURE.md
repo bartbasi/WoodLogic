@@ -159,17 +159,26 @@ contract; private helpers are the engine developer's choice.
     `queue: PackedInt32Array` (one color per box, in order), `tray_size: int`,
     `tray_par: int` (the slack already added), `par_time_s: int`, `line: String`,
     `hint: PackedInt32Array` (screw ids).
-  - `kind: int` (`TUTORIAL`, `NUMBERED`, `DAILY`, `RELAXED`), `number: int` (the level number,
-    the date as yyyymmdd, or the relaxed stream index), `band: String` (relaxed only),
-    `tier: int`, `group: String`, `blueprint_id: String`, `generator_version: int`.
-  - `static func from_json(text: String) -> LevelData` (null and an error on bad data) and
-    `to_dict() -> Dictionary`.
+  - `kind: int` (`BLUEPRINT` for a bare blueprint with no colors yet, `TUTORIAL`, `NUMBERED`,
+    `DAILY`, `RELAXED`), `number: int` (the level number, the date as yyyymmdd, or the relaxed
+    stream index), `band: String` (relaxed only), `tier: int`, `group: String`,
+    `blueprint_id: String`, `generator_version: int`. A blueprint also has `id`, `name` and
+    `blueprint_kind`. `geometry` is its `BoardGeometry`, built once.
+  - `static func from_json(text: String) -> LevelData` (null and an error on bad data),
+    `static func parse(text: String, errors: PackedStringArray) -> LevelData` (the same, but
+    quiet: problems go in `errors`, nothing is logged), `from_dict`, `to_dict() -> Dictionary`,
+    and `with_colors(...)`, which returns a new level on the same planks with colors and a
+    queue. Small read helpers: `screw_center`, `screw_plank`, `layer_count`, `color_count`,
+    `screw_count`, `has_colors`.
 - `PlankData`: `layer: int`, `shape: int` (`BAR`, `POLY`, `DISC`, `RING`), the shape's fields
   in gu, `screws: PackedInt32Array` (screw ids, one per hole, in hole order),
   `holes: PackedVector2Array` (gu, for the view), `outline() -> PackedVector2Array` (the
   authored outline in gu, the same polygon the logic and the renderer use; arcs flattened as
   GDD 1.2 says; for a ring, `inner_outline()` is the hole).
 - **Screw ids** are 0 to n-1 in file order: plank 0's holes, then plank 1's, and so on.
+- `Geom` (outlines, signed distance, centroids, all in float64 and rounded to 1/1024 gu) and
+  `BoardGeometry` (every possible pose of every plank and what it covers, as bit masks,
+  worked out once per board).
 
 ### 4.2 Play state
 
@@ -190,13 +199,14 @@ func plank_state(plank: int) -> int            # FIXED, HANGING, FALLEN
 func plank_pose(plank: int) -> Vector3         # pivot x, pivot y (gu), angle (degrees)
 func plank_outline(plank: int) -> PackedVector2Array   # current pose, gu
 func open_box(position: int) -> Vector2i       # (color or -1, screws in it 0..3)
+func box_screws(position: int) -> PackedInt32Array   # the screw in each filled well, in order
 func preview() -> PackedInt32Array             # the next colors in the queue, up to `preview`
 func tray() -> PackedInt32Array                # per slot: screw id or -1 (5 or 6 slots)
 func tray_uses() -> int
 func helpers_used() -> PackedStringArray       # helpers used this attempt, each name once
 func extra_slot_used() -> bool
 func can_undo() -> bool
-func snapshot() -> Dictionary                  # the whole rule state, for tests (== after undo)
+func snapshot() -> Dictionary                  # the rule state undo restores, for tests
 func level() -> LevelData
 ```
 
@@ -212,6 +222,9 @@ func level() -> LevelData
   the pivot screw's center and the rest angle (a plank that turns half way round reports 180).
   For `FALLEN`, the pose it had when it fell.
 - `cover_plank()` picks the frontmost layer; within one layer, the lowest plank index.
+- `snapshot()` holds everything an undo restores, including the tray's length, and leaves
+  out helpers used and the Extra slot flag, which undo never takes back (R27). So a tap then
+  an undo gives back an equal snapshot.
 - Relaxed uses the same `PlayState`. "Can't be lost" is the screens' job: on `LOST` they offer
   the free Undo instead of the out of room sheet.
 
@@ -222,7 +235,7 @@ func level() -> LevelData
 | `reason` | When |
 |-|-|
 | `NONE` | it worked |
-| `GONE` | the screw is no longer on the board (a double tap) |
+| `GONE` | the screw is no longer on the board (a double tap), or the id is out of range |
 | `COVERED` | the screw is covered (the view wiggles `cover_plank(screw)`) |
 | `REFUSED` | no destination (R25, or a Screwdriver with nowhere to go, R31) |
 | `NOTHING_TO_UNDO` | undo with an empty history (nothing is spent) |
@@ -236,14 +249,14 @@ func level() -> LevelData
 |-|-|-|
 | `SCREW_TO_BOX` | screw, position, well (0..2) | a screw leaves the board for a box well |
 | `SCREW_TO_TRAY` | screw, slot | a screw leaves the board for a tray slot |
-| `PLANK_SWUNG` | plank, screw (pivot), angle | a plank goes down to one screw and hangs at this rest angle |
+| `PLANK_SWUNG` | plank, screw (pivot), angle | a plank goes down to one screw and hangs at this rest angle (sent with angle 0 when it doesn't turn, R16) |
 | `PLANK_FELL` | plank | a plank loses its last screw |
 | `COVER_CHANGED` | screws | these screws changed between free and covered; the view asks `is_free()` |
 | `BOX_CLOSED` | position, color | a full box closes and leaves |
 | `BOX_ARRIVED` | position, color | the next queue box takes the position (or `color` -1: it stays empty) |
 | `TRAY_TO_BOX` | screw, slot, position, well | a tray screw jumps into the new box (R20) |
 | `TRAY_EXTENDED` | slot | the Extra slot opened |
-| `UNDONE` | screw, screws | an undo put `screw` back; `screws` lists every screw whose place changed. The view replays the move backwards for `screw` and tweens everything else to the state |
+| `UNDONE` | screw, screws | an undo put `screw` back; `screws` lists every screw whose place changed, `screw` included. The view replays the move backwards for `screw` and tweens everything else to the state |
 | `WON` / `LOST` / `RESUMED` | | the status changed (`RESUMED`: a loss was cleared) |
 
 **Canonical order within one action** (logic tests assert it):
@@ -271,7 +284,12 @@ milliseconds are measured only for reports.
   `trap: float` (the engine's trap measure), `ms: int` (report only). A level whose search
   did not complete is never shown. The search explores moves in a fixed order (by screw id),
   so a search stopped at `max_states` stops at the same point on every phone. The visited set
-  is keyed on the full state, not a hash number, so two states can never be confused.
+  is keyed on an exact packing of the rule state, not a hash number, so two states can never
+  be confused. The key leaves out which tray slot and which box position holds what: tray
+  counts per color follow from the key, same-colored tray screws are interchangeable, and
+  R12's tie between two boxes only happens when they are identical. A rule that makes slots
+  or positions matter must change the key too.
+  `Solver.explore` and `Solver.search_only` are for tests and tools only.
 - `Generator.GENERATOR_VERSION: int` (starts at 1).
   `Generator.make(kind: int, number: int, band: String) -> GeneratedLevel`: `level`, `solve`,
   `attempts: int`, `fell_back: bool`, `gen_ms: int` (report only). It tries a fixed sequence
@@ -313,8 +331,11 @@ milliseconds are measured only for reports.
   - `shutdown()` waits for every running task; the app flow calls it before quitting.
   - The app flow asks for level N+1 as soon as level N starts.
 - `Stars.award(level: LevelData, won: bool, elapsed_ms: int, tray_uses: int, helpers_used:
-  PackedStringArray) -> Vector3i` (cleared, fast, clean as 0 or 1), per GDD S1 to S8.
-- `Tuning`: `data/tuning.json`, validated, loaded by `LevelCatalog.load_all()`.
+  PackedStringArray) -> Vector3i` (cleared, fast, clean as 0 or 1), per GDD S1 to S8, and
+  `Stars.par_time`.
+- `Tuning`: `data/tuning.json`, validated, loaded by `LevelCatalog.load_all()`. Its values are
+  static and written only then, at boot; after that everyone, worker threads included, only
+  reads them.
 
 ### 4.5 tools/levels
 
