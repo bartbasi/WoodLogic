@@ -21,6 +21,14 @@ var over_cap: bool = false
 var states: int = 0
 ## Whether the novice policy (GDD 6.4) wins.
 var novice_won: bool = false
+## The novice's survival (GDD 6.4.1, G9a): the taps it makes before the level is lost, every
+## tap counted (into a box or into the tray), the tap after which R23 holds included. The
+## screw count when it wins.
+var novice_taps: int = 0
+## Where the solution makes its last tray use (GDD 6.4.1, G9b): the tap number, 1 to the screw
+## count, of its last tap that sends a screw to the tray. 0 if it makes none or nothing was
+## solved.
+var last_tray_use: int = 0
 ## The trap measure: the share of careless playouts that lose (see Solver).
 var trap: float = 0.0
 ## Wall-clock milliseconds, for reports only. Nothing may depend on it.

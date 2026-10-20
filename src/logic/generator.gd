@@ -12,16 +12,19 @@ extends RefCounted
 ##    blueprint (G7, a pure function of kind, number and version: see blueprint_for).
 ## 2. Up to VARIATIONS varied boards (mirrored, shifted, two layers swapped, a plank dropped),
 ##    each checked against the blueprint rules (G2) and the tier's screws and layers (G1).
-## 3. Up to COLORINGS colorings per board, colored with intent (see _color), each searched
-##    with the tier's MAX_STATES and with the tier's top tray use count as the cap. A coloring
-##    is kept if the search completes and G1 to G6 hold. Between tries the coloring pressure
-##    goes up when a level came out too easy and down when it came out too hard.
-## 4. If no try is kept after MAX_ATTEMPTS tries or LEVEL_STATES states in all, a stored
-##    fallback level for the tier (exempt from G7; see _fall_back).
+## 3. Up to COLORINGS colorings per board, colored with intent (see _color). The novice plays
+##    each one first (G4, and G9a where the tier requires it); one that passes is searched with
+##    the tier's MAX_STATES and with the tier's top tray use count as the cap. A coloring is
+##    kept if the search completes and G1 to G6 hold, and G9 where the tier requires it.
+##    Between tries the coloring pressure goes up when a level came out too easy and down when
+##    it came out too hard; a G9 failure leaves it alone (GDD 6.4.1).
+## 4. If no try is kept after MAX_ATTEMPTS tries or LEVEL_STATES states in all (G9_BUDGET times
+##    as many on a tier that requires G9), a stored fallback level for the tier (exempt from
+##    G7; see _fall_back).
 ##
 ## Every number here counts toward GENERATOR_VERSION: changing one changes levels.
 
-const GENERATOR_VERSION := 3
+const GENERATOR_VERSION := 4
 ## Seed purposes for Seeds.derive.
 const DEAL := 11
 const VARY := 12
@@ -41,6 +44,21 @@ const MAX_ATTEMPTS := 60
 ## level together. (See the Hard Stop 2 report for how they were picked.)
 const MAX_STATES: Array[int] = [20000, 20000, 20000, 30000, 30000, 40000, 60000, 60000, 80000, 80000]
 const LEVEL_STATES := 1200000
+## G9, the soft step into Hard (GDD 6.4.1). G9a: on SURVIVAL_TIERS the novice must survive at
+## least ceil(n / SURVIVAL_DIVISOR) taps of a level of n screws. G9b: on LATE_TRAY_TIERS the
+## solution's last tray use must come after the first LATE_TRAY_PART of its taps. Everywhere
+## else both are measured and reported, never required. A tier that requires either rule gets
+## G9_BUDGET times VARIATIONS, MAX_ATTEMPTS and LEVEL_STATES, for the colorings G9 turns down.
+## (Bart approved G9 at Hard Stop 2 for tiers 7 to 10. These lists are the designer's proposed
+## form in GDD 6.4.1, put to Bart: G9a on tiers 7 and 8 only, G9b reported only. Requiring G9a
+## on 9 and 10 too, or G9b anywhere, is a change to one list.)
+const SURVIVAL_TIERS: Array[int] = [7, 8]
+const LATE_TRAY_TIERS: Array[int] = []
+const SURVIVAL_DIVISOR := 3
+const LATE_TRAY_PART := 3
+const G9_BUDGET := 2
+## In _closeness, holding G9 outranks any tray use count.
+const G9_RANK := 100
 ## Coloring pressure to start with, per tier (index tier - 1), and the most it goes to (see
 ## _color).
 const START_PRESSURE: Array[int] = [0, 0, 0, 2, 2, 3, 4, 4, 6, 6]
@@ -325,16 +343,62 @@ static func _shuffled(list: PackedInt32Array, seed_value: int) -> PackedInt32Arr
 	return out
 
 
-## Steps 2 and 3. Tries at most max_attempts; on success out.level is set. Whatever happens,
-## out.closest keeps the solved try that came nearest the tier (the most tray uses, then the
-## novice result the tier wants), as a last resort.
-static func _try(plan: Plan, out: GeneratedLevel, max_attempts: int = MAX_ATTEMPTS) -> void:
+## G9a's least survival for a level of this many screws: ceil(screws / SURVIVAL_DIVISOR) taps.
+static func survival_needed(screws: int) -> int:
+	@warning_ignore("integer_division")
+	return (screws + SURVIVAL_DIVISOR - 1) / SURVIVAL_DIVISOR
+
+
+## G9a: the novice survives at least survival_needed taps.
+static func survives(level: LevelData, r: SolveResult) -> bool:
+	return r.novice_taps >= survival_needed(level.screw_count())
+
+
+## G9b: the solution's tray uses are not all in the first third: its last tray use's tap number
+## p has 3p > n. A solution with no tray use passes.
+static func late_tray(level: LevelData, r: SolveResult) -> bool:
+	return r.last_tray_use == 0 or r.last_tray_use * LATE_TRAY_PART > level.screw_count()
+
+
+## G9 as this tier requires it (true on a tier that requires neither rule).
+static func g9_holds(tier: int, level: LevelData, r: SolveResult) -> bool:
+	return (not SURVIVAL_TIERS.has(tier) or survives(level, r)) and (not LATE_TRAY_TIERS.has(tier) or late_tray(level, r))
+
+
+## How many times the base budget (VARIATIONS, MAX_ATTEMPTS, LEVEL_STATES) a tier gets.
+static func budget_scale(tier: int) -> int:
+	return G9_BUDGET if SURVIVAL_TIERS.has(tier) or LATE_TRAY_TIERS.has(tier) else 1
+
+
+## G4: the novice result is the one the tier wants.
+static func _novice_right(spec: Tuning.TierSpec, r: SolveResult) -> bool:
+	return not ((spec.novice == Tuning.NOVICE_WIN and not r.novice_won) or (spec.novice == Tuning.NOVICE_LOSE and r.novice_won))
+
+
+## How near a measured, solved try came to the tier, for the closest try: holding G9 as the
+## tier requires it comes first, then the most tray uses, then the novice result the tier wants
+## (GDD 6.4.1). On a tier that requires no G9 every try gets G9_RANK, so only the rest counts.
+## (_try only searches colorings that already pass G4 and G9a, so among its tries this ranks by
+## G9b where required, then tray uses.)
+static func _closeness(plan: Plan, spec: Tuning.TierSpec, level: LevelData, r: SolveResult) -> int:
+	return (G9_RANK if g9_holds(plan.tier, level, r) else 0) + r.fewest_tray_uses * 2 + (1 if _novice_right(spec, r) else 0)
+
+
+## Steps 2 and 3. Tries at most max_attempts (by default the tier's MAX_ATTEMPTS times
+## budget_scale); on success out.level is set. Whatever happens, out.closest keeps the solved
+## try that came nearest the tier (see _closeness), as a last resort.
+static func _try(plan: Plan, out: GeneratedLevel, max_attempts: int = -1) -> void:
 	var bp := LevelCatalog.blueprints[plan.blueprint]
 	var spec := Tuning.tier(plan.tier)
 	var budget: int = MAX_STATES[plan.tier - 1]
+	var scale := budget_scale(plan.tier)
+	var variations := VARIATIONS * scale
+	var level_states := LEVEL_STATES * scale
+	if max_attempts < 0:
+		max_attempts = MAX_ATTEMPTS * scale
 	var pressure: int = START_PRESSURE[plan.tier - 1]
 	var closest_score := -1
-	for v: int in VARIATIONS:
+	for v: int in variations:
 		if out.attempts >= max_attempts:
 			return
 		var rng := RandomNumberGenerator.new()
@@ -346,7 +410,7 @@ static func _try(plan: Plan, out: GeneratedLevel, max_attempts: int = MAX_ATTEMP
 			out.rejected_boards += 1
 			continue
 		for c: int in COLORINGS:
-			if out.attempts >= max_attempts or out.total_states >= LEVEL_STATES:
+			if out.attempts >= max_attempts or out.total_states >= level_states:
 				return
 			out.attempts += 1
 			var crng := RandomNumberGenerator.new()
@@ -355,7 +419,27 @@ static func _try(plan: Plan, out: GeneratedLevel, max_attempts: int = MAX_ATTEMP
 			if level == null:
 				out.rejected_colorings += 1
 				continue
+			# G4 and G9a depend on the coloring alone (one novice playout, no search), so they are
+			# checked first and a coloring they turn down is never searched. On the hard tiers most
+			# colorings that would come out too easy are ones the novice wins, so this saves most
+			# of the searches there. The rules are the same as checking after the search; only
+			# the order of the walk differs. A G9 failure keeps the pressure (GDD 6.4.1).
+			var novice := SolveResult.new()
+			Solver.measure(level, novice, false)
+			if not _novice_right(spec, novice):
+				out.novice_wrong += 1
+				if spec.novice == Tuning.NOVICE_WIN:
+					pressure = maxi(0, pressure - 1)
+				else:
+					pressure = _harder(pressure, plan.tier, spec)
+				continue
+			if SURVIVAL_TIERS.has(plan.tier) and not survives(level, novice):
+				out.short_survival += 1
+				continue
 			var r := Solver.search_only(level, budget, true, spec.tray_uses.y)
+			r.novice_won = novice.novice_won
+			r.novice_taps = novice.novice_taps
+			r.ms += novice.ms
 			out.total_states += r.states
 			if not r.complete or not r.solved:
 				if not r.complete:
@@ -364,31 +448,23 @@ static func _try(plan: Plan, out: GeneratedLevel, max_attempts: int = MAX_ATTEMP
 					out.over_cap += 1
 				pressure = maxi(0, pressure - 1)
 				continue
-			var in_range := r.fewest_tray_uses >= spec.tray_uses.x
-			# The novice and trap playouts cost a little, so only when they can matter.
-			if not in_range and r.fewest_tray_uses * 2 + 1 <= closest_score:
-				out.too_easy += 1
-				pressure = _harder(pressure, plan.tier, spec)
-				continue
-			Solver.measure(level, r)
-			var novice_right := not ((spec.novice == Tuning.NOVICE_WIN and not r.novice_won) or (spec.novice == Tuning.NOVICE_LOSE and r.novice_won))
-			var score := r.fewest_tray_uses * 2 + (1 if novice_right else 0)
+			var score := _closeness(plan, spec, level, r)
 			if score > closest_score:
 				closest_score = score
 				out.closest = _finish(level, plan, r.fewest_tray_uses)
 				out.closest_solve = r
 				out.closest_variation = va.describe()
+			# G3.
 			if r.fewest_tray_uses < spec.tray_uses.x:
 				out.too_easy += 1
 				pressure = _harder(pressure, plan.tier, spec)
 				continue
-			if not novice_right:
-				out.novice_wrong += 1
-				if spec.novice == Tuning.NOVICE_WIN:
-					pressure = maxi(0, pressure - 1)
-				else:
-					pressure = _harder(pressure, plan.tier, spec)
+			# G9b needs the solution.
+			if LATE_TRAY_TIERS.has(plan.tier) and not late_tray(level, r):
+				out.early_tray += 1
 				continue
+			# The trap measure decides nothing, so only the level kept gets it.
+			Solver.measure(level, r)
 			out.level = _finish(level, plan, r.fewest_tray_uses)
 			out.solve = r
 			out.variation = va.describe()
@@ -744,7 +820,8 @@ static func level_id(kind: int, number: int, band: String) -> String:
 ## Builds stored fallback levels for a tier (tools/levels --fallback writes them to
 ## src/logic/fallback/). It goes through the tier's blueprints in turn on its own seed stream,
 ## with more tries per level, and keeps up to `count` levels, each on a different blueprint
-## while there are enough.
+## while there are enough. Each is accepted by _try, so it holds every rule a generated level
+## of its tier holds, G9 included where the tier requires it.
 static func build_fallback(tier: int, count: int, max_attempts: int) -> Array[GeneratedLevel]:
 	var out: Array[GeneratedLevel] = []
 	var list := LevelCatalog.suits[tier - 1]
@@ -793,6 +870,8 @@ static func build_fallback(tier: int, count: int, max_attempts: int) -> Array[Ge
 static func _fall_back(plan: Plan, out: GeneratedLevel) -> void:
 	var pool: Array = LevelCatalog.fallback[plan.tier - 1] if plan.tier >= 1 and plan.tier <= LevelCatalog.fallback.size() else []
 	if pool.is_empty() and out.closest != null:
+		# _try measured only its novice; the trap too now that it is shown.
+		Solver.measure(out.closest, out.closest_solve)
 		out.level = out.closest
 		out.solve = out.closest_solve
 		out.fell_back = true

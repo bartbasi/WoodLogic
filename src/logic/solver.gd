@@ -110,9 +110,10 @@ var _child_aux: int
 var _child_tray: bool
 
 
-## Solves a level: the fewest tray uses, a solution, the novice result and the trap measure.
-## With max_tray_uses at 0 or more, the search stops (over_cap) once every solution is known
-## to need more than that, which is all the generator needs to reject a level.
+## Solves a level: the fewest tray uses, a solution and where its last tray use falls, the
+## novice result and taps (GDD 6.4 and 6.4.1) and the trap measure. With max_tray_uses at 0 or
+## more, the search stops (over_cap) once every solution is known to need more than that,
+## which is all the generator needs to reject a level.
 static func solve(level: LevelData, max_states: int, max_tray_uses: int = -1) -> SolveResult:
 	var started := Time.get_ticks_usec()
 	var result := SolveResult.new()
@@ -139,23 +140,29 @@ static func search_only(level: LevelData, max_states: int, prune: bool = true, m
 	return result
 
 
-## Adds the novice result and the trap measure to a result from search_only.
-static func measure(level: LevelData, result: SolveResult) -> void:
+## Adds the novice result (novice_won and novice_taps) and the trap measure to a result from
+## search_only. With with_trap false, only the novice (one playout instead of
+## TRAP_PLAYOUTS + 1; the generator measures the trap only for the level it keeps). Neither
+## needs the search: both depend on the coloring alone.
+static func measure(level: LevelData, result: SolveResult, with_trap: bool = true) -> void:
 	var started := Time.get_ticks_usec()
 	var solver := Solver.new()
 	if solver._setup(level):
-		solver._measure(result)
+		solver._measure(result, with_trap)
 	@warning_ignore("integer_division")
 	result.ms += (Time.get_ticks_usec() - started) / 1000
 
 
-func _measure(result: SolveResult) -> void:
-	result.novice_won = _playout(null)
+func _measure(result: SolveResult, with_trap: bool = true) -> void:
+	result.novice_taps = _playout(null)
+	result.novice_won = result.novice_taps == _n
+	if not with_trap:
+		return
 	var rng := RandomNumberGenerator.new()
 	rng.seed = TRAP_SEED
 	var lost := 0
 	for _i: int in TRAP_PLAYOUTS:
-		if not _playout(rng):
+		if _playout(rng) < _n:
 			lost += 1
 	result.trap = float(lost) / TRAP_PLAYOUTS
 
@@ -488,6 +495,7 @@ func _search(max_states: int, result: SolveResult, max_tray_uses: int = -1) -> v
 	result.complete = true
 	result.fewest_tray_uses = cost
 	result.solution = moves
+	result.last_tray_use = _last_tray_use(moves)
 	result.states = visited.size() + pending.size()
 
 
@@ -568,12 +576,15 @@ func _fits(key: int, s: int) -> bool:
 	return false
 
 
-## Plays one game to the end and says whether it was won. With no rng, the novice policy
-## (GDD 6.4): the topmost free screw that fits an open box, otherwise the topmost free screw.
-## With an rng, the careless player of the trap measure.
-func _playout(rng: RandomNumberGenerator) -> bool:
+## Plays one game to the end and returns the taps it made: the screw count if it won,
+## otherwise the taps before the level was lost (the tap after which R23 holds is the last one
+## counted). An empty board is a win (R3 and I1 leave nothing in the tray then). With no rng,
+## the novice policy (GDD 6.4): the topmost free screw that fits an open box, otherwise the
+## topmost free screw. With an rng, the careless player of the trap measure.
+func _playout(rng: RandomNumberGenerator) -> int:
 	var key := _start_key
 	var aux := 0
+	var taps := 0
 	var fits := PackedInt32Array()
 	var others := PackedInt32Array()
 	while key & _ob_mask != 0:
@@ -591,7 +602,7 @@ func _playout(rng: RandomNumberGenerator) -> bool:
 					break
 			if pick < 0:
 				if (aux >> _tt_shift) >= _tray_size:
-					return false
+					return taps
 				pick = first
 		else:
 			fits.clear()
@@ -605,12 +616,28 @@ func _playout(rng: RandomNumberGenerator) -> bool:
 			if not fits.is_empty():
 				pick = fits[rng.randi_range(0, fits.size() - 1)]
 			elif (aux >> _tt_shift) >= _tray_size:
-				return false
+				return taps
 			else:
 				pick = others[rng.randi_range(0, others.size() - 1)]
 		key = _child(key, aux, pick)
 		aux = _child_aux
-	return true
+		taps += 1
+	return taps
+
+
+## The tap number (from 1) of the last tap in moves that sends its screw to the tray, or 0.
+func _last_tray_use(moves: PackedInt32Array) -> int:
+	var key := _start_key
+	var aux := 0
+	var last := 0
+	for i: int in moves.size():
+		key = _child(key, aux, moves[i])
+		aux = _child_aux
+		if key < 0:
+			return 0
+		if _child_tray:
+			last = i + 1
+	return last
 
 
 ## Bits needed to hold every value from 0 to value (at least 1).

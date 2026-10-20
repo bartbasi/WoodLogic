@@ -25,6 +25,112 @@ const ONE_TRAY_USE := [
 ]
 
 
+## Nine screws whose order is forced. A one hole A bar in front (screw 0, at (43, 40)) covers
+## the screw of a big C disc (screw 1), which covers six screws behind it (A A B B B C, screws
+## 2 to 7). One more C screw (8) is free at the top. Boxes A, B, then C. So the first tap must
+## be the bar, then the disc's C screw has to wait in the tray (tap 2), and after that nothing
+## needs the tray. The novice (topmost fitting screw, else topmost free screw) taps the bar,
+## then the top C screw into the tray, then the disc's C screw into the tray, and wins.
+const FORCED := [
+	{"layer": 0, "shape": "bar", "path": [[43, 40], [43, 60]], "width": 10, "holes": [[43, 40]], "colors": [0]},
+	{"layer": 1, "shape": "disc", "center": [43, 52], "radius": 26, "holes": [[43, 52]], "colors": [2]},
+	{"layer": 2, "shape": "disc", "center": [31, 34], "radius": 5, "holes": [[31, 34]], "colors": [0]},
+	{"layer": 2, "shape": "disc", "center": [55, 34], "radius": 5, "holes": [[55, 34]], "colors": [0]},
+	{"layer": 2, "shape": "disc", "center": [25, 52], "radius": 5, "holes": [[25, 52]], "colors": [1]},
+	{"layer": 2, "shape": "disc", "center": [61, 52], "radius": 5, "holes": [[61, 52]], "colors": [1]},
+	{"layer": 2, "shape": "disc", "center": [31, 70], "radius": 5, "holes": [[31, 70]], "colors": [1]},
+	{"layer": 2, "shape": "disc", "center": [55, 70], "radius": 5, "holes": [[55, 70]], "colors": [2]},
+	{"layer": 2, "shape": "disc", "center": [43, 10], "radius": 5, "holes": [[43, 10]], "colors": [2]},
+]
+
+
+func test_g9a_novice_taps_count_every_tap_until_the_loss() -> void:
+	var base := Kit.level(FORCED, [0, 1, 2])
+	check(BlueprintValidator.check(base).is_empty(), "the level keeps the blueprint rules: %s" % "; ".join(BlueprintValidator.check(base)))
+	var state := PlayState.start(base)
+	check(state.is_free(0) and state.is_free(8) and not state.is_free(1), "at the start only the bar and the top C screw are free")
+	for s: int in range(2, 8):
+		check(not state.is_free(s), "screw %d starts under the disc" % s)
+	# Five slots: the novice wins, so it makes a tap per screw.
+	var r := Solver.solve(base, MAX_STATES)
+	check(r.novice_won, "with five tray slots the novice wins")
+	check_eq(r.novice_taps, 9, "and makes all nine taps")
+	# One slot: the bar into box A (tap 1), the top C screw into the tray (tap 2). Then the
+	# disc's C screw is free but fits no box and the tray is full: lost after tap 2, a tray tap.
+	var one := _with_tray(base, 1)
+	var r1 := Solver.solve(one, MAX_STATES)
+	check(not r1.novice_won, "with one tray slot the novice loses")
+	check_eq(r1.novice_taps, 2, "after two taps, the second into the tray")
+	check_eq(_novice_taps(one), 2, "PlayState agrees")
+	# No slots: the bar (tap 1), then both free screws are C and nothing can go anywhere.
+	var none := _with_tray(base, 0)
+	var r0 := Solver.solve(none, MAX_STATES)
+	check(not r0.novice_won and r0.novice_taps == 1, "with no tray the novice is out after one tap (got %d)" % r0.novice_taps)
+	check_eq(_novice_taps(none), 1, "PlayState agrees")
+
+
+func test_g9b_last_tray_use_is_the_tap_number_of_the_solutions_last_tray_tap() -> void:
+	var base := Kit.level(FORCED, [0, 1, 2])
+	for slots: int in [5, 1]:
+		var level := _with_tray(base, slots)
+		var r := Solver.solve(level, MAX_STATES)
+		check(r.solved and r.fewest_tray_uses == 1, "%d slots: one tray use" % slots)
+		check_eq(r.last_tray_use, 2, "%d slots: the only tray use any best solution makes is tap 2" % slots)
+		check_eq(_tray_taps(level, r.solution), PackedInt32Array([2]), "%d slots: PlayState sends tap 2 to the tray" % slots)
+	var unsolved := Solver.solve(_with_tray(base, 0), MAX_STATES)
+	check(not unsolved.solved and unsolved.last_tray_use == 0, "no solution, no last tray use")
+	var no_tray := Solver.solve(Kit.level([Kit.bar(0, [[20, 45], [66, 45]], 10, [[22, 45], [43, 45], [64, 45]], [0, 0, 0])], [0]), MAX_STATES)
+	check(no_tray.solved and no_tray.fewest_tray_uses == 0 and no_tray.last_tray_use == 0, "a solution with no tray use: 0")
+	# search_only gives it too (the generator measures with search_only, then measure).
+	var searched := Solver.search_only(base, MAX_STATES)
+	check_eq(searched.last_tray_use, 2, "search_only reports it")
+	Solver.measure(base, searched)
+	check_eq(searched.novice_taps, 9, "measure adds the novice taps")
+	# The novice alone, as the generator measures the tries it may turn down.
+	var level := Kit.random_colors(Kit.blueprint("lattice"), 7, _rng(12))
+	var full := SolveResult.new()
+	Solver.measure(level, full)
+	var quick := SolveResult.new()
+	Solver.measure(level, quick, false)
+	check_eq([quick.novice_won, quick.novice_taps], [full.novice_won, full.novice_taps], "measure without the trap gives the same novice")
+	check(quick.trap == 0.0 and full.trap > 0.0, "and leaves the trap unmeasured (full: %.2f)" % full.trap)
+
+
+func test_g9_measures_match_play_state_on_random_colorings() -> void:
+	# The solver's own model against PlayState: the novice's taps (won or lost) and the tap
+	# number of every tray use along the solution.
+	var rng := _rng(99)
+	var lost := 0
+	var with_tray := 0
+	# The novice on every blueprint, with many colors so it often loses (no search needed).
+	for file: String in DirAccess.get_files_at(Kit.BLUEPRINT_DIR):
+		if not file.ends_with(".json"):
+			continue
+		var bp := Kit.blueprint(file.get_basename())
+		for colors: int in [4, 6, 8]:
+			var level := Kit.random_colors(bp, mini(colors, int(bp.screw_count() / 3.0)), rng)
+			var m := SolveResult.new()
+			Solver.measure(level, m)
+			var taps := _novice_taps(level)
+			check_eq(m.novice_taps, taps, "%s with %d colors: novice taps" % [bp.id, colors])
+			check_eq(m.novice_won, taps == level.screw_count(), "%s with %d colors: won exactly when it tapped every screw" % [bp.id, colors])
+			lost += 0 if m.novice_won else 1
+	# The last tray use along solutions.
+	for id: String in Kit.BLUEPRINTS:
+		for colors: int in [3, 5, 7]:
+			var base := Kit.blueprint(id)
+			var level := Kit.random_colors(base, mini(colors, int(base.screw_count() / 3.0)), rng)
+			var r := Solver.solve(level, MAX_STATES)
+			check_eq(r.novice_taps, _novice_taps(level), "%s with %d colors: novice taps from solve" % [id, colors])
+			if r.solved:
+				var trays := _tray_taps(level, r.solution)
+				check_eq(trays.size(), r.fewest_tray_uses, "%s: the solution's tray taps" % id)
+				check_eq(r.last_tray_use, trays[-1] if not trays.is_empty() else 0, "%s with %d colors: last tray use" % [id, colors])
+				with_tray += 0 if trays.is_empty() else 1
+	check(lost >= 10 and with_tray >= 5, "the colorings include novice losses (%d) and solutions with tray uses (%d)" % [lost, with_tray])
+	print("        novice lost %d random colorings; %d solutions used the tray" % [lost, with_tray])
+
+
 func test_solver_one_bar_needs_no_tray() -> void:
 	var level := Kit.level([Kit.bar(0, [[20, 45], [66, 45]], 10, [[22, 45], [43, 45], [64, 45]], [0, 0, 0])], [0])
 	var r := Solver.solve(level, MAX_STATES)
@@ -362,6 +468,17 @@ func _replay(level: LevelData, solution: PackedInt32Array) -> int:
 
 ## The novice policy (GDD 6.4) played through PlayState's public API.
 func _novice(level: LevelData) -> bool:
+	var state := PlayState.start(level)
+	_novice_play(level, state)
+	return state.status() == PlayState.WON
+
+
+## The taps the novice policy makes through PlayState before the level ends (GDD G9a).
+func _novice_taps(level: LevelData) -> int:
+	return _novice_play(level, PlayState.start(level))
+
+
+func _novice_play(level: LevelData, state: PlayState) -> int:
 	var order: Array[int] = []
 	for s: int in level.screw_count():
 		order.append(s)
@@ -369,7 +486,7 @@ func _novice(level: LevelData) -> bool:
 		var pa := level.screw_center(a)
 		var pb := level.screw_center(b)
 		return pa.y < pb.y if pa.y != pb.y else pa.x < pb.x)
-	var state := PlayState.start(level)
+	var taps := 0
 	while state.status() == PlayState.PLAYING:
 		var pick := -1
 		var first := -1
@@ -384,8 +501,28 @@ func _novice(level: LevelData) -> bool:
 		if pick < 0:
 			pick = first
 		if not state.tap(pick).ok:
-			return false
-	return state.status() == PlayState.WON
+			break
+		taps += 1
+	return taps
+
+
+## The tap numbers (from 1) at which PlayState sends a solution's screw to the tray.
+func _tray_taps(level: LevelData, solution: PackedInt32Array) -> PackedInt32Array:
+	var state := PlayState.start(level)
+	var out := PackedInt32Array()
+	for i: int in solution.size():
+		if state.destination(solution[i]).x == PlayState.TRAY:
+			out.append(i + 1)
+		state.tap(solution[i])
+	return out
+
+
+## The same level with another tray size (as test_solver_proves_a_level_unsolvable does).
+func _with_tray(base: LevelData, slots: int) -> LevelData:
+	var errors := PackedStringArray()
+	var level := base.with_colors(base.screw_colors, base.queue, errors)
+	level.tray_size = slots
+	return level
 
 
 ## The fewest tray uses by an independent search over PlayState itself: for budgets 0, 1, 2

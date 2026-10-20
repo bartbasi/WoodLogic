@@ -306,18 +306,33 @@ static func from_dict(d: Dictionary, errors: PackedStringArray) -> LevelData:
 
 
 ## A short text that changes whenever anything that decides the level changes: blueprint,
-## tier, tray par, par time, colors, queue, and a hash of every plank field and hole. Only whole
-## numbers go in (no angles or other floats, whose last bits can differ between phones). For
-## the golden test and tools/levels.
+## tier, tray par, par time, colors, queue, and a hash of every plank's layer, shape, holes and
+## the fields its shape uses (exactly what to_dict writes, so a level read back from its file
+## has the same fingerprint). Only whole numbers go in (no angles or other floats, whose last
+## bits can differ between phones). For the golden test, tools/levels and the saved next level.
 func fingerprint() -> String:
 	var h := 0x57D1
 	for p: PlankData in planks:
 		h = Seeds.mix(h, p.layer * 16 + p.shape)
-		for list: PackedVector2Array in [p.path, p.points, p.holes, PackedVector2Array([p.center])]:
+		var lists: Array[PackedVector2Array] = [p.holes]
+		var sizes := 0
+		match p.shape:
+			PlankData.BAR:
+				lists.append(p.path)
+				sizes = p.width * 10000
+			PlankData.POLY:
+				lists.append(p.points)
+			PlankData.DISC:
+				lists.append(PackedVector2Array([p.center]))
+				sizes = p.radius * 100
+			PlankData.RING:
+				lists.append(PackedVector2Array([p.center]))
+				sizes = p.radius * 100 + p.inner
+		for list: PackedVector2Array in lists:
 			h = Seeds.mix(h, list.size())
 			for v: Vector2 in list:
 				h = Seeds.mix(h, int(v.x) * 1000 + int(v.y))
-		h = Seeds.mix(h, p.width * 10000 + p.radius * 100 + p.inner)
+		h = Seeds.mix(h, sizes)
 	return "%s t%d p%d s%d c%s q%s g%08x" % [blueprint_id, tier, tray_par, par_time_s, "".join(Array(screw_colors).map(func(c: int) -> String: return str(c))), "".join(Array(queue).map(func(c: int) -> String: return str(c))), h]
 
 

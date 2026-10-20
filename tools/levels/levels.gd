@@ -14,6 +14,8 @@ extends SceneTree
 ##   --fallback=K         also build K fallback levels per tier into src/logic/fallback/
 ##   --golden             write tests/logic/golden_levels.json (only with a new
 ##                        GENERATOR_VERSION)
+## report.md has a table per tier (timing, attempts, fallbacks, tray uses, the novice's taps and
+## G9a, the last tray use and G9b, trap, pressure), the slowest levels, and a row per level.
 ## Exits with 1 if any level was not solved with a complete search, or a repeat differed.
 
 const GOLDEN_PATH := "res://tests/logic/golden_levels.json"
@@ -25,6 +27,8 @@ const GOLDEN_DAILIES := [20261019, 20261020, 20270101]
 const GOLDEN_RELAXED := 2
 ## Pixels per grid unit in the pictures.
 const SCALE := 2
+## How many of the slowest levels the report names.
+const SLOWEST := 10
 ## Plain colors for the pictures: the palette is the renderer's, so the report draws its own.
 const SCREW_COLORS := [Color("d1453b"), Color("e8b931"), Color("5ab4e5"), Color("2f5fb8"), Color("4caf50"), Color("9c5fc4"), Color("f08a3c"), Color("7a4e2d")]
 const WOOD := [Color("e3c08f"), Color("cfa671"), Color("b98d58"), Color("a37645"), Color("8b6236")]
@@ -64,7 +68,7 @@ func _main(args: PackedStringArray) -> int:
 		if opt["png"]:
 			_draw(g.level).save_png(out_dir.path_join("png").path_join(str(row["key"]).replace(":", "-") + ".png"))
 		rows.append(row)
-		print("%s tier %d %s: %d ms%s" % [row["key"], row["tier"], row["blueprint"], row["gen_ms"], " (fallback)" if row["fell_back"] else ""])
+		print("%s tier %d %s: %d ms, %d attempts, novice %d of %d taps%s" % [row["key"], row["tier"], row["blueprint"], row["gen_ms"], row["attempts"], row["novice_taps"], row["screws"], " (fallback)" if row["fell_back"] else ""])
 	var report := _report(rows, opt, Time.get_ticks_msec() - started)
 	var file := FileAccess.open(out_dir.path_join("report.md"), FileAccess.WRITE)
 	file.store_string(report)
@@ -139,11 +143,17 @@ func _row(req: Array, g: GeneratedLevel) -> Dictionary:
 	for s: int in level.screw_count():
 		if covered & (1 << s):
 			covered_count += 1
+	# A fallback's time went into the blueprint it planned, so the report names both.
+	var shown := level.blueprint_id
+	if g.fell_back:
+		var plan := Generator.plan_for(req[0], req[1], req[2])
+		if plan.blueprint >= 0 and LevelCatalog.blueprints[plan.blueprint].id != shown:
+			shown += " (planned %s)" % LevelCatalog.blueprints[plan.blueprint].id
 	return {
 		"key": LevelPrefetcher.key_for(req[0], req[1], req[2]),
 		"kind": LevelData.KIND_NAMES[level.kind],
 		"tier": level.tier,
-		"blueprint": level.blueprint_id,
+		"blueprint": shown,
 		"variation": g.variation,
 		"screws": level.screw_count(),
 		"colors": level.color_count(),
@@ -152,6 +162,11 @@ func _row(req: Array, g: GeneratedLevel) -> Dictionary:
 		"fewest": g.solve.fewest_tray_uses,
 		"tray_par": level.tray_par,
 		"novice": "win" if g.solve.novice_won else "lose",
+		"novice_taps": g.solve.novice_taps,
+		"need": Generator.survival_needed(level.screw_count()),
+		"g9a": Generator.survives(level, g.solve),
+		"last_tray": g.solve.last_tray_use,
+		"g9b": Generator.late_tray(level, g.solve),
 		"trap": g.solve.trap,
 		"attempts": g.attempts,
 		"fell_back": g.fell_back,
@@ -176,8 +191,10 @@ func _report(rows: Array[Dictionary], opt: Dictionary, total_ms: int) -> String:
 	lines.append("")
 	lines.append("## Timing and acceptance per tier")
 	lines.append("")
-	lines.append("| Tier | Levels | Generation ms (median / 95th / worst) | Solve ms (worst) | States (median / worst) | States, all tries (worst) | Attempts (median / worst) | Fell back | Fewest tray uses | Novice loses | Trap (mean) | Pressure kept |")
-	lines.append("|-|-|-|-|-|-|-|-|-|-|-|-|")
+	lines.append("G9 (GDD 6.4.1) is required on tiers %s for G9a (novice taps at least ceil(screws / %d)) and %s for G9b (last tray use after the first third); elsewhere it is only measured." % [_tier_list(Generator.SURVIVAL_TIERS), Generator.SURVIVAL_DIVISOR, _tier_list(Generator.LATE_TRAY_TIERS)])
+	lines.append("")
+	lines.append("| Tier | Levels | Generation ms (median / 95th / worst) | Solve ms (worst) | States (median / worst) | States, all tries (worst) | Attempts (median / worst) | Fell back | Fewest tray uses | Novice loses | Novice taps (median / least) | Hold G9a | Last tray use (median / latest) | Hold G9b | Trap (mean) | Pressure kept |")
+	lines.append("|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|")
 	for t: int in range(1, 11):
 		var group: Array[Dictionary] = []
 		for r: Dictionary in rows:
@@ -190,8 +207,12 @@ func _report(rows: Array[Dictionary], opt: Dictionary, total_ms: int) -> String:
 		var states := _values(group, "states")
 		var all_states := _values(group, "total_states")
 		var attempts := _values(group, "attempts")
+		var taps := _values(group, "novice_taps")
+		var last_tray := _values(group, "last_tray")
 		var fell := 0
 		var lose := 0
+		var g9a := 0
+		var g9b := 0
 		var trap := 0.0
 		var fewest := {}
 		var pressures := {}
@@ -200,6 +221,8 @@ func _report(rows: Array[Dictionary], opt: Dictionary, total_ms: int) -> String:
 				pressures[r["pressure"]] = int(pressures.get(r["pressure"], 0)) + 1
 			fell += 1 if r["fell_back"] else 0
 			lose += 1 if r["novice"] == "lose" else 0
+			g9a += 1 if r["g9a"] else 0
+			g9b += 1 if r["g9b"] else 0
 			trap += float(r["trap"])
 			fewest[r["fewest"]] = int(fewest.get(r["fewest"], 0)) + 1
 		var fewest_keys := fewest.keys()
@@ -212,11 +235,17 @@ func _report(rows: Array[Dictionary], opt: Dictionary, total_ms: int) -> String:
 		var pressure_text := PackedStringArray()
 		for k: Variant in pressure_keys:
 			pressure_text.append("%s: %d" % [str(k), pressures[k]])
-		lines.append("| %d | %d | %d / %d / %d | %d | %d / %d | %d | %d / %d | %d (%d%%) | %s | %d | %.2f | %s |" % [t, group.size(), _median(gen), _pct(gen, 0.95), gen[-1], solve[-1], _median(states), states[-1], all_states[-1], _median(attempts), attempts[-1], fell, int(round(100.0 * fell / group.size())), ", ".join(fewest_text), lose, trap / group.size(), ", ".join(pressure_text)])
+		lines.append("| %d | %d | %d / %d / %d | %d | %d / %d | %d | %d / %d | %d (%d%%) | %s | %d | %d / %d | %d | %d / %d | %d | %.2f | %s |" % [t, group.size(), _median(gen), _pct(gen, 0.95), gen[-1], solve[-1], _median(states), states[-1], all_states[-1], _median(attempts), attempts[-1], fell, int(round(100.0 * fell / group.size())), ", ".join(fewest_text), lose, _median(taps), taps[0], g9a, _median(last_tray), last_tray[-1], g9b, trap / group.size(), ", ".join(pressure_text)])
 	var gen_all := _values(rows, "gen_ms")
 	lines.append("")
 	if not gen_all.is_empty():
 		lines.append("All %d levels: generation median %d ms, 95th percentile %d ms, worst %d ms." % [rows.size(), _median(gen_all), _pct(gen_all, 0.95), gen_all[-1]])
+		var slow := rows.duplicate()
+		slow.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return int(a["gen_ms"]) > int(b["gen_ms"]) if a["gen_ms"] != b["gen_ms"] else str(a["key"]) < str(b["key"]))
+		var slow_text := PackedStringArray()
+		for r: Dictionary in slow.slice(0, SLOWEST):
+			slow_text.append("%s (tier %d, %s, %d ms, %d attempts%s)" % [r["key"], r["tier"], r["blueprint"], r["gen_ms"], r["attempts"], ", fell back" if r["fell_back"] else ""])
+		lines.append("Slowest: %s." % ", ".join(slow_text))
 	var unsolved := 0
 	var repeats := 0
 	for r: Dictionary in rows:
@@ -229,11 +258,22 @@ func _report(rows: Array[Dictionary], opt: Dictionary, total_ms: int) -> String:
 	lines.append("")
 	lines.append("## Levels")
 	lines.append("")
-	lines.append("| Level | Kind | Tier | Blueprint | Variation | Screws | Colors | Layers | Covered % | First tap fits a box (G5) | Fewest tray uses | Tray par | Novice | Trap | Attempts | Fallback | Generation ms | Solve ms | States | Turned down | Picture |")
-	lines.append("|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|")
+	lines.append("Novice taps: the taps the novice makes before the level is lost (all of them when it wins), with G9a's need in brackets. Last tray use: the tap number of the solution's last tray use, of the screws (0: none).")
+	lines.append("")
+	lines.append("| Level | Kind | Tier | Blueprint | Variation | Screws | Colors | Layers | Covered % | First tap fits a box (G5) | Fewest tray uses | Tray par | Novice | Novice taps (need) | Last tray use | Trap | Attempts | Fallback | Generation ms | Solve ms | States | Turned down | Picture |")
+	lines.append("|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|")
 	for r: Dictionary in rows:
-		lines.append("| %s | %s | %d | %s | %s | %d | %d | %d | %d | %s | %d | %d | %s | %.2f | %d | %s | %d | %d | %d | %s | %s |" % [r["key"], r["kind"], r["tier"], r["blueprint"], r["variation"], r["screws"], r["colors"], r["layers"], r["covered"], "yes" if r["g5"] else "NO", r["fewest"], r["tray_par"], r["novice"], r["trap"], r["attempts"], "yes" if r["fell_back"] else "", r["gen_ms"], r["solve_ms"], r["states"], r["rejections"], "png/%s.png" % str(r["key"]).replace(":", "-")])
+		lines.append("| %s | %s | %d | %s | %s | %d | %d | %d | %d | %s | %d | %d | %s | %d (%d)%s | %d of %d%s | %.2f | %d | %s | %d | %d | %d | %s | %s |" % [r["key"], r["kind"], r["tier"], r["blueprint"], r["variation"], r["screws"], r["colors"], r["layers"], r["covered"], "yes" if r["g5"] else "NO", r["fewest"], r["tray_par"], r["novice"], r["novice_taps"], r["need"], "" if r["g9a"] else " short", r["last_tray"], r["screws"], "" if r["g9b"] else " early", r["trap"], r["attempts"], "yes" if r["fell_back"] else "", r["gen_ms"], r["solve_ms"], r["states"], r["rejections"], "png/%s.png" % str(r["key"]).replace(":", "-")])
 	return "\n".join(lines) + "\n"
+
+
+func _tier_list(tiers: Array[int]) -> String:
+	if tiers.is_empty():
+		return "none"
+	var parts := PackedStringArray()
+	for t: int in tiers:
+		parts.append(str(t))
+	return ", ".join(parts)
 
 
 func _values(rows: Array[Dictionary], key: String) -> PackedInt32Array:
@@ -350,6 +390,8 @@ func _write_fallback(count: int) -> int:
 					"fewest": g.solve.fewest_tray_uses,
 					"states": g.solve.states,
 					"novice_won": g.solve.novice_won,
+					"novice_taps": g.solve.novice_taps,
+					"last_tray_use": g.solve.last_tray_use,
 					"trap": g.solve.trap,
 					"solution": Array(g.solve.solution),
 					"variation": g.variation,

@@ -95,7 +95,8 @@ func copy() -> PlankData:
 
 ## A varied copy for the generator: mirrored left to right across the board (x becomes
 ## 86 - x), then shifted by (dx, dy), on another layer. Holes keep their order, so screw ids
-## keep theirs. Built and ready.
+## keep theirs. Only the fields the shape uses are moved, so the copy holds exactly what
+## to_dict writes and from_dict reads back (an unused center stays at zero). Built and ready.
 func transformed(mirror: bool, dx: int, dy: int, new_layer: int) -> PlankData:
 	var p := PlankData.new()
 	p.layer = new_layer
@@ -106,8 +107,8 @@ func transformed(mirror: bool, dx: int, dy: int, new_layer: int) -> PlankData:
 	p.path = _moved(path, mirror, dx, dy)
 	p.points = _moved(points, mirror, dx, dy)
 	p.holes = _moved(holes, mirror, dx, dy)
-	var c := _moved(PackedVector2Array([center]), mirror, dx, dy)
-	p.center = c[0]
+	if shape == DISC or shape == RING:
+		p.center = _moved(PackedVector2Array([center]), mirror, dx, dy)[0]
 	p.build()
 	return p
 

@@ -146,7 +146,128 @@ func test_g1_to_g6_hold_and_every_level_is_solved() -> void:
 			check(r.novice_won, "%s: G4, the novice must win" % where)
 		elif spec.novice == Tuning.NOVICE_LOSE:
 			check(not r.novice_won, "%s: G4, the novice must lose" % where)
+		# G9 where the tier requires it.
+		check(Generator.g9_holds(level.tier, level, r), "%s: G9 (novice taps %d of %d)" % [where, r.novice_taps, n])
 	print("        %d levels made, %d from a fallback" % [requests.size(), fell])
+
+
+func test_g9a_survival_needed_follows_the_gdd_table() -> void:
+	# GDD 6.4.1: ceil(n / 3) taps, 9 for 27 screws up to 12 for 34 to 36.
+	var table := {27: 9, 28: 10, 30: 10, 31: 11, 33: 11, 34: 12, 36: 12}
+	for n: int in table:
+		check_eq(Generator.survival_needed(n), table[n], "%d screws" % n)
+	check_eq(str(Generator.SURVIVAL_TIERS), "[7, 8]", "G9a is required on tiers 7 and 8 (GDD 6.4.1 as proposed)")
+	check(Generator.LATE_TRAY_TIERS.is_empty(), "G9b is reported only")
+	for t: int in range(1, 11):
+		check_eq(Generator.budget_scale(t), 2 if t == 7 or t == 8 else 1, "tier %d budget scale" % t)
+
+
+func test_g9a_tier_7_and_8_levels_let_the_novice_survive_a_third() -> void:
+	_ready_catalog()
+	var requests: Array[Array] = []
+	for n: int in range(111, 200):
+		var t := Tuning.tier_for_level(n)
+		if Generator.SURVIVAL_TIERS.has(t) and requests.size() < 10:
+			requests.append([LevelData.NUMBERED, n, ""])
+	for i: int in 6:
+		if Generator.SURVIVAL_TIERS.has(Generator.relaxed_tier("hard", i)) and requests.size() < 13:
+			requests.append([LevelData.RELAXED, i, "hard"])
+	var fell := 0
+	var tiers := {}
+	for req: Array in requests:
+		var g := Generator.make(req[0], req[1], req[2])
+		var where := LevelPrefetcher.key_for(req[0], req[1], req[2])
+		var level := g.level
+		var r := g.solve
+		tiers[level.tier] = true
+		fell += 1 if g.fell_back else 0
+		check(not r.novice_won, "%s: G4, the novice loses" % where)
+		check_eq(r.novice_taps, _novice_taps(level), "%s: the novice taps agree with PlayState" % where)
+		if Generator.SURVIVAL_TIERS.has(level.tier):
+			check(Generator.survives(level, r), "%s (tier %d, %d screws): G9a, the novice survives %d taps, needs %d" % [where, level.tier, level.screw_count(), r.novice_taps, Generator.survival_needed(level.screw_count())])
+		print("        %s tier %d %s: novice %d of %d taps (needs %d), last tray use %d, %d attempts%s" % [where, level.tier, level.blueprint_id, r.novice_taps, level.screw_count(), Generator.survival_needed(level.screw_count()), r.last_tray_use, g.attempts, ", fell back" if g.fell_back else ""])
+	check(tiers.has(7) and tiers.has(8), "levels of both tiers were made")
+	check(fell < requests.size(), "not every level fell back")
+
+
+func test_g9_is_only_reported_on_tiers_9_and_10() -> void:
+	_ready_catalog()
+	for n: int in [154, 155, 159, 160]:
+		var g := Generator.make(LevelData.NUMBERED, n, "")
+		check(g.level.tier >= 9, "level %d is expert" % n)
+		check_eq(g.short_survival + g.early_tray, 0, "level %d: nothing turned down for G9" % n)
+		check_eq(g.solve.novice_taps, _novice_taps(g.level), "level %d: but the novice taps are measured" % n)
+
+
+func test_g9_closest_try_prefers_one_that_holds_g9a() -> void:
+	_ready_catalog()
+	var board := LevelCatalog.blueprints[LevelCatalog.blueprint_index("skyline")]
+	check_eq(board.screw_count(), 30, "a 30 screw board, so G9a needs 10 taps")
+	var deep := SolveResult.new()
+	deep.solved = true
+	deep.fewest_tray_uses = 3
+	deep.novice_taps = 6
+	var soft := SolveResult.new()
+	soft.solved = true
+	soft.fewest_tray_uses = 2
+	soft.novice_taps = 12
+	for t: int in [7, 8, 9, 10]:
+		var plan := Generator.Plan.new()
+		plan.tier = t
+		var spec := Tuning.tier(t)
+		var a := Generator._closeness(plan, spec, board, deep)
+		var b := Generator._closeness(plan, spec, board, soft)
+		if Generator.SURVIVAL_TIERS.has(t):
+			check(b > a, "tier %d: two tray uses holding G9a beat three that do not" % t)
+		else:
+			check(a > b, "tier %d: G9a is not required, so the most tray uses come first" % t)
+
+
+func test_4_1_generated_levels_read_back_from_json_with_the_same_fingerprint_and_solve() -> void:
+	# The app saves the next level as JSON and plays it from the file (ARCHITECTURE 10.3).
+	_ready_catalog()
+	var requests: Array[Array] = []
+	for n: int in range(FIRST, 61):
+		requests.append([LevelData.NUMBERED, n, ""])
+	for n: int in [101, 152, 153, 155]:
+		requests.append([LevelData.NUMBERED, n, ""])
+	for d: int in [20261019, 20261231]:
+		requests.append([LevelData.DAILY, d, ""])
+	for band: String in Tuning.BANDS:
+		requests.append([LevelData.RELAXED, 2, band])
+	var made: Array[GeneratedLevel] = []
+	for req: Array in requests:
+		made.append(Generator.make(req[0], req[1], req[2]))
+	# Stored fallback levels too, as they are handed out (relabeled, with play fields).
+	for n: int in [12, 47, 158]:
+		var g := GeneratedLevel.new()
+		Generator._fall_back(Generator.plan_for(LevelData.NUMBERED, n, ""), g)
+		made.append(g)
+	var moved_centers := 0
+	for g: GeneratedLevel in made:
+		var level := g.level
+		var where := level.id
+		var errors := PackedStringArray()
+		var back := LevelData.parse(JSON.stringify(level.to_dict()), errors)
+		check(back != null and errors.is_empty(), "%s reads back: %s" % [where, "; ".join(errors)])
+		if back == null:
+			continue
+		check_eq(back.fingerprint(), level.fingerprint(), "%s: the same fingerprint" % where)
+		check_eq(back.to_dict(), level.to_dict(), "%s: the same data" % where)
+		for p: PlankData in level.planks:
+			if p.shape != PlankData.DISC and p.shape != PlankData.RING and p.center != Vector2.ZERO:
+				moved_centers += 1
+		# The same search the generator ran, on both.
+		var budget: int = Generator.MAX_STATES[level.tier - 1]
+		var cap := Tuning.tier(level.tier).tray_uses.y
+		var a := g.solve if not g.fell_back else Solver.solve(level, budget * 4, cap)
+		var b := Solver.solve(back, budget * 4 if g.fell_back else budget, cap)
+		check(b.solved and b.complete, "%s: the file solves" % where)
+		check_eq([b.fewest_tray_uses, b.solution, b.novice_won, b.novice_taps, b.last_tray_use, b.trap], [a.fewest_tray_uses, a.solution, a.novice_won, a.novice_taps, a.last_tray_use, a.trap], "%s: the same solve" % where)
+		if not g.fell_back:
+			check_eq(b.states, a.states, "%s: the same search, state for state" % where)
+	check_eq(moved_centers, 0, "no bar or polygon carries a center the file would drop")
+	print("        %d levels read back from JSON" % made.size())
 
 
 func test_same_seed_same_level() -> void:
@@ -175,6 +296,10 @@ func test_fallback_files_hold_good_levels_for_every_tier() -> void:
 			check(r.fewest_tray_uses >= spec.tray_uses.x and r.fewest_tray_uses <= spec.tray_uses.y, "%s: G3" % level.id)
 			check_eq(_replay(level, stored.solve.solution), r.fewest_tray_uses, "%s: the stored solution replays" % level.id)
 			check_eq(r.novice_won, stored.solve.novice_won, "%s: the stored novice result" % level.id)
+			check_eq(r.novice_taps, stored.solve.novice_taps, "%s: the stored novice taps" % level.id)
+			check_eq(_last_tray_tap(level, stored.solve.solution), stored.solve.last_tray_use, "%s: the stored last tray use" % level.id)
+			# GDD 6.4.1: the stored levels of tiers that require G9 hold it too.
+			check(Generator.g9_holds(t, level, stored.solve), "%s: G9 as tier %d requires it (novice taps %d of %d, last tray use %d)" % [level.id, t, stored.solve.novice_taps, level.screw_count(), stored.solve.last_tray_use])
 
 
 func test_fallbacks_avoid_their_neighbors_and_are_relabeled() -> void:
@@ -255,6 +380,41 @@ func _replay(level: LevelData, solution: PackedInt32Array) -> int:
 		if not state.tap(s).ok:
 			return -1
 	return state.tray_uses() if state.status() == PlayState.WON else -1
+
+
+## The novice policy (GDD 6.4) through PlayState: the taps it makes before the level ends.
+func _novice_taps(level: LevelData) -> int:
+	var order: Array[int] = []
+	for s: int in level.screw_count():
+		order.append(s)
+	order.sort_custom(func(a: int, b: int) -> bool:
+		var pa := level.screw_center(a)
+		var pb := level.screw_center(b)
+		return pa.y < pb.y if pa.y != pb.y else (pa.x < pb.x if pa.x != pb.x else a < b))
+	var state := PlayState.start(level)
+	var taps := 0
+	while state.status() == PlayState.PLAYING:
+		var pick := -1
+		for s: int in order:
+			if state.is_free(s) and (pick < 0 or state.destination(s).x == PlayState.BOX):
+				pick = s
+				if state.destination(s).x == PlayState.BOX:
+					break
+		if pick < 0 or not state.tap(pick).ok:
+			break
+		taps += 1
+	return taps
+
+
+## The tap number of the last tap of a solution that PlayState sends to the tray, or 0.
+func _last_tray_tap(level: LevelData, solution: PackedInt32Array) -> int:
+	var state := PlayState.start(level)
+	var last := 0
+	for i: int in solution.size():
+		if state.destination(solution[i]).x == PlayState.TRAY:
+			last = i + 1
+		state.tap(solution[i])
+	return last
 
 
 func _g5(level: LevelData) -> bool:

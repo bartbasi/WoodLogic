@@ -144,7 +144,9 @@ static func reload_fallback(dir: String = FALLBACK_DIR) -> bool:
 
 
 ## Fallback files: src/logic/fallback/tier-<t>.json, each
-## {"format": 1, "tier": t, "levels": [{"level": {...}, "solve": {...}}, ...]}. Replaces the
+## {"format": 1, "tier": t, "levels": [{"level": {...}, "solve": {...}}, ...]}, where solve
+## holds fewest, states, novice_won, novice_taps, last_tray_use, trap, solution and
+## variation (see SolveResult). Replaces the
 ## loaded fallback levels with the folder's. False if any file is broken (its problems go in
 ## errors, quietly); the good files still load.
 static func read_fallback(dir: String, errors: PackedStringArray) -> bool:
@@ -194,6 +196,8 @@ static func parse_fallback(text: String, errors: PackedStringArray) -> Array[Gen
 		r.fewest_tray_uses = PlankData.read_int(s, "fewest", 0, 20, "solve", errors)
 		r.states = PlankData.read_int(s, "states", 0, 100000000, "solve", errors)
 		r.novice_won = s.get("novice_won") == true
+		r.novice_taps = PlankData.read_int(s, "novice_taps", 0, BoardGeometry.MAX_SCREWS, "solve", errors)
+		r.last_tray_use = PlankData.read_int(s, "last_tray_use", 0, BoardGeometry.MAX_SCREWS, "solve", errors)
 		r.trap = float(s.get("trap", 0.0)) if (s.get("trap") is float or s.get("trap") is int) else 0.0
 		var solution: Variant = s.get("solution")
 		if solution is Array:

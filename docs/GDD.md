@@ -3,7 +3,9 @@
 Owner: game-designer. Status: Approved by Bart at Hard Stop 1, 19 October 2026. Phase 2 updates:
 the library of 40 blueprints (section 10), the tutorial files (section 8), data/tuning.json
 (section 9.4), rule B13 (section 9.2), and wider layer ranges and new covering targets for the
-tiers (section 6.1). Each change says why.
+tiers (section 6.1). Approved by Bart at Hard Stop 2, 19 October 2026 (section 0). Phase 3
+updates: the cover rule G8 and the soft step G9 (section 6.4), and covering added to eight
+blueprints plus three new ones, 43 in all (section 10). Each change says why.
 
 Board sizes come from docs/UX.md (section 3.2.1). The layout counts are the brief's defaults
 and are unchanged. The data formats in section 9 are the ones docs/ARCHITECTURE.md section 3
@@ -67,11 +69,28 @@ at 50, cherry at 100, ebony at 150, copper screws at a 3 day daily streak, black
 8. The timer starts at the first action, including a helper (S6).
 9. Relaxed shows only the free Undo; Extra slot and Screwdriver are hidden (R33).
 10. The small speed and clean markers beside the timer stay. Check at Gate 1 that they do not
-    feel like pressure (S9).
+    feel like pressure (S9). (The Gate 1 build shows no timer or stars, so this check moves to
+    Gate 2.)
 11. Pause covers the board (S6).
 12. Quitting mid level brings the player back to the same level, restarted from the beginning
     (R36). A brand new player skips the title and opens into level 1.
 13. Prices 4, 6 and 8 stars, as proposed.
+
+**Decided by Bart at Hard Stop 2** (19 October 2026, approving all the recommendations).
+
+1. The wider layer ranges per tier stay (section 6.1).
+2. Covered at start is reported per level, not required (section 6.1).
+3. The tutorial plank moves in levels 3, 5 and 6 stay (section 8).
+4. The rename to Falling blocks (`falling-blocks`) stands.
+5. The cover rule: a tier that needs k tray uses only takes blueprints with at least 2k + 1
+   screws covered at the start (G8, section 6.4).
+6. The softer step into Hard on tiers 7 to 10 (G9, section 6.4.1): the novice survives at
+   least ceil(screws / 3) taps, and the fewest tray use solution does not put all its tray uses
+   in the first third. After measuring I propose a change, waiting for Bart: require the
+   survival part on tiers 7 and 8 only, and report (not require) the tray use position, because
+   as approved 73 to 98 percent of hard levels would fall back to stored ones (6.4.1).
+7. More variety: covering for eight blueprints and three new round ones, so every tier from 7 to
+   10 has at least 8 boards (section 10.1).
 
 ## 1. Board, units and geometry
 
@@ -388,7 +407,7 @@ Colors never exceed screws / 3. "Tray pressure" is the fewest tray uses column t
 the novice policy column: a careless order must be able to fail from tier 7 up. The same numbers
 are in data/tuning.json (section 9.4).
 
-**Phase 2 changes, and why.**
+**Phase 2 changes, and why** (both confirmed by Bart at Hard Stop 2).
 
 - **Layers are wider ranges.** With the Hard Stop 1 ranges (tier 2 exactly 2 layers, tiers 4 and
   5 exactly 3, tiers 7 and 8 exactly 4, tier 10 exactly 5), half of the first ten blueprints
@@ -397,11 +416,14 @@ are in data/tuning.json (section 9.4).
   coloring. So each tier now takes one more layer count, and tier 10 takes 4 or 5 like tier 9.
   Tier 10 still differs from tier 9 by colors (up to 8) and tray uses (up to 5). With 5 layers
   only, tier 10 had three blueprints; with 4 or 5 it has six.
-- **Covered at start is reported, not a rule.** It is not one of G1 to G7, and the generator's
+- **Covered at start is reported, not a rule.** It is not one of G1 to G9, and the generator's
   variations (a changed layer order, a dropped plank) move it a lot. tools/levels reports it per
-  level so we can see the spread. The ranges now match what the 40 blueprints give as authored
-  (section 10, where percentages are rounded; castle and crates cover 4 of 27, 14.8 percent), so a report outside them means the variation changed the board a lot, which is
-  worth a look but is not a reason to reject the level.
+  level so we can see the spread. The ranges match what the blueprints give as authored
+  (section 10, where percentages are rounded; in Phase 2 castle and crates covered 4 of 27,
+  14.8 percent, and all 43 of Phase 3 still fall inside their tiers' ranges), so a report
+  outside them means the variation changed the board a lot, which is worth a look but is not a
+  reason to reject the level. The cover rule G8 (section 6.4) is separate: it counts covered
+  screws on the authored blueprint to decide which tiers may use it.
 
 ### 6.2 Readability caps (every tier, every level)
 
@@ -455,6 +477,17 @@ A variation is shown only if all of these hold. Otherwise the generator tries th
 - **G5.** At the start at least one free screw fits an open box.
 - **G6.** The queue never has the same color twice in a row, and the two starting boxes differ.
 - **G7.** The blueprint was not used in the previous 5 numbered levels.
+- **G8. The cover rule** (approved by Bart at Hard Stop 2). A tier whose fewest tray uses range
+  starts at k (its `tray_uses` low end in data/tuning.json) only uses blueprints with at least
+  2k + 1 screws covered at the start, counted on the blueprint as authored
+  (`LevelCatalog.suits_tier`). Tiers with k = 0 (1 to 3) take any blueprint whose screws and
+  layers fit. So tiers 4 to 6 need 3 covered, tiers 7 and 8 need 5, tiers 9 and 10 need 7. Why:
+  a board with nothing covered never needs the tray, whatever its colors (every screw can be
+  taken in queue order), and each forced tray use needs about two covered screws to hide the
+  screws that make it. This decides which blueprints a tier may draw (G7's deal); it is not
+  checked again on the varied board.
+- **G9. The soft step into Hard** (tiers 7 to 10, approved by Bart at Hard Stop 2, with a
+  proposed change). See section 6.4.1.
 
 **Novice policy** (a cheap stand in for a careless player, deterministic): at every step, if
 some free screw fits an open box, tap the topmost such screw (smallest y, then smallest x);
@@ -463,6 +496,121 @@ otherwise tap the topmost free screw. It never uses helpers.
 **Measures the solver records** for every level (brief section 5): screws, colors, layers,
 planks, fewest tray uses, the novice policy's result, and a trap measure the engine defines
 (suggested: the share of random playouts that lose). Bots in tests/bots report the rest.
+
+### 6.4.1 G9: the soft step into Hard
+
+**Why.** In the Hard Stop 2 bot run (build/bots/hs2-run.txt) the novice won 76 percent of tier 6
+levels and none on tiers 7 to 10, and the random bot fell from 57 to 7 percent. The novice lost
+after about 8 taps on 30 screws: the tray was full by then, so one opening decided the whole
+level and the other 20 taps carried no pressure. On the Phase 3 library the same generator gives
+the same picture: of 148 hard levels (151 to 350), the novice is out by tap 7 on 88, and the
+solver's solution makes its last tray use by tap 7 on 133.
+
+**Where it applies.** Every generated level of tiers 7 to 10: numbered, Relaxed (hard band) and
+the stored fallback levels. Not the daily (tier 6) or the tutorial. As proposed below, G9a is
+required on tiers 7 and 8 and reported on 9 and 10, and G9b is reported only.
+
+**G9a. Survival.** Let n be the level's screws. Play the novice policy (section 6.4) from the
+start, exactly as `Solver.measure` does for `SolveResult.novice_won`. Its survival s is the
+number of taps it makes before the level is lost: every tap counts, into a box or into the tray,
+and the tap after which R23 holds is the last one counted. (The novice never makes a refused
+tap, because it only taps a screw that has a destination, and it uses no helpers.) G4 already
+requires it to lose on these tiers, so s is below n. The rule:
+
+  **s >= ceil(n / 3)**, required on tiers 7 and 8; on tiers 9 and 10 reported, not required
+  (proposed, waiting for Bart; approved was required on all four).
+
+| Screws | 27 | 28 to 30 | 31 to 33 | 34 to 36 |
+|-|-|-|-|-|
+| ceil(n / 3), taps | 9 | 10 | 11 | 12 |
+
+**G9b. Late tray use.** Number the taps of the solver's solution (`SolveResult.solution`, one tap
+per screw, the order that reaches the fewest tray uses) from 1 to n. A tap is a tray use when its
+screw goes to the tray (R12; the tap that R13 step 4 counts). A tray use's position is its tap
+number p. The solution puts all its tray uses in the first third when every tray use has
+3p <= n. Approved: such a coloring is turned down. Proposed (waiting for Bart): tools/levels and
+the bot report show the last tray use's position for every level, and nothing is turned down for
+it.
+
+**When a coloring fails G9.** It is turned down like a coloring that fails G4: the generator
+goes on to its next attempt (the next coloring of the same variation, then the next variation),
+and the attempt counts toward the attempt and state budgets. The coloring pressure does not
+change (measured: lowering it after a G9 failure made no difference). G4 and G9a are checked
+first, before the search, because they need only the novice playout (one playout of at most n
+taps, about 1 ms); only colorings that pass them are searched for G3. The rules for keeping a level
+are the same; only the order of the walk through the colorings differs (so levels can differ,
+which is part of why the golden levels changed with version 4), and it makes the hard tiers
+about 3.5 times faster (searches per level on tier 7 fell from 43 to 4, on tier 8 from 40
+to 6, with the same fallbacks). G9b, where it is reported, needs one replay of the solution
+after the search.
+
+**With the per-tier tray cap.** Unchanged. The search still stops past the tier's top tray use
+count (`over_cap`), the fewest tray uses must still be inside the tier's range (G3), and G9 never
+widens or narrows that range.
+
+**With the fallbacks.** The stored fallback levels of tiers 7 and 8 must pass G9a (rebuild them
+once G9 is in). When a level's attempts run out, the order stays: the tier's own stored levels,
+then the closest solved attempt, then a neighboring tier's stored levels. When choosing the
+closest attempt, one that passes G9a beats one that does not, before the existing order (most
+tray uses, then the novice result the tier wants). A neighbor's stored level from tier 6 or 9
+needs no G9.
+
+**Measured, and why I propose a change.** A scratch copy of the generator with G9 added, on
+levels 151 to 350 (40 levels per tier, the Phase 3 library), counting the levels that ran out of
+attempts and fell back to a stored level. "Today's budget" is 12 variations, 60 attempts and
+1.2 million states per level; "double" is 24, 120 and 2.4 million.
+
+| Generator | Tier 7 | Tier 8 | Tier 9 | Tier 10 |
+|-|-|-|-|-|
+| as now, no G9 | 0% | 5% | 20% | 5% |
+| as approved: G9a at n / 3 and G9b, today's budget | 73% | 88% | 98% | 98% |
+| G9a at n / 3 only, today's budget | 25% | 28% | 73% | 58% |
+| G9a at n / 3 only, double budget | 13% | 10% | 60% | 43% |
+| G9a at n / 3 on tiers 7 and 8 only, double budget (proposed) | 13% | 10% | 20% | 5% |
+
+On the accepted levels with G9a, the novice survives 13 to 15 taps on average (today 8 to 10),
+and the trap measure barely moves (0.88 on tier 7 instead of 0.90), so a careless order still
+loses, just not in the opening.
+
+- **G9b measures the solver more than the level.** The solver is a breadth first search by tray
+  uses that keeps the first solution it reaches, and its order of exploring puts tray uses
+  early: today 133 of 148 hard solutions make their last tray use by tap 7. Requiring a late one
+  turned down nearly every coloring.
+- **G9a fits the step into Hard, not yet Expert.** The hard tiers color with a deep opening (the
+  two open boxes need screws that only come free after several removals), which is exactly what
+  fills the novice's tray by tap 6 or 7. Enough of those colorings survive n / 3 on tiers 7 and
+  8, given a bigger budget. Tiers 9 and 10 also need 3 or more tray uses, and too few colorings
+  manage both: even with the double budget, 43 to 60 percent of those levels would be stored
+  ones, which undoes the variety work of section 10.1. The cliff Bart saw is between tiers 6 and
+  7, so the rule goes there first; Expert stays sharp for now.
+- **What would let the approved version work** (for level-engine-dev, a suggestion): a second
+  coloring that gives the deep screws to boxes 3 and 4 (the previewed ones) and screws free at
+  the start to boxes 1 and 2. In my scratch copy every level it produced passed G9a at n / 3,
+  but on its own it fell back as often as the deep opening on Expert (35, 18, 75 and 60 percent
+  on tiers 7 to 10 at today's budget), and mixing the two did not help there. Expert needs a
+  better coloring before G9a can be required on it; then measure again.
+- **Acceptance.** G9 ships when tools/levels shows at most about 10 percent fallbacks on tiers 7
+  and 8 over levels 9 to 400 (13 and 10 percent in my scratch run with the double budget), and
+  the generation times on the phone stay acceptable. If the engine can't get there, the numbers
+  come back to me and Bart; nobody relaxes them silently.
+- **Measured with generator version 4** (level-engine-dev, levels 9 to 400, double budget). Fell
+  back: tier 7 12 percent (8 of 69), tier 8 19 percent (12 of 64), tier 9 14 percent, tier 10 10
+  percent. A triple budget brings tier 7 to 3 percent but leaves tier 8 at 13; a quadruple adds
+  nothing. Two boards cause most of it: skyline falls back 5 of 6 times on tier 7, and bookshelf
+  4 of 6 on tier 8, 5 of 8 on tier 9 and 4 of 6 on tier 10 (the fallback builder found no tier 8
+  bookshelf level in 160 tries). Jellyfish and ship-wheel each miss 2 on tier 8. On accepted tier
+  7 and 8 levels the novice survives a median of 13 taps (at least 9 and 10). On Expert, where
+  G9a is only reported, 7 of 48 tier 9 levels and 7 of 40 tier 10 levels pass it, with a median
+  of 7 novice taps. Levels 358 and 368 hand out the same stored level. So the gate is not met on
+  tier 8.
+- **Recommendation for Bart.** Ship Gate 1 as it is: every fallback is still a solved, checked
+  level, Gate 1 is about feel, and the player meets tier 7 first at level 60 and tier 8 at level
+  85, past where the Gate 1 sittings reach. In Phase 4, fix the data, with the version bump that
+  goes with it. I prefer retuning skyline and bookshelf (deeper or more covering, so colorings
+  that let the novice survive also need 2 or more tray uses) over keeping them off tiers 7 and 8:
+  skyline suits only tiers 7 and 8, so dropping it there drops it from the game and leaves tier 7
+  with 7 boards, and bookshelf fails on tiers 9 and 10 too. Then measure again against this gate,
+  and check that no two levels within 5 of each other hand out the same stored level.
 
 ### 6.5 Evidence so far
 
@@ -482,7 +630,7 @@ is the main thing to prove at Hard Stop 2.
   counted date, so moving the clock back gains nothing. The daily keeps the date it was started
   on (UX 4.3).
 - **Relaxed:** opens after level 8. Its own seed stream. Easy picks a tier from 1 to 3, medium
-  from 4 to 6, hard from 7 to 8, by seed, and applies G1 to G7. No stars, no clock. Undo is free
+  from 4 to 6, hard from 7 to 8, by seed, and applies G1 to G9. No stars, no clock. Undo is free
   and unlimited. When R23 would make the level lost, it is not lost: the stuck sheet offers a
   free Undo (UX 3.5). Relaxed does not move the level count or the stats beyond "helpers used".
 
@@ -627,6 +775,33 @@ An example showing all four shapes (data/blueprints/ holds the real files):
   one of its holes as pivot, the distance r from the pivot to the centroid is below 0.25 or
   above 0.75 units, never in between, so no phone can disagree about whether it turns.
 
+**Planks hanging below the core: a view rule, not a B14** (asked for in Phase 3 review; I
+propose this instead, waiting for the lead and Bart). A plank on its last screw hangs straight
+below it (R16), so a long plank near the bottom hangs far below the 90 gu core: in level 40 the
+weave's full width bar (86 gu long) hangs from (67, 55) down to y 122. On the base phone UX
+3.2.1 leaves no room for that: the board panel is exactly the core, with 8 units (2 gu) of gap
+above, below and at each side before the tray, the helper bar or the screen edge. I measured the
+reach of every rest pose (BoardGeometry's `hang_outline` for every screw, the furthest vertex
+outside x 0 to 86, y 0 to 90):
+
+| Allowed reach outside the core | 1 gu | 2 gu | 15 gu (the tall phone's extra back board) | 30 gu | 45 gu |
+|-|-|-|-|-|-|
+| Files that fail, of 43 blueprints and 8 tutorials | 49 | 49 | 47 | 35 | 27 |
+
+Every tutorial fails, and so would almost any picture with a long plank near the bottom (bases,
+hulls, branches, rails, shelves): the worst reach is 91 gu. A data rule tight enough to keep
+poses on the base phone's board would mean redrawing nearly the whole library and losing most of
+its long planks, and it would still not cover the fall (planks drop off the board, R17) or the
+swing's overshoot, which are drawn outside the core anyway. Below the core a plank covers
+nothing (there are no screws there), so this is purely a drawing question. So the rule goes to
+the view:
+
+- **V1.** The board view draws planks (resting, hanging, swinging and falling) clipped to the
+  board panel of UX 3.2.1 (on the base phone exactly the core; on taller phones the panel with
+  its extra back board), and the top bar, boxes, tray and helper bar are drawn above the board
+  layer. A hanging plank is cut off at the panel's edge and never covers a bar or a button.
+- The logic and the rules are unchanged; the validator gets no new check.
+
 **House rules I hold my own blueprints to** (stricter than B1 to B13, not checked by the game):
 a one hole plank has its centroid exactly on the vertical through its hole (or on the hole), and
 a covered screw is at least 2 units (8 du) under the wood that covers it. The Phase 1 ten keep
@@ -683,10 +858,12 @@ document wins if they ever differ:
 
 ## 10. The blueprint library
 
-Forty blueprints in data/blueprints/: the ten from Phase 1 and thirty added in Phase 2, each an
-original picture or pattern. "Suits tiers" means the blueprint as authored has a screw count and
-a layer count inside that tier's ranges (section 6.1); the generator's variations (a dropped or
-added plank) can reach a neighboring tier too. The table is sorted by screws.
+There are 43 blueprints in data/blueprints/: ten from Phase 1, thirty added in Phase 2 and three
+added in Phase 3, each an original picture or pattern. "Suits tiers" means
+`LevelCatalog.suits_tier` accepts the blueprint as authored: its screw count and layer count are
+inside the tier's ranges (section 6.1), and it has enough covered screws for the tier's tray uses
+(the cover rule, G8 in section 6.4). The generator's variations (a dropped plank) can reach a
+neighboring tier too. The table is sorted by screws.
 
 | Blueprint | Picture | Kind | Screws | Planks | Layers | Free at start | Covered at start | Suits tiers | Added |
 |-|-|-|-|-|-|-|-|-|-|
@@ -695,51 +872,107 @@ added plank) can reach a neighboring tier too. The table is sorted by screws.
 | mug | Mug | silhouette | 9 | 4 | 2 | 9 | 0 (0%) | 1 | Phase 2 |
 | mushroom | Mushroom | silhouette | 9 | 5 | 2 | 9 | 0 (0%) | 1 | Phase 2 |
 | signpost | Signpost | silhouette | 9 | 4 | 2 | 8 | 1 (11%) | 1 | Phase 2 |
-| target | Target | pattern | 12 | 3 | 1 | 12 | 0 (0%) | 1 | Phase 2 |
 | flower | Flower | silhouette | 12 | 11 | 2 | 12 | 0 (0%) | 1, 2 | Phase 2 |
-| house | House | silhouette | 15 | 6 | 2 | 12 | 3 (20%) | 2, 3 | Phase 1 |
+| target | Target | pattern | 12 | 3 | 1 | 12 | 0 (0%) | 1 | Phase 2 |
 | car | Car | silhouette | 15 | 7 | 3 | 13 | 2 (13%) | 2, 3 | Phase 2 |
 | fish | Fish | silhouette | 15 | 9 | 3 | 11 | 4 (27%) | 2, 3 | Phase 1 |
+| house | House | silhouette | 15 | 6 | 2 | 12 | 3 (20%) | 2, 3 | Phase 1 |
 | sailboat | Sailboat | silhouette | 15 | 7 | 3 | 13 | 2 (13%) | 2, 3 | Phase 1 |
 | snowman | Snowman | silhouette | 15 | 9 | 3 | 14 | 1 (7%) | 2, 3 | Phase 2 |
 | windmill | Windmill | silhouette | 15 | 7 | 4 | 10 | 5 (33%) | 3 | Phase 1 |
-| rocket | Rocket | silhouette | 18 | 15 | 3 | 17 | 1 (6%) | 3, 4 | Phase 2 |
-| tree | Tree | silhouette | 18 | 7 | 3 | 15 | 3 (17%) | 3, 4 | Phase 1 |
 | bridge | Bridge | silhouette | 18 | 5 | 4 | 14 | 4 (22%) | 3, 4 | Phase 1 |
-| lighthouse | Lighthouse | silhouette | 18 | 9 | 4 | 16 | 2 (11%) | 3, 4 | Phase 1 |
-| owl | Owl | silhouette | 18 | 7 | 4 | 17 | 1 (6%) | 3, 4 | Phase 2 |
+| lighthouse | Lighthouse | silhouette | 18 | 9 | 4 | 16 | 2 (11%) | 3 | Phase 1 |
+| owl | Owl | silhouette | 18 | 7 | 4 | 13 | 5 (28%) | 3, 4 | Phase 2, covered more in Phase 3 |
 | pagoda | Pagoda | silhouette | 18 | 9 | 4 | 15 | 3 (17%) | 3, 4 | Phase 2 |
-| train | Train | silhouette | 21 | 9 | 3 | 21 | 0 (0%) | 4, 5 | Phase 2 |
-| balloon | Hot air balloon | silhouette | 21 | 9 | 4 | 21 | 0 (0%) | 4, 5 | Phase 2 |
+| rocket | Rocket | silhouette | 18 | 15 | 3 | 17 | 1 (6%) | 3 | Phase 2 |
+| tree | Tree | silhouette | 18 | 7 | 3 | 15 | 3 (17%) | 3, 4 | Phase 1 |
+| balloon | Hot air balloon | silhouette | 21 | 9 | 4 | 16 | 5 (24%) | 4, 5 | Phase 2, covered more in Phase 3 |
 | barn | Barn | silhouette | 21 | 10 | 4 | 17 | 4 (19%) | 4, 5 | Phase 2 |
-| robot | Robot | silhouette | 21 | 12 | 4 | 21 | 0 (0%) | 4, 5 | Phase 2 |
 | rings | Rings | pattern | 21 | 10 | 5 | 17 | 4 (19%) | 5 | Phase 1 |
-| weave | Weave | pattern | 24 | 8 | 3 | 20 | 4 (17%) | 5, 6 | Phase 2 |
+| train | Train | silhouette | 21 | 10 | 3 | 16 | 5 (24%) | 4, 5 | Phase 2, covered more in Phase 3 |
 | bricks | Brick wall | pattern | 24 | 10 | 4 | 12 | 12 (50%) | 5, 6 | Phase 1 |
-| butterfly | Butterfly | silhouette | 24 | 8 | 4 | 22 | 2 (8%) | 5, 6 | Phase 2 |
-| steamboat | Steamboat | silhouette | 24 | 10 | 4 | 22 | 2 (8%) | 5, 6 | Phase 2 |
-| crane | Tower crane | silhouette | 24 | 8 | 5 | 21 | 3 (12%) | 5, 6 | Phase 2 |
-| castle | Castle | silhouette | 27 | 10 | 4 | 23 | 4 (15%) | 6, 7 | Phase 2 |
-| crates | Crates | pattern | 27 | 9 | 5 | 23 | 4 (15%) | 6, 7 | Phase 2 |
-| skyline | City skyline | silhouette | 30 | 6 | 4 | 22 | 8 (27%) | 7, 8 | Phase 2 |
+| butterfly | Butterfly | silhouette | 24 | 8 | 4 | 19 | 5 (21%) | 5, 6 | Phase 2, covered more in Phase 3 |
+| crane | Tower crane | silhouette | 24 | 8 | 5 | 21 | 3 (13%) | 5, 6 | Phase 2 |
+| weave | Weave | pattern | 24 | 8 | 3 | 20 | 4 (17%) | 5, 6 | Phase 2 |
+| castle | Castle | silhouette | 27 | 10 | 4 | 19 | 8 (30%) | 6, 7 | Phase 2, covered more in Phase 3 |
+| crates | Crates | pattern | 27 | 9 | 5 | 19 | 8 (30%) | 6, 7 | Phase 2, covered more in Phase 3 |
+| ladybug | Ladybug | silhouette | 27 | 11 | 4 | 17 | 10 (37%) | 6, 7 | Phase 3 |
+| robot | Robot | silhouette | 27 | 16 | 4 | 20 | 7 (26%) | 6, 7 | Phase 2, covered more in Phase 3 |
+| steamboat | Steamboat | silhouette | 27 | 12 | 4 | 21 | 6 (22%) | 6, 7 | Phase 2, covered more in Phase 3 |
 | dominoes | Dominoes | pattern | 30 | 14 | 5 | 20 | 10 (33%) | 7, 8 | Phase 2 |
+| skyline | City skyline | silhouette | 30 | 6 | 4 | 22 | 8 (27%) | 7, 8 | Phase 2 |
 | ziggurat | Step temple | silhouette | 30 | 5 | 5 | 21 | 9 (30%) | 7, 8 | Phase 2 |
 | bookshelf | Bookshelf | silhouette | 33 | 16 | 4 | 22 | 11 (33%) | 8, 9, 10 | Phase 2 |
 | catface | Cat | silhouette | 33 | 7 | 4 | 23 | 10 (30%) | 8, 9, 10 | Phase 2 |
-| lattice | Lattice | pattern | 33 | 7 | 4 | 24 | 9 (27%) | 8, 9, 10 | Phase 1 |
-| jellyfish | Jellyfish | silhouette | 33 | 11 | 5 | 24 | 9 (27%) | 8, 9, 10 | Phase 2 |
 | falling-blocks | Falling blocks | pattern | 33 | 13 | 5 | 23 | 10 (30%) | 8, 9, 10 | Phase 2 |
+| ferris-wheel | Ferris wheel | silhouette | 33 | 15 | 5 | 19 | 14 (42%) | 8, 9, 10 | Phase 3 |
+| jellyfish | Jellyfish | silhouette | 33 | 11 | 5 | 24 | 9 (27%) | 8, 9, 10 | Phase 2 |
+| lattice | Lattice | pattern | 33 | 7 | 4 | 24 | 9 (27%) | 8, 9, 10 | Phase 1 |
+| ship-wheel | Ship's wheel and lifebuoys | silhouette | 33 | 9 | 5 | 21 | 12 (36%) | 8, 9, 10 | Phase 3 |
 | tiles | Tiles | pattern | 36 | 9 | 5 | 20 | 16 (44%) | 9, 10 | Phase 2 |
 
-**How many blueprints each tier can use, as authored:**
+**How many blueprints each tier can use, as authored** (measured with `LevelCatalog.suits_tier`,
+section 10.1):
 
 | Tier | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 |
 |-|-|-|-|-|-|-|-|-|-|-|
-| Blueprints | 7 | 6 | 12 | 10 | 10 | 7 | 5 | 8 | 6 | 6 |
+| Before Phase 3 (with the cover rule) | 7 | 6 | 12 | 4 | 5 | 5 | 3 | 8 | 6 | 6 |
+| Now | 7 | 6 | 12 | 7 | 8 | 9 | 8 | 10 | 8 | 8 |
 
-G7 needs at least two per tier, and in the cycle after level 151 tiers 6 to 10 come once every
-five levels, so the five hardest tiers share 16 different blueprints. Tier 7 is the thinnest
-(castle, crates, dominoes, skyline, step temple).
+G7 itself needs only two boards per tier, but the more a tier has, the longer a player goes
+before seeing the same board at that tier again. From level 151 tiers 6 to 10 come once every
+five levels, and they now share 20 different blueprints (14 before). The daily (tier 6) has 9
+boards, so a board comes back about every 9 days instead of every 6.
+
+### 10.1 Phase 3 changes: covering for the middle and hard tiers
+
+Why: under the cover rule (G8), a tier that needs k tray uses only takes blueprints with at least
+2k + 1 screws covered at the start, so tiers 4 to 6 needed 3 covered and tiers 7 to 10 needed 5
+or 7. Robot, train and balloon had none covered and butterfly and steamboat two, so those five
+suited no tier at all and the owl (one covered) only tier 3; tier 7 had only 3 boards, and hard levels repeated
+boards (Hard Stop 2 bot run: levels 159, 169 and 179 were the same stored bookshelf level).
+
+What changed (pictures in build/blueprints-p3/, before and after):
+
+| Blueprint | Screws (was) | Covered (was) | What covers what now |
+|-|-|-|-|
+| castle | 27 (27) | 8 (4) | pointed roofs on both towers cover the towers' top screws; the wall rises in front of the keep and covers its two lower screws |
+| crates | 27 (27) | 8 (4) | the top crate is wider and covers two screws of the crates beside it; the left and right stacks reach further and cover one each |
+| robot | 27 (21) | 7 (0) | a visor and a mouth plate cover the head's two screws; the arms start under the torso; the chest panel and a belt cover three torso screws; two antennae and two ears are new |
+| steamboat | 27 (24) | 6 (2) | a deck rail covers the cabin's three lower screws; a wheelhouse stands behind the cabin with one screw under it; the funnels still cover the cabin's top screws |
+| ladybug (new) | 27 | 10 | the shield in front of the head covers one head screw and one body screw; the wing cases cover two body screws and, with the body, the inner screws of all six legs |
+| butterfly | 24 (24) | 5 (2) | the forewings overlap the hindwings and cover one screw each; the body covers the screw where the antennae meet |
+| train | 21 (21) | 5 (0) | a crate on the wagon covers two wagon screws; the coupling bar covers one screw of the engine and one of the wagon; the engine covers the chimney's lower screw |
+| balloon | 21 (21) | 5 (0) | the envelope covers the tops of the two ropes; the middle stripe covers two envelope screws; a small cloud covers the sun |
+| owl | 18 (18) | 5 (1) | big eyes cover one body screw each; the body covers three branch screws |
+| ferris-wheel (new) | 33 | 14 | the hub covers the six inner spoke screws and the rim covers the six outer ones; the base covers both feet of the stand; eight cabins ring the wheel |
+| ship-wheel (new) | 33 | 12 | the hub covers the six inner spoke screws, and the three spokes cover six of the rim's twelve; four lifebuoys fill the corners |
+
+- The three new boards are round, so the hard tiers no longer look like rows of rectangles
+  (tiles, falling blocks, cat, skyline, step temple, dominoes, lattice).
+- The Ferris wheel and the ship's wheel are built alike (a hub, a rim and three spokes that cross
+  in the middle) but play differently: on the Ferris wheel the rim is in front and locks the outer
+  spoke screws until all six rim screws are out; on the ship's wheel the spokes are in front and
+  each spoke that falls frees two rim screws.
+- Robot, steamboat, castle, crates and the ladybug serve tiers 6 and 7; the Ferris wheel and the
+  ship's wheel serve 8 to 10. Train, balloon, owl and butterfly stay medium boards (tiers 3 to 6):
+  tiers 4 and 5 needed boards as badly as tier 7 did, and those four pictures are too small to
+  hold 27 screws and stay readable.
+- Every picture keeps its idea and its outline; nothing is taken from any reference game.
+
+**How I checked.**
+
+- The engine's validator (src/logic/blueprint_validator.gd, `bash tools/test.sh validator`)
+  passes all 43 blueprints and the 8 tutorials.
+- My house rules hold for all eleven boards: every covered screw is at least 2 units (8 du)
+  under its wood, and every one hole plank hangs exactly on the vertical through its hole.
+- B11 margin: in every rest pose of the eleven boards, no screw comes within 0.44 units (1.8
+  du) of the covering threshold. The closest in the whole library is still the windmill (0.32
+  units).
+- The counts above come from a scratch script that calls `LevelCatalog.suits_tier` for every
+  blueprint and tier, before and after the change.
+
+### 10.2 Phase 2 checks and notes (still true)
 
 **What I checked, and how.** Every file was checked by my scratch validator (Python, outside the
 repo) against B1 to B13 and my house rules (section 9.2), and drawn and looked at. B11 and B13
@@ -778,8 +1011,9 @@ eight tutorials.
   blueprints are the largest searches. They are where `max_states` will bite first.
 - **A hanging plank can be drawn over a free screw of its own layer.** Same layer planks never
   cover each other (R8), but after a swing a plank can hang across another plank's screw on the
-  same layer. 19 blueprints have at least one such pose (target 12, bricks 10, balloon 8,
-  bookshelf 8, skyline 6, sailboat 5, and fewer in the rest); no tutorial has one. The renderer
+  same layer. 24 blueprints have at least one such pose (19 in Phase 2: target 12, bricks 10,
+  bookshelf 8, skyline 6, sailboat 5; the Phase 3 boards add the ship's wheel 14, the Ferris
+  wheel and the ladybug 10 each, and fewer in the rest); no tutorial has one. The renderer
   should draw every screw above every plank of its own layer, so the screw stays visible and
   tappable, as the rules say.
 - **Hanging planks reach below the core.** Most blueprints have a pose (a long bar flipping
@@ -868,7 +1102,10 @@ Walk these on Windows (tests and bots) and on the phone. Each item names how to 
 **Difficulty**
 
 21. tier(N) matches section 6.3 for levels 9 to 30 and 151 to 160.
-22. 100 generated levels per tier pass G1 to G7.
+22. 100 generated levels per tier pass G1 to G7, and G9a on tiers 7 and 8. The report gives
+    the fallback rate, the novice survival and the last tray use position per tier next to it.
+22a. G8: `LevelCatalog.suits_tier` gives section 10's "Suits tiers" column for every
+    blueprint, and every tier from 7 to 10 has at least 8 suitable blueprints.
 23. The novice policy wins every tier 1 to 3 level and loses every tier 7 to 10 level (G4).
     The greedy novice bot's win rates per tier are reported next to it.
 24. No level shows more than 36 screws, 8 colors, 5 layers or 24 free screws at the start.
@@ -898,15 +1135,23 @@ Walk these on Windows (tests and bots) and on the phone. Each item names how to 
   New items for you: a refused tap needs feedback (R25), Daily and Relaxed are locked until
   level 8 (they need a short note on the title buttons), the `hint` field is in 9.3, and the out of room sheet now lists every owned, usable helper
   (R37), not only Undo.
-- **level-engine-dev.** Rules R1 to R38, worked examples E1 to E7, generator rules G1 to G7,
+- **level-engine-dev.** Rules R1 to R38, worked examples E1 to E7, generator rules G1 to G9,
   the novice policy, and B1 to B13 for variations. Please round turned vertices to a fixed
   precision (R17 note). Higher tiers will need coloring with intent (section 6.5). Phase 2:
   the tier layer ranges changed (6.1), covered at start is a report, not a filter, the
   sawtooth steps are indexed by (N - 1) mod 5 (6.3), and tutorials 3, 5 and 6 moved some planks
-  (8). Tutorial `hint` entries are [plank, hole] in the file.
+  (8). Tutorial `hint` entries are [plank, hole] in the file. Phase 3: the cover rule is written
+  down as G8 and the soft step as G9 (6.4, 6.4.1); eight blueprints changed and three are new
+  (10.1), so `GENERATOR_VERSION` goes to 4, the golden fingerprints are renewed, the fallback
+  levels are rebuilt (tiers 7 to 10 must pass G9), and the expected table in
+  tests/logic/test_validator.gd (`test_b12_shipped_blueprints_free_at_start_match_the_gdd`)
+  takes its numbers from section 10's table.
 - **graphic-designer.** The palette needs at least 8 screw colors usable in one level. Plank
   outlines drawn by the renderer must match the logic outline (section 1.2). Please draw every
   screw above every plank of its own layer: after a swing, a plank can hang across a free screw
   of the same layer (section 10).
+- **gameplay-dev, graphic-designer and ux-designer.** View rule V1 (section 9.2): planks are
+  drawn clipped to the board panel and under the bars, because a hanging plank can reach up to
+  91 gu outside the core (for example level 40's weave bar, down to y 122).
 - **qa-tester.** Section 12, and bot reports per tier group so section 5's table can be
   checked.

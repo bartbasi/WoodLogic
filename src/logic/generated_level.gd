@@ -21,19 +21,24 @@ var pressure: int = -1
 ## For reports: the sum of states over every search this level took.
 var total_states: int = 0
 ## For reports: why tries were turned down. Boards: the blueprint rules or the tier's screws
-## and layers (G1, G2). Colorings: no screw free at the start fits an open box (G5). Searches:
-## stopped at max_states, no solution within the tray use cap (or none at all), too few tray
-## uses (G3), or the novice result is wrong for the tier (G4).
+## and layers (G1, G2). Colorings: no screw free at the start fits an open box (G5). Before the
+## search: the novice result is wrong for the tier (G4) or the novice is out too soon (G9a).
+## Searches: stopped at max_states, no solution within the tray use cap (or none at all), too
+## few tray uses (G3), or the solution's tray uses all come in the first third (G9b). The G9
+## counts are only where the tier requires the rule (Generator.SURVIVAL_TIERS and
+## LATE_TRAY_TIERS).
 var rejected_boards: int = 0
 var rejected_colorings: int = 0
 var over_budget: int = 0
 var over_cap: int = 0
 var too_easy: int = 0
 var novice_wrong: int = 0
+var short_survival: int = 0
+var early_tray: int = 0
 
 
 func rejections() -> String:
-	return "boards %d, colorings %d, budget %d, cap %d, easy %d, novice %d" % [rejected_boards, rejected_colorings, over_budget, over_cap, too_easy, novice_wrong]
+	return "boards %d, colorings %d, budget %d, cap %d, easy %d, novice %d, survival %d, early tray %d" % [rejected_boards, rejected_colorings, over_budget, over_cap, too_easy, novice_wrong, short_survival, early_tray]
 ## For the fallback: the solved try that came nearest the tier, its solve and its variation.
 var closest: LevelData
 var closest_solve: SolveResult
