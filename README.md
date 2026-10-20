@@ -45,3 +45,40 @@ WoodLogic is free software: you can redistribute it and/or modify it under the t
 Every source file starts with a two-line notice pointing to LICENSE and NOTICE; please keep it.
 WoodLogic is built with the [Godot Engine](https://godotengine.org) (MIT license); the game's
 Credits screen shows Godot's notices and those of its third-party parts.
+
+## Building the Android APK
+
+You need Godot 4.7.2 with its export templates, the Android SDK (`C:\Android\Sdk`) and JDK 17.
+The SDK, JDK and debug key are set once in Godot's editor settings (Editor Settings, Export,
+Android), not in the repo. Nothing secret is stored in the project.
+
+```bash
+bash tools/build/android-debug.sh    # build/woodlogic-debug.apk, the game
+bash tools/build/android-timing.sh   # build/woodlogic-timing.apk, the phone timing
+```
+
+Each script imports, exports, then prints the APK size, its package, version and permissions,
+and fails if the APK asks for any permission. The game asks for none.
+
+**Turn on USB debugging on the phone.** Settings, About phone, tap "Build number" seven times.
+Then Settings, System, Developer options, turn on "USB debugging". Plug the phone in and accept
+the "Allow USB debugging" question. `adb devices` (in `C:\Android\Sdk\platform-tools`) should list it.
+
+**Install the game:**
+
+```bash
+C:/Android/Sdk/platform-tools/adb.exe install -r build/woodlogic-debug.apk
+```
+
+**Install the timing build** (it installs beside the game as "WoodLogic timing"):
+
+```bash
+C:/Android/Sdk/platform-tools/adb.exe install -r build/woodlogic-timing.apk
+```
+
+Open "WoodLogic timing" and wait for "Done". Then take a screenshot of the screen, or read the
+saved table:
+
+```bash
+C:/Android/Sdk/platform-tools/adb.exe shell run-as io.github.bartbasi.woodlogic.timing cat files/timing.txt
+```

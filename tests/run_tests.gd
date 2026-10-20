@@ -17,6 +17,7 @@ const TIME_LIMIT := 1800.0
 
 var _errors := ErrorCatcher.new()
 var _current := ""
+var _save_dir := ""
 
 
 ## Collects engine and script errors as they happen, so a test that hits one fails instead of
@@ -47,6 +48,7 @@ func _initialize() -> void:
 	OS.add_logger(_errors)
 	create_timer(TIME_LIMIT, true, false, true).timeout.connect(func() -> void:
 		print("\nTIMED OUT after %d s in %s" % [TIME_LIMIT, _current])
+		_remove_dir(_save_dir)
 		quit(1))
 	_run.call_deferred()
 
@@ -54,6 +56,16 @@ func _initialize() -> void:
 func _run() -> void:
 	var args := OS.get_cmdline_user_args()
 	var only: String = args[0] if args.size() > 0 else ""
+	# Tests never touch the player's real saves.
+	var save_dir := "user://test_%d/" % OS.get_process_id()
+	# (A -s script compiles before the autoloads exist as names, so it finds Save by its node.)
+	var save := root.get_node("Save")
+	save.set("dir", save_dir)
+	if save.get("dir") != save_dir:
+		print("Could not point Save at %s, so no test runs (they would touch the real saves)." % save_dir)
+		quit(1)
+		return
+	_save_dir = save_dir
 	# The game data loads once, on the main thread, as the app does at boot.
 	var loaded := LevelCatalog.load_all()
 	var load_errors := _errors.take()
@@ -108,6 +120,7 @@ func _run() -> void:
 	if passed + failed == 0:
 		print("No tests found%s." % ("" if only == "" else " matching \"%s\"" % only))
 	print("\n%d passed, %d failed" % [passed, failed])
+	_remove_dir(save_dir)
 	# A filter that matches nothing is a mistake (a typo, or suites in the wrong folder), not a pass.
 	quit(1 if failed > 0 or (only != "" and passed == 0) else 0)
 
@@ -118,3 +131,14 @@ func _find_suites(dir: String, found: Array[String]) -> void:
 	for file: String in DirAccess.get_files_at(dir):
 		if file.begins_with("test_") and file.get_extension() == "gd" and file != "test_case.gd":
 			found.append(dir.path_join(file))
+
+
+## Deletes a folder the tests made, with everything in it.
+func _remove_dir(dir: String) -> void:
+	if dir == "" or not DirAccess.dir_exists_absolute(dir):
+		return
+	for sub: String in DirAccess.get_directories_at(dir):
+		_remove_dir(dir.path_join(sub))
+	for file: String in DirAccess.get_files_at(dir):
+		DirAccess.remove_absolute(dir.path_join(file))
+	DirAccess.remove_absolute(dir)

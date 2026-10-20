@@ -47,3 +47,36 @@ Testing (qa-tester):
 
 - A bot that spends and buys helpers, to check the star economy.
 - A time model for the bots where thinking time grows with the number of free choices.
+
+## From Phase 3 (19 October 2026)
+
+Sound (audio-dev):
+
+- A master volume slider.
+- A short haptic buzz on Android that matches the knock. It needs the VIBRATE permission,
+  which ground rule 2 rules out, so only if Bart ever allows that one permission.
+
+Level scene (gameplay-dev):
+
+- A reduced-motion setting that uses the instant path the tests already use.
+- A hidden frame-time and draw-call readout, to check 60 fps on a phone.
+
+Screens and saves (ui-dev):
+
+- A "Continue" note on the title when a level was left unfinished.
+- The time on Level clear, before stars exist.
+- A note in Settings when a save was repaired (a `.bad` file was kept).
+
+Build (platform-dev):
+
+- An adb helper script that installs and launches the app on the phone.
+- An arm64-only build, a few MB smaller.
+
+Level generator (level-engine-dev):
+
+- A second coloring for Expert (the designer's "deep second wave"), so G9a could be required
+  on tiers 9 and 10 too.
+- Among the solutions with the fewest tray uses, prefer the one whose last tray use comes
+  latest, so G9b measures the level rather than the search order.
+- One solver setup shared by the novice playout and the search.
+- On slow phones, let the prefetcher look two levels ahead before hard levels.

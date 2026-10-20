@@ -4,7 +4,7 @@ The contract every area builds against. The rules themselves are in docs/GDD.md 
 to R38, B1 to B13, G1 to G7, S1 to S9); screens, sizes and words are in docs/UX.md; the look
 and motion timings are in docs/DESIGN.md. Where UX.md and DESIGN.md give different numbers,
 UX.md wins for sizes and layout and DESIGN.md wins for motion and color. If you need something
-here changed, ask the lead. Status: Phase 2.
+here changed, ask the lead. Status: Phase 3 (section 10 says what Phase 3 builds).
 
 ## 1. Areas and how they depend on each other
 
@@ -151,8 +151,9 @@ A stored level is `LevelData.to_dict()`: the tutorial format of GDD 9.3 (planks 
 `colors`, `queue`, `tray_par`, `par_time`, `line`, `hint`) with `kind` "numbered", "daily" or
 "relaxed", plus `number`, `tier`, `group`, `blueprint`, `generator` (the version that made
 it) and `band`. A fallback file is `{"format": 1, "tier": t, "levels": [{"level": {...},
-"solve": {...}}, ...]}`, one level per line, where `solve` is the stored `SolveResult`. The
-test suite solves every stored level again and replays its solution.
+"solve": {...}}, ...]}`, one level per line, where `solve` is the stored `SolveResult`
+(including `novice_taps` and `last_tray_use`). The test suite solves every stored level again
+and replays its solution.
 
 ## 4. The logic model (src/logic/)
 
@@ -292,7 +293,9 @@ milliseconds are measured only for reports.
   `solved: bool`,
   `complete: bool` (false if it stopped at `max_states`), `fewest_tray_uses: int`,
   `solution: PackedInt32Array` (screw ids), `states: int`, `novice_won: bool` (GDD 6.4),
-  `trap: float` (the engine's trap measure), `ms: int` (report only). A level whose search
+  `trap: float` (the engine's trap measure), `novice_taps: int` (the novice's taps before the
+  loss, or n on a win), `last_tray_use: int` (the tap number, 1 to n, of the solution's last
+  tray use; 0 if none), `ms: int` (report only). A level whose search
   did not complete is never shown. The search explores moves in a fixed order (by screw id),
   so a search stopped at `max_states` stops at the same point on every phone. The visited set
   is keyed on an exact packing of the rule state, not a hash number, so two states can never
@@ -301,21 +304,34 @@ milliseconds are measured only for reports.
   R12's tie between two boxes only happens when they are identical. A rule that makes slots
   or positions matter must change the key too.
   With `max_tray_uses` set (the tier's top count), the search stops once that count is
-  passed and `over_cap` is true. `Solver.explore`, `Solver.search_only` and `Solver.measure`
+  passed and `over_cap` is true. `Solver.explore`, `Solver.search_only` and
+  `Solver.measure(level, result, with_trap := true)` (with false, only the novice is measured)
   are for tests and tools only.
-- `Generator.GENERATOR_VERSION: int` (started at 1; 3 since Phase 2's review fixes).
+- `Generator.GENERATOR_VERSION: int` (started at 1; 3 since Phase 2's review fixes; 4 since
+  Phase 3's G9).
   `Generator.make(kind: int, number: int, band: String) -> GeneratedLevel`: `level`, `solve`,
   `attempts: int`, `fell_back: bool`, `gen_ms: int` (report only). It tries a fixed sequence
   of attempts derived from the seed, each solved with a fixed `max_states`, and falls back
   after a fixed number of failed attempts. The same kind, number, band and version give the
   same level on every phone and PC. Budgets are per tier: `max_states` per attempt is 20k for
   tiers 1 to 3, 30k for 4 and 5, 40k for 6, 60k for 7 and 8 and 80k for 9 and 10; a level gets
-  at most 60 attempts and 1.2M states in all, then falls back. Hard tiers color with intent:
+  at most 12 variations, 60 attempts and 1.2M states in all, then falls back. A tier in
+  `Generator.SURVIVAL_TIERS` or `LATE_TRAY_TIERS` gets `G9_BUDGET` (2) times each, so 24, 120
+  and 2.4M on tiers 7 and 8. Hard tiers color with intent:
   a planned solution that sends key screws to the tray (solvable by construction), or a deep
   opening (made safe only by the solver). Either way only a complete, solved search accepts a
   level, and it proves the fewest tray uses. A tier needing k tray uses only takes blueprints
-  with at least 2k + 1 screws covered at the start (pending the designer's and Bart's sign-off
-  at Hard Stop 2). `level` is never null once `LevelCatalog.load_all()` has succeeded.
+  with at least 2k + 1 screws covered at the start (approved by Bart at Hard Stop 2). `level` is
+  never null once `LevelCatalog.load_all()` has succeeded.
+- **G9 (GDD 6.4.1).** G9a holds when the novice survives at least ceil(n / `SURVIVAL_DIVISOR`)
+  taps (the divisor is 3); it is required on `SURVIVAL_TIERS` ([7, 8]). G9b holds when the last
+  tray use p has p x `LATE_TRAY_PART` > n (the part is 3), or there is no tray use; it is
+  required on `LATE_TRAY_TIERS` (empty for now). Both are reported on every tier. The novice
+  plays each coloring before the search, so only colorings that pass G4 and G9a are searched;
+  the rules are the same as checking after the search, only cheaper. The trap measure is made
+  only for the level kept. Helpers for tests and tools: `survival_needed(screws)`,
+  `survives(level, r)`, `late_tray(level, r)`, `g9_holds(tier, level, r)`, `budget_scale(tier)`;
+  `GeneratedLevel` counts `short_survival` and `early_tray` in `rejections()`.
 - **Blueprint choice (G7) is a pure function** of (kind, number, version): computing level N
   never needs any other level to be generated. For numbered levels it guarantees no blueprint
   repeats within 5 levels (for example a seeded deal per block of levels, arranged so the
@@ -332,7 +348,8 @@ milliseconds are measured only for reports.
   `hash()`. Randomness only through a `RandomNumberGenerator` with its `seed` set from these.
   `Seeds.date_of_day(days) -> int` gives the yyyymmdd of a day count.
 - **A golden test** in tests/logic pins `LevelData.fingerprint()` (whole numbers only:
-  blueprint, tier, tray par, par time, colors, queue and every plank field; never an angle) of a
+  blueprint, tier, tray par, par time, colors, queue, holes and the fields each plank's shape
+  uses, exactly what `to_dict` writes; never an angle) of a
   fixed set of levels (numbered 9 to 40, a spread from 100 to 160 covering tiers 7 to 10, deep
   openings and fallbacks, three dailies and two relaxed levels per band). Any change that
   alters them fails the test until `GENERATOR_VERSION` goes up and the fingerprints are
@@ -340,8 +357,9 @@ milliseconds are measured only for reports.
 - **Fallback levels** are known-good levels per tier, generated by the engine developer's tool
   and stored as JSON in `src/logic/fallback/tier-NN.json` (up to 8 per tier, one per line;
   level-engine-dev; format in 3.5). When a level's attempts run out the order is: the tier's
-  own stored levels, then the closest attempt that was solved, then a neighboring tier's
-  stored levels. A stored level is picked among those whose blueprint's nearest planned use in
+  own stored levels, then the closest attempt that was solved (preferring one that holds G9
+  as its tier requires, then the most tray uses, then the novice result), then a neighboring
+  tier's stored levels. Stored levels hold G9 for their tier. A stored level is picked among those whose blueprint's nearest planned use in
   the same stream is farthest away (beyond 5 either side whenever the pool allows;
   `Generator.neighbor_distances(kind, number, band)` plans blueprints only and makes no
   levels), and its colors are relabeled by a permutation seeded from the level's seed (the
@@ -372,7 +390,7 @@ milliseconds are measured only for reports.
     level as urgent, and today's daily and the next Relaxed level of each band as normal,
     since those can't be fetched during an earlier level. It keeps the current and previous
     level's `LevelData`, so Retry and Previous don't make them again. Worst case on this PC
-    is 1.5 s for a numbered level.
+    is about 2 s for a numbered level (1.98 s, level 114, in the version 4 run of 1 to 350).
 - `Stars.award(level: LevelData, won: bool, elapsed_ms: int, tray_uses: int, helpers_used:
   PackedStringArray) -> Vector3i` (cleared, fast, clean as 0 or 1), per GDD S1 to S8, and
   `Stars.par_time`.
@@ -383,7 +401,8 @@ milliseconds are measured only for reports.
 - `LevelData.with_colors(colors, queue, errors, play := {})`: `play` sets the play fields
   (kind, number, band, tier, group, tray par, par time, line, hint, generator, blueprint, id,
   name) and shares the planks and geometry. Also `LevelData.from_planks`, `fingerprint`,
-  `is_id`, and `PlankData.transformed` for variations. The other public helpers in
+  `is_id`, and `PlankData.transformed` for variations (it moves the center only for discs
+  and rings, the shapes that have one). The other public helpers in
   `Generator`, `LevelCatalog`, `GeneratedLevel` (report-only fields) and `LevelPrefetcher`
   (`key_for`, `is_running`) are for tests and tools.
 
@@ -392,8 +411,11 @@ milliseconds are measured only for reports.
 `C:/Tools/Godot/Godot_v4.7.2-stable_win64_console.exe --headless --path . -s
 res://tools/levels/levels.gd -- --from=1 --to=100 [--daily=2026-10-19] [--out=build/levels]`
 writes `report.md` (per level: kind, tier, blueprint, screws, colors, layers, fewest tray
-uses, novice result, trap, attempts, fallback, generation ms, solve ms) and one small PNG per
-level drawn into an `Image`, plus a timing summary (median, 95th percentile, worst). Other
+uses, novice result, novice taps against the G9a need, last tray use, trap, attempts,
+fallback with the blueprint it planned, generation ms, solve ms) and one small PNG per level
+drawn into an `Image`, plus per tier the novice taps (median and least) and how many hold G9a,
+the last tray use (median and latest) and how many hold G9b, a timing summary (median, 95th
+percentile, worst) and the ten slowest levels. Other
 options: `--days`, `--relaxed`, `--no-png`, `--repeat` (make every level twice and compare).
 Two options write into the repo, for the engine developer only: `--fallback=K` rewrites
 `src/logic/fallback/`, and `--golden` rewrites `tests/logic/golden_levels.json` (only after
@@ -471,8 +493,9 @@ and never hold game state.
   unscrew and the flight).
 - `BoxView.setup(color: int, preview: bool)` (a preview box is the closed queue look),
   `set_count(n: int)`, `set_lid(open: float)` (0 closed, 1 open), `close()`.
-- `TrayView.setup(slots: int)`, `set_warning(on: bool)` (one free slot left, a steady state,
-  never blinking), `set_full(on: bool)`.
+- `TrayView.setup(slots: int)`, `set_filled(filled: PackedByteArray)` (1 for each slot that
+  holds a screw, so the warning mark sits on the free slot), `set_warning(on: bool)` (one free
+  slot left, a steady state, never blinking), `set_full(on: bool)`.
 - `BoardView` (the back board and its shadows); icon drawing in `Icons`.
 - `Palette`: `COLORS` (the nine screw colors, in DESIGN.md's order), `symbol(color: int)`
   drawing data, `color_name()`. The logic only knows color indices.
@@ -488,10 +511,29 @@ Registered by the lead in project.godot:
 
 | Name | Script | Owner | Purpose |
 |-|-|-|-|
-| `Save` | src/save/save.gd | ui-dev | progress and settings, `settings_changed` and `progress_changed` signals, `load_all()` |
+| `Save` | src/save/save.gd | ui-dev | progress and settings on the phone (below) |
 | `Audio` | src/audio/audio.gd | audio-dev | one call per effect (`Audio.play("ratchet")` and so on), music, `set_sound(on)` and `set_music(on)`, which the app flow calls from the settings |
 
 The logic and the renderers use no autoload.
+
+`Save`'s public interface (Phase 3):
+
+- Signals `settings_changed` and `progress_changed`. Variables `dir` (set by the test runner
+  before `load_all()`), `sound`, `music`, `symbols`, `wood_id`, `metal_id`, and `problems`
+  (what the last load found wrong).
+- Files: `load_all()`, `save_all()`, `save_progress()`, `save_settings()` (all do nothing
+  before `load_all()`), and `erase_all()` (memory and files, `.bad` and `.tmp` included).
+- Progress: `next_level()`, `set_next_level(n)`, `highest_cleared()`, `star_bank()`,
+  `stars_earned()`, `level_record(n)` (`{stars, best_ms, gen}` or `{}`), `progress_copy()`
+  (a deep copy), and `record_win(level, elapsed_ms, stars: Vector3i) -> int` (the stars
+  gained; saves at once). Stars per level only add, `best_ms` only improves, `next_level`
+  moves to n + 1 only when n is at least `next_level`, and `stats` counts as 3.4 says.
+- Settings: `set_sound(on)`, `set_music(on)`, `set_symbols(on)`, `set_look(wood, metal)`,
+  `wood()` and `metal()` (an id that isn't unlocked reads as the default),
+  `is_unlocked(kind, id)`.
+- The saved next level (10.3): `write_next_level(key, level) -> bool`,
+  `read_next_level(key, generator_version) -> LevelData` (null for anything it doesn't
+  trust), `clear_next_level()`.
 
 ## 9. Tests
 
@@ -506,3 +548,104 @@ The logic and the renderers use no autoload.
   classes, and no `OS.shell_open` outside src/ui/links.gd.
 - src/directions/ (the Hard Stop 1 mock-ups) is excluded from exports until Phase 4 removes
   it.
+
+## 10. Phase 3: the first playable
+
+What Phase 3 builds, so Bart can play the core loop on his phone at Playtest Gate 1 (PROMPT.md
+Phase 3). Everything here builds toward the full contract above; Phase 4 adds the rest without
+reworking it.
+
+**Scope.** Numbered levels only (tutorial levels 1 to 8, then generated), with Retry and
+Previous level. No stars shown, no helpers, no Daily, Relaxed, Levels list, Stats, Settings,
+About, links or coffee button yet. The look is a plain placeholder.
+
+### 10.1 Level scene (gameplay-dev)
+
+- Section 6 in full, with these Phase 3 stubs: `set_star_bank`, `set_helpers`,
+  `highlight_helper` and `use_helper` do nothing, `usable_after_loss` returns an empty list,
+  and `helper_used` and `helper_buy_requested` are never emitted. No helper row. The clock
+  runs (the result's `elapsed_ms`), and `LevelResult.stars` comes from `Stars.award` as usual,
+  but no star is drawn.
+- **Placeholder look.** Plain shapes and flat colors, drawn by private classes in
+  `src/level/placeholder/` named `PlaceholderPlank`, `PlaceholderScrew`, `PlaceholderBox` and
+  `PlaceholderTray`. They take section 7's `setup` arguments and offer its methods, and the
+  level scene makes them in one place, so Phase 4 swaps in src/render's views there and
+  nowhere else. Screws use DESIGN.md 3.2's nine colors plus a simple line symbol per color,
+  so color is never the only signal (UX 7.4). Layout, sizes and the board scale follow UX 3.2
+  and 3.2.1a, so the board grows on large and foldable screens.
+- **Real motion.** The timings and feedback in UX 6.1 and DESIGN.md 9: the turn and flight,
+  the box filling, closing and sliding away, the queue moving up, tray jumps in tray order,
+  the plank swing to the logic's rest angle, and the fall (Godot physics or a tween, for looks
+  only), the covered-screw wiggle and the refused-tap shake. Input is never blocked (section
+  5.2).
+- Section 5.3's `debug_snapshot()` and `set_instant()`, and a test in tests/level that plays
+  generated levels tap by tap and checks the snapshot against `PlayState` after every tap.
+
+### 10.2 Audio (audio-dev)
+
+The `Audio` autoload, `src/audio/audio.gd`:
+
+```
+func play(effect: String, pitch := 1.0, volume_db := 0.0) -> void
+func set_sound(on: bool) -> void
+func set_music(on: bool) -> void      # Phase 3: stores the switch; music comes in Phase 4
+```
+
+Phase 3 effects, synthesized into `AudioStreamWAV` buffers by our own code (PROMPT.md 10):
+
+| Name | When (UX 6.1) |
+|-|-|
+| `ratchet` | a screw starts to turn |
+| `pop` | it comes free |
+| `clink` | it lands in a box; tray jumps call it with a rising `pitch` |
+| `clink_tray` | it lands in the tray (duller than `clink`) |
+| `knock` | a plank falls (wooden) |
+| `knock_dull` | a covered screw is tapped; a refused tap plays it at `pitch` 0.85; a button press at `pitch` 1.3 and `volume_db` -12 |
+
+An unknown name logs an error. `play` adds its own small random changes in pitch and timing
+(its own `RandomNumberGenerator`, never the logic's) and never clips; several effects can
+sound at once. With sound off, `play` does nothing. Making all the buffers takes under 50 ms
+on this PC. The rest of PROMPT.md 10's effects and the music come in Phase 4, including
+`lid`, `tick` and `creak`, which the Phase 3 level scene stands in for with `knock` and
+`knock_dull` at other pitches.
+
+### 10.3 Screens, app flow and saves (ui-dev)
+
+- `src/ui/app_flow.tscn` (root `AppFlow`) runs the app; `src/app/main.tscn` (lead) holds it.
+  At boot it calls `LevelCatalog.load_all()` (a failure shows a plain "WoodLogic could not
+  start" line and nothing else), `Save.load_all()`, and `Audio.set_sound` from the settings,
+  then shows the first screen.
+- Screens: Title (Play only, and the version), the level, Pause (Resume, Retry, Quit to
+  title), Level clear (Next and Replay, no stars), and Out of room ("The tray is full",
+  Retry, Previous level, Title). UX 3.1, 3.3, 3.4, 3.5 and 4.1 for layout, words and flow,
+  without the parts this phase leaves out. First launch skips the title (UX 4.1).
+- The Android back button and the lifecycle follow UX 4.2 and 4.3 for these screens.
+- `LevelPrefetcher` as in 4.4: urgent for the level the player waits on, level N+1 as soon as
+  N starts, and the current and previous `LevelData` kept for Retry and Previous level.
+- **The next level is saved** (Bart, Hard Stop 2, to save time on slow phones):
+  `user://next_level.json`, written through `Save` as soon as the app flow holds the level
+  that `Save.next_level()` names (so quitting mid level or on Level clear both work), is the
+  stored-level format of 3.5 for one level plus `"key"`. At boot, if its key is the Play
+  level's and its `generator` is `GENERATOR_VERSION`, the app flow reads it with
+  `LevelData.from_dict` and plays it without generating. Anything else (missing, broken, an
+  error from `from_dict`, another key or version) is ignored and the level is generated as
+  usual. The file only saves time: the same key and version always make the same level.
+- `Save` (src/save/save.gd) writes the full `progress.json` and `settings.json` of 3.4, with
+  the fields this phase doesn't use left at their defaults. It offers `var dir := "user://"`,
+  which the test runner points at `user://test_<process id>/` before `load_all()`. ui-dev
+  lists `Save`'s public functions in its report and the lead adds them to section 8.
+
+### 10.4 Android build and the phone timing (platform-dev and the lead)
+
+- `export_presets.cfg`: an "Android debug" preset for `io.github.bartbasi.woodlogic` that asks
+  for no permissions, signed with the debug key only, excluding `src/directions/*`, `tests/*`,
+  `tools/*`, `docs/*`, `build/*` and Markdown files. `tools/build/android-debug.sh` exports it to
+  `build/woodlogic-debug.apk`; Bart installs it with `adb install -r build/woodlogic-debug.apk`.
+- An "Android timing" preset, the same but named "WoodLogic timing", with the package
+  `io.github.bartbasi.woodlogic.timing` (so it installs beside the game), the custom feature
+  `timing`, and `tests/logic/golden_levels.json` included. With that feature, `src/app/main.gd`
+  (lead) runs `src/app/timing.gd` instead of the app: it loads the catalog, checks the golden
+  fingerprints (so the phone reads `res://data` from the APK and makes the same levels as the
+  PC), times levels 1 to 200, ten dailies, the boot's sound building and reading a saved next
+  level, and shows the table on screen and writes it to `user://timing.txt` and the log.
+  `tools/build/android-timing.sh` builds it to `build/woodlogic-timing.apk`.
