@@ -12,6 +12,7 @@ extends SceneTree
 ##   --no-png             skip the pictures
 ##   --repeat             make every level twice and check both are the same
 ##   --fallback=K         also build K fallback levels per tier into src/logic/fallback/
+##                        (at least 11 for the daily's tier, see _write_fallback)
 ##   --golden             write tests/logic/golden_levels.json (only with a new
 ##                        GENERATOR_VERSION)
 ## report.md has a table per tier (timing, attempts, fallbacks, tray uses, the novice's taps and
@@ -381,7 +382,10 @@ func _write_fallback(count: int) -> int:
 	var missing := 0
 	for t: int in range(1, Tuning.tiers.size() + 1):
 		var started := Time.get_ticks_msec()
-		var list := Generator.build_fallback(t, count, FALLBACK_ATTEMPTS)
+		# Every day draws on the daily tier's pool, so a day can have 2R lower ranked neighbors
+		# on it (Generator.stored_pick): with 2R + 1 stored levels one is always left for it.
+		var r := maxi(Tuning.recent_blueprints_excluded, 1)
+		var list := Generator.build_fallback(t, maxi(count, 2 * r + 1) if t == Tuning.daily_tier else count, FALLBACK_ATTEMPTS)
 		var levels := []
 		for g: GeneratedLevel in list:
 			levels.append({

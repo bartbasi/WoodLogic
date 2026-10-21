@@ -302,24 +302,17 @@ func test_fallback_files_hold_good_levels_for_every_tier() -> void:
 			check(Generator.g9_holds(t, level, stored.solve), "%s: G9 as tier %d requires it (novice taps %d of %d, last tray use %d)" % [level.id, t, stored.solve.novice_taps, level.screw_count(), stored.solve.last_tray_use])
 
 
-func test_fallbacks_avoid_their_neighbors_and_are_relabeled() -> void:
+func test_fallbacks_hand_out_the_stored_pick_relabeled() -> void:
 	_ready_catalog()
-	# Levels that fall back: their stored level's blueprint is not planned within five levels,
-	# and the relabeled colors keep the stored solve.
+	# A level that falls back hands out the stored level stored_pick names, and the relabeled
+	# colors keep the stored solve.
 	for n: int in range(100, 241):
 		var plan := Generator.plan_for(LevelData.NUMBERED, n, "")
 		var g := GeneratedLevel.new()
 		Generator._fall_back(plan, g)
-		var near := Generator.neighbor_blueprints(LevelData.NUMBERED, n, "")
-		var pool_ids := PackedStringArray()
-		for stored: GeneratedLevel in LevelCatalog.fallback[g.level.tier - 1]:
-			if not pool_ids.has(stored.level.blueprint_id):
-				pool_ids.append(stored.level.blueprint_id)
-		var avoidable := false
-		for id: String in pool_ids:
-			avoidable = avoidable or not near.has(id)
-		if avoidable:
-			check(not near.has(g.level.blueprint_id), "level %d: its fallback %s is not planned within five levels" % [n, g.level.blueprint_id])
+		var stored: GeneratedLevel = LevelCatalog.fallback[Generator.fallback_tier(plan.tier) - 1][Generator.stored_pick(LevelData.NUMBERED, n, "", {})]
+		check(g.level.blueprint_id == stored.level.blueprint_id and g.variation == "fallback " + stored.variation, "level %d hands out the stored pick" % n)
+		check_eq(g.solve, stored.solve, "level %d: with the stored solve" % n)
 		check_eq(_replay(g.level, g.solve.solution), g.solve.fewest_tray_uses, "level %d: the relabeled fallback keeps its solve" % n)
 	var a := Generator.relabeled(LevelCatalog.fallback[7][0].level, 1)
 	var b := Generator.relabeled(LevelCatalog.fallback[7][0].level, 2)
@@ -330,35 +323,75 @@ func test_fallbacks_avoid_their_neighbors_and_are_relabeled() -> void:
 	check_eq(r.trap, LevelCatalog.fallback[7][0].solve.trap, "and the trap measure")
 
 
-func test_a_fallback_is_never_next_to_its_own_blueprint_when_the_pool_allows() -> void:
+func test_6_4_1_no_two_levels_within_5_hand_out_the_same_stored_level() -> void:
 	_ready_catalog()
-	# For every numbered level from 9 to 400, every day of a year and 300 Relaxed levels per band,
-	# the fallback it would use: never the blueprint planned one level before or after while the
-	# pool has another, and always one whose nearest planned use is as far as the pool allows.
-	var requests: Array[Array] = []
-	for n: int in range(FIRST, 401):
-		requests.append([LevelData.NUMBERED, n, ""])
-	for day: int in 365:
-		requests.append([LevelData.DAILY, Seeds.date_of_day(Seeds.day_number(2026, 10, 19) + day), ""])
+	# For numbered levels 9 to 1000, 400 days and 300 Relaxed levels per band, the stored level
+	# each would hand out if it fell back: never the same as a level within 5 of it on the same
+	# pool, and otherwise as far from its blueprint's planned uses as the pool allows once the
+	# lower ranked neighbors' picks (rank: stream position mod 6) are taken out.
+	var r := Tuning.recent_blueprints_excluded
+	var streams: Array[Array] = [[LevelData.NUMBERED, "", range(FIRST, 1001)]]
+	var days: Array[int] = []
+	for day: int in 400:
+		days.append(Seeds.date_of_day(Seeds.day_number(2026, 10, 19) + day))
+	streams.append([LevelData.DAILY, "", days])
 	for band: String in Tuning.BANDS:
-		for i: int in 300:
-			requests.append([LevelData.RELAXED, i, band])
-	var bad := 0
-	for req: Array in requests:
-		var plan := Generator.plan_for(req[0], req[1], req[2])
-		var g := GeneratedLevel.new()
-		Generator._fall_back(plan, g)
-		var nearest := Generator.neighbor_distances(req[0], req[1], req[2])
-		var far := Tuning.recent_blueprints_excluded + 1
-		var best := 0
-		for stored: GeneratedLevel in LevelCatalog.fallback[g.level.tier - 1]:
-			best = maxi(best, int(nearest.get(stored.level.blueprint_id, far)))
-		var got := int(nearest.get(g.level.blueprint_id, far))
-		if got != best or (best >= 2 and got == 1):
-			bad += 1
-			if bad <= 5:
-				check(false, "%s: fallback %s is %d away from a planned use; the pool allows %d" % [LevelPrefetcher.key_for(req[0], req[1], req[2]), g.level.blueprint_id, got, best])
-	check_eq(bad, 0, "fallbacks closer to their own blueprint than the pool needs, of %d" % requests.size())
+		streams.append([LevelData.RELAXED, band, range(0, 300)])
+	var levels := 0
+	var same := 0
+	var too_close := 0
+	var full := 0
+	var most := PackedStringArray()
+	for stream: Array in streams:
+		var kind: int = stream[0]
+		var band: String = stream[1]
+		var memo := {}
+		var picks := {}
+		var pools := {}
+		var most_taken := 0
+		for number: int in stream[2]:
+			var at := Generator.stream_position(kind, number)
+			picks[at] = Generator.stored_pick(kind, number, band, memo)
+			pools[at] = Generator.fallback_tier(Generator.tier_of(kind, number, band))
+		for at: int in picks:
+			levels += 1
+			var number := Generator.stream_number(kind, at)
+			var pool: Array = LevelCatalog.fallback[int(pools[at]) - 1]
+			for k: int in range(1, r + 1):
+				if picks.has(at + k) and pools[at + k] == pools[at] and picks[at + k] == picks[at]:
+					same += 1
+					if same <= 5:
+						check(false, "%s and %d ahead hand out the same stored level" % [LevelPrefetcher.key_for(kind, number, band), k])
+			var taken := PackedInt32Array()
+			for k: int in range(-r, r + 1):
+				var other := at + k
+				var in_stream := other > Tuning.tutorial_levels if kind == LevelData.NUMBERED else (other >= 0 if kind == LevelData.RELAXED else true)
+				if k == 0 or posmod(other, r + 1) >= posmod(at, r + 1) or not in_stream:
+					continue
+				var other_number := Generator.stream_number(kind, other)
+				if Generator.fallback_tier(Generator.tier_of(kind, other_number, band)) == pools[at]:
+					taken.append(Generator.stored_pick(kind, other_number, band, memo))
+			most_taken = maxi(most_taken, taken.size())
+			var nearest := Generator.neighbor_distances(kind, number, band)
+			var best := 0
+			var left := 0
+			for i: int in pool.size():
+				if not taken.has(i):
+					left += 1
+					best = maxi(best, int(nearest.get((pool[i] as GeneratedLevel).level.blueprint_id, r + 1)))
+			if left == 0:
+				full += 1
+				continue
+			var got := int(nearest.get((pool[int(picks[at])] as GeneratedLevel).level.blueprint_id, r + 1))
+			if taken.has(int(picks[at])) or got != best:
+				too_close += 1
+				if too_close <= 5:
+					check(false, "%s: stored level %d is %d from a planned use; %d was possible" % [LevelPrefetcher.key_for(kind, number, band), picks[at], got, best])
+		most.append("%s %s %d" % [LevelData.KIND_NAMES[kind], band, most_taken])
+	print("        most lower ranked neighbors on one pool: %s" % ", ".join(most))
+	check_eq(same, 0, "pairs within 5 on one pool with the same stored level, of %d levels" % levels)
+	check_eq(full, 0, "levels whose lower ranked neighbors took every stored level")
+	check_eq(too_close, 0, "picks nearer their blueprint than the pool allows")
 
 
 func test_deal_gives_distinct_blueprints_from_one_half() -> void:

@@ -24,7 +24,7 @@ extends RefCounted
 ##
 ## Every number here counts toward GENERATOR_VERSION: changing one changes levels.
 
-const GENERATOR_VERSION := 4
+const GENERATOR_VERSION := 5
 ## Seed purposes for Seeds.derive.
 const DEAL := 11
 const VARY := 12
@@ -859,17 +859,12 @@ static func build_fallback(tier: int, count: int, max_attempts: int) -> Array[Ge
 ## stored fallback level of the nearest tier that has one. Only with no fallback files at all
 ## and no solved try does the level stay null (and an error is logged).
 ##
-## A stored level is picked (seeded) among those whose blueprint's nearest planned use in the
-## same stream is farthest away: not within R levels either side when the pool allows, and
-## otherwise as far as it can be, so never next to a level of the same blueprint while another
-## blueprint is stored. (A neighbor that itself falls back can still match; that needs both
-## to fall back.) Its colors
-## are then relabeled by a seeded permutation, the same on screws and queue, so two levels that
-## use the same stored level look different while every rule outcome (and so the stored solve)
-## stays exactly the same.
+## Which stored level is handed out: see stored_pick. Its colors are then relabeled by a seeded
+## permutation, the same on screws and queue, so two levels that use the same stored level look
+## different while every rule outcome (and so the stored solve) stays exactly the same.
 static func _fall_back(plan: Plan, out: GeneratedLevel) -> void:
-	var pool: Array = LevelCatalog.fallback[plan.tier - 1] if plan.tier >= 1 and plan.tier <= LevelCatalog.fallback.size() else []
-	if pool.is_empty() and out.closest != null:
+	var own: Array = LevelCatalog.fallback[plan.tier - 1] if plan.tier >= 1 and plan.tier <= LevelCatalog.fallback.size() else []
+	if own.is_empty() and out.closest != null:
 		# _try measured only its novice; the trap too now that it is shown.
 		Solver.measure(out.closest, out.closest_solve)
 		out.level = out.closest
@@ -877,27 +872,11 @@ static func _fall_back(plan: Plan, out: GeneratedLevel) -> void:
 		out.fell_back = true
 		out.variation = "closest try " + out.closest_variation
 		return
-	for distance: int in range(1, Tuning.tiers.size()):
-		for t: int in [plan.tier - distance, plan.tier + distance]:
-			if pool.is_empty() and t >= 1 and t <= LevelCatalog.fallback.size():
-				pool = LevelCatalog.fallback[t - 1]
-	if pool.is_empty():
+	var pool_tier := fallback_tier(plan.tier)
+	if pool_tier < 0:
 		push_error("no fallback level for tier %d" % plan.tier)
 		return
-	# Among the stored levels, those whose blueprint's nearest planned use is farthest away
-	# (R + 1 means not within R either side), then a seeded pick among them.
-	var nearest := neighbor_distances(plan.kind, plan.number, plan.band)
-	var far := maxi(Tuning.recent_blueprints_excluded, 1) + 1
-	var best := -1
-	var choices: Array = []
-	for g: GeneratedLevel in pool:
-		var d: int = nearest.get(g.level.blueprint_id, far)
-		if d > best:
-			best = d
-			choices = []
-		if d == best:
-			choices.append(g)
-	var stored: GeneratedLevel = choices[Seeds.derive(plan.seed_value, PICK, 0) % choices.size()]
+	var stored: GeneratedLevel = LevelCatalog.fallback[pool_tier - 1][stored_pick(plan.kind, plan.number, plan.band, {})]
 	var level := relabeled(stored.level, Seeds.derive(plan.seed_value, RELABEL, 0))
 	var fallback_plan := Plan.new()
 	fallback_plan.kind = plan.kind
@@ -910,6 +889,107 @@ static func _fall_back(plan: Plan, out: GeneratedLevel) -> void:
 	out.solve = stored.solve
 	out.fell_back = true
 	out.variation = "fallback " + stored.variation
+
+
+## The tier whose stored levels serve a level of this tier: its own if it has any, otherwise
+## the nearest tier that has some (the lower one first), or -1 if none has any.
+static func fallback_tier(tier: int) -> int:
+	for distance: int in Tuning.tiers.size():
+		for t: int in [tier - distance, tier + distance]:
+			if t >= 1 and t <= LevelCatalog.fallback.size() and not LevelCatalog.fallback[t - 1].is_empty():
+				return t
+	return -1
+
+
+## The stored level (an index into fallback_tier's pool) this level hands out if it falls back.
+## Pure: it plans tiers and blueprints only and makes no level, so its answer does not depend on
+## whether this level or its neighbors really fall back.
+##
+## The pool is ordered by how far each stored level's blueprint is from its nearest planned use
+## in the same stream (R + 1 when it is not planned within R levels either side, so never next
+## to a level of the same blueprint while the pool has another), then by a seeded key. The
+## level takes the first stored level in that order that no lower ranked level within R of it,
+## in the same stream and drawing on the same pool, takes. A level's rank is its stream position
+## mod (R + 1), so two levels within R of each other never share a rank: of any two, one picks
+## knowing the other's pick, and so no two levels within R hand out the same stored level (GDD
+## 6.4.1). Ranks only go down, so it looks at most R steps away. That needs more stored levels
+## than lower ranked neighbors on the same pool: every day shares the daily tier's pool, so a
+## day can have 2R of them and that tier stores 2R + 1 levels (the tools/levels fallback option);
+## numbered and Relaxed levels have far fewer on their tier's 8. If all were taken it would use
+## the first in the order (tests check this never happens with the shipped pools). memo keeps
+## the picks made within one call, by stream position.
+static func stored_pick(kind: int, number: int, band: String, memo: Dictionary) -> int:
+	var at := stream_position(kind, number)
+	if memo.has(at):
+		return memo[at]
+	var plan := plan_for(kind, number, band)
+	var pool_tier := fallback_tier(plan.tier)
+	if pool_tier < 0:
+		return -1
+	var pool: Array = LevelCatalog.fallback[pool_tier - 1]
+	var r := maxi(Tuning.recent_blueprints_excluded, 1)
+	var nearest := neighbor_distances(kind, number, band)
+	var far: Array[int] = []
+	var key: Array[int] = []
+	var order: Array[int] = []
+	for i: int in pool.size():
+		far.append(int(nearest.get((pool[i] as GeneratedLevel).level.blueprint_id, r + 1)))
+		key.append(Seeds.derive(plan.seed_value, PICK, i))
+		order.append(i)
+	order.sort_custom(func(a: int, b: int) -> bool:
+		if far[a] != far[b]:
+			return far[a] > far[b]
+		return key[a] < key[b] if key[a] != key[b] else a < b)
+	var taken := PackedInt32Array()
+	for k: int in range(-r, r + 1):
+		var other := at + k
+		if k == 0 or posmod(other, r + 1) >= posmod(at, r + 1) or not _in_stream(kind, other):
+			continue
+		var other_number := stream_number(kind, other)
+		if fallback_tier(tier_of(kind, other_number, band)) == pool_tier:
+			taken.append(stored_pick(kind, other_number, band, memo))
+	var pick := order[0]
+	for i: int in order:
+		if not taken.has(i):
+			pick = i
+			break
+	memo[at] = pick
+	return pick
+
+
+## A level's position in its stream: the level number, the Relaxed index, or for a daily (whose
+## number is yyyymmdd) the day number, so that neighbors are one apart.
+static func stream_position(kind: int, number: int) -> int:
+	if kind == LevelData.DAILY:
+		@warning_ignore("integer_division")
+		return Seeds.day_number(number / 10000, (number / 100) % 100, number % 100)
+	return number
+
+
+## The number of the level at a stream position (the inverse of stream_position).
+static func stream_number(kind: int, position: int) -> int:
+	return Seeds.date_of_day(position) if kind == LevelData.DAILY else position
+
+
+## The tier a level is planned at (as plan_for gives it), without the rest of the plan.
+static func tier_of(kind: int, number: int, band: String) -> int:
+	match kind:
+		LevelData.DAILY:
+			return Tuning.daily_tier
+		LevelData.RELAXED:
+			return relaxed_tier(band, number)
+	return Tuning.tier_for_level(number)
+
+
+## Whether a stream position is a level that can fall back (numbered levels after the tutorial,
+## Relaxed indices from 0, any day).
+static func _in_stream(kind: int, position: int) -> bool:
+	match kind:
+		LevelData.DAILY:
+			return true
+		LevelData.RELAXED:
+			return position >= 0
+	return position > Tuning.tutorial_levels
 
 
 ## The blueprint ids planned for the R levels before and after this one in its stream (numbered

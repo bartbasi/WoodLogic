@@ -1,348 +1,341 @@
 {
-  "generator_version": 4,
+  "generator_version": 5,
   "levels": [
     {
       "fell_back": false,
-      "fingerprint": "lighthouse t3 p2 s65 c111021230330100021 q103120 ge8b5d941",
+      "fingerprint": "windmill t3 p2 s55 c322130303131320 q31230 gd49293a9",
       "key": "numbered:9",
       "pressure": 0,
       "tier": 3
     },
     {
       "fell_back": false,
-      "fingerprint": "owl t4 p3 s75 c102202312131230112 q013212 gc283e8a5",
+      "fingerprint": "owl t4 p4 s75 c111121220033313330 q130132 ga57d9370",
       "key": "numbered:10",
-      "pressure": 4,
+      "pressure": 5,
       "tier": 4
     },
     {
       "fell_back": false,
-      "fingerprint": "mushroom t1 p2 s40 c002112021 q201 ged39add6",
+      "fingerprint": "signpost t1 p2 s40 c010111110 q101 geb304cd7",
       "key": "numbered:11",
       "pressure": 0,
       "tier": 1
     },
     {
       "fell_back": false,
-      "fingerprint": "heart t1 p2 s40 c010001100 q010 g90612f1a",
+      "fingerprint": "heart t1 p2 s40 c012212100 q201 g543080e5",
       "key": "numbered:12",
       "pressure": 0,
       "tier": 1
     },
     {
       "fell_back": false,
-      "fingerprint": "car t2 p2 s55 c222011112110220 q12102 g83e8a16a",
+      "fingerprint": "sailboat t2 p2 s55 c002122002101220 q21020 g696b45d0",
       "key": "numbered:13",
       "pressure": 0,
       "tier": 2
     },
     {
       "fell_back": false,
-      "fingerprint": "pagoda t3 p2 s65 c030301311232033200 q031032 gaf6f9c59",
+      "fingerprint": "house t3 p2 s55 c220100220110022 q01202 ga3af1c9d",
       "key": "numbered:14",
       "pressure": 0,
       "tier": 3
     },
     {
       "fell_back": false,
-      "fingerprint": "bridge t4 p4 s75 c112333113233101200 q303121 g0ba50356",
+      "fingerprint": "barn t4 p3 s85 c301031122003003203030 q1203030 ged516439",
       "key": "numbered:15",
-      "pressure": 2,
+      "pressure": 4,
       "tier": 4
     },
     {
       "fell_back": false,
-      "fingerprint": "mug t1 p2 s40 c000111111 q101 g495f9717",
+      "fingerprint": "mug t1 p2 s40 c001001010 q010 ge3cf208d",
       "key": "numbered:16",
       "pressure": 0,
       "tier": 1
     },
     {
       "fell_back": false,
-      "fingerprint": "target t1 p2 s50 c101001122211 q0121 g08f25820",
+      "fingerprint": "target t1 p2 s50 c111010000110 q1010 g08f25820",
       "key": "numbered:17",
       "pressure": 0,
       "tier": 1
     },
     {
       "fell_back": false,
-      "fingerprint": "snowman t2 p2 s55 c001221020110110 q10102 g6bf40051",
+      "fingerprint": "fish t2 p2 s55 c202120211122101 q21201 g5c5580fc",
       "key": "numbered:18",
       "pressure": 0,
       "tier": 2
     },
     {
       "fell_back": false,
-      "fingerprint": "lighthouse t3 p2 s65 c022320321021323313 q301232 ge8b5d941",
+      "fingerprint": "lighthouse t3 p2 s65 c200000021021222100 q201020 g3c1fa0c8",
       "key": "numbered:19",
       "pressure": 0,
       "tier": 3
     },
     {
       "fell_back": false,
-      "fingerprint": "train t4 p3 s85 c301211011313131012233 q0213131 gcf5e653b",
+      "fingerprint": "train t4 p3 s85 c223300222113100200111 q1020213 g12983e8c",
       "key": "numbered:20",
-      "pressure": 7,
+      "pressure": 3,
       "tier": 4
     },
     {
       "fell_back": false,
-      "fingerprint": "signpost t1 p2 s40 c101020221 q120 g270bea6c",
+      "fingerprint": "mushroom t1 p2 s40 c200122101 q102 g3dea92d9",
       "key": "numbered:21",
       "pressure": 0,
       "tier": 1
     },
     {
       "fell_back": false,
-      "fingerprint": "flower t2 p2 s50 c102222102102 q2102 gd0541f95",
+      "fingerprint": "car t2 p2 s55 c001110210100212 q01210 g03e90819",
       "key": "numbered:22",
       "pressure": 0,
       "tier": 2
     },
     {
       "fell_back": false,
-      "fingerprint": "windmill t3 p2 s55 c111312020313210 q13102 gd49293a9",
+      "fingerprint": "windmill t3 p2 s55 c220211222220120 q20212 gd49293a9",
       "key": "numbered:23",
       "pressure": 0,
       "tier": 3
     },
     {
       "fell_back": false,
-      "fingerprint": "bridge t4 p3 s75 c120313313222202303 q303212 g5bcf2516",
+      "fingerprint": "bridge t4 p3 s75 c301233032133222021 q321320 g3b20f36a",
       "key": "numbered:24",
-      "pressure": 4,
+      "pressure": 5,
       "tier": 4
     },
     {
       "fell_back": false,
-      "fingerprint": "rings t5 p3 s85 c024210343240130404410 q1340420 gb80d5af4",
+      "fingerprint": "rings t5 p3 s85 c014141203340202200322 q2320401 gb60108fb",
       "key": "numbered:25",
-      "pressure": 5,
+      "pressure": 3,
       "tier": 5
     },
     {
       "fell_back": false,
-      "fingerprint": "target t1 p2 s50 c120022100100 q1020 g51e074ab",
+      "fingerprint": "target t1 p2 s50 c222001111110 q1201 g08f25820",
       "key": "numbered:26",
       "pressure": 0,
       "tier": 1
     },
     {
       "fell_back": false,
-      "fingerprint": "snowman t2 p2 s55 c202022111112201 q21201 g6bf40051",
+      "fingerprint": "snowman t2 p2 s55 c110200112111112 q10121 g6bf40051",
       "key": "numbered:27",
       "pressure": 0,
       "tier": 2
     },
     {
       "fell_back": false,
-      "fingerprint": "rocket t3 p2 s65 c320233031322322110 q023231 g2073ea67",
+      "fingerprint": "pagoda t3 p2 s65 c020212120020011112 q021201 gaf6f9c59",
       "key": "numbered:28",
       "pressure": 0,
       "tier": 3
     },
     {
       "fell_back": false,
-      "fingerprint": "train t4 p3 s85 c202102201123022320302 q2120203 g416882ba",
+      "fingerprint": "tree t4 p4 s75 c123212301333032202 q212303 g6f6ae8d1",
       "key": "numbered:29",
-      "pressure": 8,
+      "pressure": 6,
       "tier": 4
     },
     {
       "fell_back": false,
-      "fingerprint": "bricks t5 p4 s95 c100130221114030200304041 q12103040 g68dc7a32",
+      "fingerprint": "train t5 p3 s85 c320314310212102112244 q0312142 gd14c86dd",
       "key": "numbered:30",
-      "pressure": 4,
+      "pressure": 7,
       "tier": 5
     },
     {
       "fell_back": false,
-      "fingerprint": "signpost t1 p1 s40 c120110022 q021 geb304cd7",
+      "fingerprint": "flower t1 p1 s50 c221020221012 q2102 ge2a73bef",
       "key": "numbered:31",
       "pressure": 0,
       "tier": 1
     },
     {
       "fell_back": false,
-      "fingerprint": "flower t2 p1 s50 c120002100102 q0201 ge2a73bef",
+      "fingerprint": "car t2 p1 s55 c211011222221001 q10212 g83e8a16a",
       "key": "numbered:32",
       "pressure": 0,
       "tier": 2
     },
     {
       "fell_back": false,
-      "fingerprint": "lighthouse t3 p1 s65 c000201021102121221 q021210 g3c1fa0c8",
+      "fingerprint": "sailboat t3 p1 s55 c021020112001101 q10210 g696b45d0",
       "key": "numbered:33",
       "pressure": 0,
       "tier": 3
     },
     {
-      "fell_back": false,
-      "fingerprint": "barn t4 p2 s85 c020221210322213112123 q2121320 g96125414",
+      "fell_back": true,
+      "fingerprint": "barn t4 p2 s85 c000002123223222211023 q2132020 g9fe46124",
       "key": "numbered:34",
-      "pressure": 3,
+      "pressure": -1,
       "tier": 4
     },
     {
       "fell_back": false,
-      "fingerprint": "crane t5 p2 s95 c240432121012032300000402 q41032020 gfc554cc0",
+      "fingerprint": "butterfly t5 p2 s95 c432313113023304102110004 q01301324 gd8bceb8f",
       "key": "numbered:35",
       "pressure": 8,
       "tier": 5
     },
     {
       "fell_back": false,
-      "fingerprint": "fish t2 p1 s55 c212100211220121 q21201 g5c5580fc",
+      "fingerprint": "house t2 p1 s55 c222112200201222 q20212 ga3af1c9d",
       "key": "numbered:36",
       "pressure": 0,
       "tier": 2
     },
     {
       "fell_back": false,
-      "fingerprint": "house t3 p1 s55 c312122000013300 q31020 g69c35584",
+      "fingerprint": "fish t3 p1 s55 c010312322123202 q32012 g5c5580fc",
       "key": "numbered:37",
       "pressure": 0,
       "tier": 3
     },
     {
       "fell_back": false,
-      "fingerprint": "bridge t4 p2 s75 c312320233123102302 q203231 g3b20f36a",
+      "fingerprint": "bridge t4 p2 s75 c231311101030102200 q101032 g5bcf2516",
       "key": "numbered:38",
-      "pressure": 3,
+      "pressure": 4,
       "tier": 4
     },
     {
       "fell_back": false,
-      "fingerprint": "balloon t5 p3 s85 c020423143231232313420 q2323014 g742ef0f6",
+      "fingerprint": "bricks t5 p2 s85 c201201223131210321111 q3212101 ge431c109",
       "key": "numbered:39",
-      "pressure": 4,
+      "pressure": 6,
       "tier": 5
     },
     {
       "fell_back": false,
-      "fingerprint": "bricks t6 p3 s95 c313331221132040140100304 q30141230 gffaea71a",
+      "fingerprint": "ladybug t6 p2 s105 c012034443410342324020323012 q124303204 g43192e55",
       "key": "numbered:40",
-      "pressure": 3,
+      "pressure": 5,
       "tier": 6
     },
     {
       "fell_back": false,
-      "fingerprint": "dominoes t8 p3 s130 c452240254232450432201552114523 q0545124232 g3c5b8e48",
+      "fingerprint": "lattice t8 p3 s145 c125103321021035540253451224035013 q05053123214 g872d09da",
       "key": "numbered:100",
+      "pressure": 4,
+      "tier": 8
+    },
+    {
+      "fell_back": true,
+      "fingerprint": "castle t7 p3 s120 c251010332342114041151122521 q232150141 g3d2dc9c5",
+      "key": "numbered:104",
+      "pressure": -1,
+      "tier": 7
+    },
+    {
+      "fell_back": false,
+      "fingerprint": "falling-blocks t8 p2 s130 c042516456560103641065062055332 q2616350504 g157ee93b",
+      "key": "numbered:105",
       "pressure": 6,
       "tier": 8
     },
     {
       "fell_back": false,
-      "fingerprint": "crates t7 p3 s120 c523113554302114012210211421 q521204131 gd252bfbd",
-      "key": "numbered:104",
-      "pressure": 4,
-      "tier": 7
-    },
-    {
-      "fell_back": false,
-      "fingerprint": "ship-wheel t8 p2 s145 c152350214123262136421116222014501 q16154120232 gce7c2caa",
-      "key": "numbered:105",
-      "pressure": 10,
-      "tier": 8
-    },
-    {
-      "fell_back": true,
-      "fingerprint": "jellyfish t8 p2 s145 c455413553132512264346666003653044 q52350414636 gbf52e24c",
-      "key": "numbered:114",
-      "pressure": -1,
-      "tier": 8
-    },
-    {
-      "fell_back": false,
-      "fingerprint": "falling-blocks t9 p4 s160 c315362312351066031526143364364031 q52303416163 gcdf86b2b",
+      "fingerprint": "ship-wheel t9 p4 s160 c211013616300053514153344020600320 q45201063103 g7682976d",
       "key": "numbered:115",
-      "pressure": 10,
+      "pressure": 6,
       "tier": 9
     },
     {
       "fell_back": true,
-      "fingerprint": "jellyfish t9 p3 s160 c622506550322624461546212633105252 q54520326162 gb9b3fc6b",
-      "key": "numbered:130",
+      "fingerprint": "lattice t9 p3 s160 c236166316416025020453256662423633 q05136364262 g872d09da",
+      "key": "numbered:140",
       "pressure": -1,
       "tier": 9
     },
     {
       "fell_back": false,
-      "fingerprint": "falling-blocks t10 p3 s160 c373545046132535164300333217655237 q60124537353 g0bd25efc",
+      "fingerprint": "ship-wheel t10 p3 s160 c441766731037503256726236176407533 q62641537037 g18777a49",
       "key": "numbered:155",
       "pressure": 10,
       "tier": 10
     },
     {
       "fell_back": false,
-      "fingerprint": "catface t10 p3 s160 c132775513777364500705050524624601 q07015346257 gdc991f63",
+      "fingerprint": "ferris-wheel t10 p5 s160 c562151135056073677344604363562235 q07532361456 gc8256dd7",
       "key": "numbered:160",
       "pressure": 8,
       "tier": 10
     },
     {
       "fell_back": false,
-      "fingerprint": "butterfly t6 p3 s95 c241431201211232124310101 q23210141 g95b0f95c",
+      "fingerprint": "ladybug t6 p2 s105 c440110204141314300010422030 q103014240 g43192e55",
       "key": "daily:20261019",
       "pressure": 4,
       "tier": 6
     },
     {
       "fell_back": false,
-      "fingerprint": "weave t6 p2 s95 c443242314234313302210024 q02342431 g0c3b4123",
+      "fingerprint": "bricks t6 p2 s95 c303224420302442441111211 q31240241 g68dc7a32",
       "key": "daily:20261020",
-      "pressure": 5,
+      "pressure": 3,
       "tier": 6
     },
     {
       "fell_back": false,
-      "fingerprint": "crane t6 p2 s95 c041323433401443130040202 q34324010 gfc554cc0",
+      "fingerprint": "castle t6 p2 s105 c212243010011122111432221234 q204212131 g106f8bb7",
       "key": "daily:20270101",
-      "pressure": 10,
+      "pressure": 4,
       "tier": 6
     },
     {
       "fell_back": false,
-      "fingerprint": "tree t3 p0 s65 c231213323123020203 q320132 gcbc1bfc9",
+      "fingerprint": "snowman t3 p0 s55 c320121300203010 q32010 g6bf40051",
       "key": "relaxed:easy:0",
       "pressure": 0,
       "tier": 3
     },
     {
       "fell_back": false,
-      "fingerprint": "fish t2 p0 s55 c002210102102202 q02012 g5c5580fc",
+      "fingerprint": "fish t2 p0 s55 c102110110111212 q12101 g5c5580fc",
       "key": "relaxed:easy:1",
       "pressure": 0,
       "tier": 2
     },
     {
       "fell_back": false,
-      "fingerprint": "butterfly t5 p1 s95 c341121232200021111123144 q01312142 g95b0f95c",
+      "fingerprint": "pagoda t4 p1 s75 c000230322232011102 q130202 g2c4a6a1a",
       "key": "relaxed:medium:0",
-      "pressure": 5,
-      "tier": 5
-    },
-    {
-      "fell_back": false,
-      "fingerprint": "bridge t4 p1 s75 c232100100303121011 q013012 g3b20f36a",
-      "key": "relaxed:medium:1",
-      "pressure": 5,
+      "pressure": 4,
       "tier": 4
     },
     {
       "fell_back": false,
-      "fingerprint": "ship-wheel t8 p2 s145 c450012024051641354250354411536016 q34645012051 g7682976d",
-      "key": "relaxed:hard:0",
-      "pressure": 10,
-      "tier": 8
+      "fingerprint": "train t5 p2 s85 c000432234401000132001 q2403010 g12983e8c",
+      "key": "relaxed:medium:1",
+      "pressure": 4,
+      "tier": 5
     },
     {
       "fell_back": false,
-      "fingerprint": "skyline t7 p2 s120 c324102002142015210355341012 q050123412 g41968969",
-      "key": "relaxed:hard:1",
-      "pressure": 8,
+      "fingerprint": "skyline t7 p2 s130 c524422413554100154151314050003 q1434150250 gb1545ef1",
+      "key": "relaxed:hard:0",
+      "pressure": 10,
       "tier": 7
+    },
+    {
+      "fell_back": false,
+      "fingerprint": "ziggurat t8 p3 s130 c145444501143022055153114424543 q1214503454 g31af58f3",
+      "key": "relaxed:hard:1",
+      "pressure": 6,
+      "tier": 8
     }
   ]
 }
