@@ -842,3 +842,15 @@ static func order_problem(kinds: PackedInt32Array, action: String) -> String:
 	if in_group and not after_arrival:
 		return "BOX_CLOSED without BOX_ARRIVED"
 	return ""
+
+
+## How many planks in front of the screw's own plank cover it on the starting board (the
+## authored poses), by the same R7 test as above. GDD 6.2 allows at most 3.
+static func planks_over(level_data: LevelData, screw: int) -> int:
+	var point := level_data.screw_center(screw)
+	var layer := level_data.planks[level_data.screw_plank(screw)].layer
+	var count := 0
+	for shape: PlankData in level_data.planks:
+		if shape.layer < layer and _region_distance(point, shape.outline(), shape.inner_outline()) < HEAD:
+			count += 1
+	return count

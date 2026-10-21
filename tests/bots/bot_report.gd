@@ -80,6 +80,8 @@ static func group(records: Array[BotRecord], by: String) -> Array:
 
 static func _key(r: BotRecord, by: String) -> String:
 	match by:
+		"kind":
+			return "relaxed " + r.entry.level.band if r.entry.source == "relaxed" else r.entry.source
 		"tier":
 			return "tutorial" if r.entry.tier == 0 else ("tier %02d%s" % [r.entry.tier, "" if r.entry.tier_given else "*"])
 		"blueprint":

@@ -13,13 +13,15 @@ extends SceneTree
 ##                     the number of blueprints (40 unless --blueprints is given)
 ##   --seed=S          seed for colorings and the random bot, 0 to 1000000 (default 1)
 ##   --random-runs=R   games the random bot plays on each level, 0 to 1000 (default 20)
-##   --by=band|tier|blueprint   how to group the tables (default band)
+##   --by=band|tier|blueprint|kind   how to group the tables (default band)
 ##   --max-states=M    solver budget per level, 1000 to 50000000; levels it cannot finish
 ##                     are dropped and counted (default 400000)
 ##   --blueprints=a,b  only these blueprint ids (they must exist)
 ##   --slack=K         tray par slack added to the fewest tray uses, 0 to 10 (default 1)
 ##   --generated=A-B   also play the generator's numbered levels A to B (needs the generator
 ##                     and LevelCatalog in src/logic)
+##   --dailies=N       also play N consecutive Daily levels from 2026-10-21 (0 to 400)
+##   --relaxed=N       also play Relaxed levels 1 to N in each band (0 to 400)
 ##   --no-tutorials    skip the tutorial levels
 ##   --quick           no independent covering check at all (faster). Without it, the perfect
 ##                     bot, the novice bot and the first random game on each level are checked
@@ -45,6 +47,8 @@ var _deep := true
 var _out := "build/bots"
 var _gen_from := 0
 var _gen_to := -1
+var _dailies := 0
+var _relaxed := 0
 
 
 func _initialize() -> void:
@@ -87,9 +91,17 @@ func _parse() -> bool:
 				if not _number("--slack", value, 0, 10, got):
 					return false
 				_slack = got[0]
+			"--dailies":
+				if not _number("--dailies", value, 0, 400, got):
+					return false
+				_dailies = got[0]
+			"--relaxed":
+				if not _number("--relaxed", value, 0, 400, got):
+					return false
+				_relaxed = got[0]
 			"--by":
-				if not ["band", "tier", "blueprint"].has(value):
-					print("--by must be band, tier or blueprint, not \"%s\"" % value)
+				if not ["band", "tier", "blueprint", "kind"].has(value):
+					print("--by must be band, tier, blueprint or kind, not \"%s\"" % value)
 					return false
 				_by = value
 			"--blueprints":
@@ -175,6 +187,32 @@ func _run() -> int:
 		set.entries.append_array(generated_set.entries)
 		if generated_missing > 0:
 			failures.append("the generator gave no level for %d of the %d numbers asked for" % [generated_missing, _gen_to - _gen_from + 1])
+	var modes_missing := 0
+	if _dailies > 0 or _relaxed > 0:
+		LevelCatalog.load_all()
+		var daily_levels: Array[LevelData] = []
+		for d: int in _dailies:
+			var stamp := Time.get_unix_time_from_datetime_dict({"year": 2026, "month": 10, "day": 21, "hour": 12}) + d * 86400
+			var date := Time.get_datetime_dict_from_unix_time(int(stamp))
+			var one := LevelCatalog.get_level(LevelData.DAILY, int(date["year"]) * 10000 + int(date["month"]) * 100 + int(date["day"]), "")
+			if one != null and one.level != null:
+				daily_levels.append(one.level)
+			else:
+				modes_missing += 1
+		var daily_set := BotLevels.from_levels(daily_levels, "daily", _max_states)
+		set.entries.append_array(daily_set.entries)
+		for band: String in ["easy", "medium", "hard"]:
+			var relaxed_levels: Array[LevelData] = []
+			for i: int in range(1, _relaxed + 1):
+				var one := LevelCatalog.get_level(LevelData.RELAXED, i, band)
+				if one != null and one.level != null:
+					relaxed_levels.append(one.level)
+				else:
+					modes_missing += 1
+			var relaxed_set := BotLevels.from_levels(relaxed_levels, "relaxed", _max_states)
+			set.entries.append_array(relaxed_set.entries)
+		if modes_missing > 0:
+			failures.append("the generator gave no level for %d Daily or Relaxed requests" % modes_missing)
 	var built := Time.get_ticks_msec()
 	var records: Array[BotRecord] = []
 	for entry: BotEntry in set.entries:
@@ -201,7 +239,18 @@ func _run() -> int:
 	print("a * after a tier means the tier is estimated from the level's size; tutorial levels have none")
 	print("took %.1f s to build the levels and %.1f s to play them\n" % [(built - started) / 1000.0, (played - built) / 1000.0])
 	if not records.is_empty():
-		print(BotReport.tables(records, _by))
+		var plain: Array[BotRecord] = []
+		var modes: Array[BotRecord] = []
+		for r: BotRecord in records:
+			if r.entry.source == "daily" or r.entry.source == "relaxed":
+				modes.append(r)
+			else:
+				plain.append(r)
+		if not plain.is_empty():
+			print(BotReport.tables(plain, _by))
+		if not modes.is_empty():
+			print("Daily and Relaxed levels, grouped by kind\n")
+			print(BotReport.tables(modes, "kind"))
 		print("CSV: ", _write_csv(records))
 	if lines.is_empty():
 		print("Rule checks: no violations, and every bot agreed with the solver.")
