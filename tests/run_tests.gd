@@ -13,7 +13,7 @@ const TESTS_ROOT := "res://tests"
 ## frame is 1/60 s, so this is the total animated time of the whole run plus room to grow.
 ## It only catches a test stuck on an await; tools/test.sh adds a wall-clock limit for a test
 ## stuck in a loop.
-const TIME_LIMIT := 1800.0
+const TIME_LIMIT := 3600.0
 
 var _errors := ErrorCatcher.new()
 var _current := ""
@@ -49,7 +49,7 @@ func _initialize() -> void:
 	create_timer(TIME_LIMIT, true, false, true).timeout.connect(func() -> void:
 		print("\nTIMED OUT after %d s in %s" % [TIME_LIMIT, _current])
 		_remove_dir(_save_dir)
-		quit(1))
+		_quit(1))
 	_run.call_deferred()
 
 
@@ -63,9 +63,14 @@ func _run() -> void:
 	save.set("dir", save_dir)
 	if save.get("dir") != save_dir:
 		print("Could not point Save at %s, so no test runs (they would touch the real saves)." % save_dir)
-		quit(1)
+		_quit(1)
 		return
 	_save_dir = save_dir
+	# No music in test runs: it would play through every suite and still be alive at quit.
+	var audio := root.get_node_or_null("Audio")
+	if audio != null:
+		audio.set("render_music", false)
+		audio.call("set_music", false)
 	# The game data loads once, on the main thread, as the app does at boot.
 	var loaded := LevelCatalog.load_all()
 	var load_errors := _errors.take()
@@ -73,7 +78,7 @@ func _run() -> void:
 		for error: String in load_errors:
 			print(error)
 		print("\nThe game data failed to load.")
-		quit(1)
+		_quit(1)
 		return
 	var files: Array[String] = []
 	_find_suites(TESTS_ROOT, files)
@@ -99,6 +104,9 @@ func _run() -> void:
 		for test_name: String in names:
 			_current = "%s %s" % [path.get_file(), test_name]
 			_errors.take()  # before new(), so errors from the suite's own setup count too
+			# No test ever opens a link: a test that doesn't set its own opener gets this one.
+			Links.opener = _no_open
+			Links.coffee_hidden_for_tests = -1
 			var suite := script.new() as TestCase
 			if suite == null:
 				failed += 1
@@ -122,7 +130,18 @@ func _run() -> void:
 	print("\n%d passed, %d failed" % [passed, failed])
 	_remove_dir(save_dir)
 	# A filter that matches nothing is a mistake (a typo, or suites in the wrong folder), not a pass.
-	quit(1 if failed > 0 or (only != "" and passed == 0) else 0)
+	_quit(1 if failed > 0 or (only != "" and passed == 0) else 0)
+
+
+## Stands in for the phone when a test taps a link: opens nothing.
+func _no_open(_address: String) -> int:
+	return OK
+
+
+## Clears Links.opener first: a callable left in a static variable crashes the engine on quit.
+func _quit(code: int) -> void:
+	Links.opener = Callable()
+	quit(code)
 
 
 func _find_suites(dir: String, found: Array[String]) -> void:

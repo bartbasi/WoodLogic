@@ -129,7 +129,7 @@ func test_pause_stops_the_clock_and_covers_the_board() -> void:
 	OS.delay_msec(80)
 	await frames(3)
 	check_eq(scene.debug_snapshot()["elapsed_ms"], before, "no time passes while paused")
-	check(not scene.get_child(0).visible, "the board is covered while paused")
+	check(scene.debug_snapshot()["board_covered"], "the board is covered while paused")
 	var r := scene.tap_screw(g.solve.solution[1])
 	check(not r.ok, "a tap is ignored while paused")
 	scene.hold_clock(true)
@@ -483,4 +483,34 @@ func test_a_plank_that_hangs_below_the_board_is_clipped_to_the_panel() -> void:
 			screw_clipped = true
 		node = node.get_parent()
 	check(not screw_clipped, "a screw in flight is not clipped")
-	check(screw_view.z_index > 5, "screws are drawn above every plank, a falling one included")
+	# Draw order is tree order and no z_index is used: the screws' layer comes after the planks'.
+	var content: Node = clip.get_parent()
+	check(screw_view.get_parent().get_index() > clip.get_index(), "the screw layer is drawn after the plank layer")
+	check_eq(screw_view.z_index, 0, "no z_index anywhere in the level")
+	check_eq(view.z_index, 0, "not on a plank either")
+	check(content != null, "the clip sits in the scene")
+
+
+func test_draw_order_is_tree_order_back_layers_first_and_a_fall_goes_last() -> void:
+	var scene := Kit.make_scene(self, Kit.numbered(Kit.level_of_tier(6, 30)).level, false)
+	await Kit.settle(self, scene)
+	var planks: Array = scene.get("_planks")
+	var layers: Array[int] = []
+	for child: Node in (planks[0].view as Node).get_parent().get_children():
+		for slot: Variant in planks:
+			if slot.view == child:
+				layers.append(scene.get_level().planks[slot.plank].layer)
+	var sorted := layers.duplicate()
+	sorted.sort()
+	sorted.reverse()
+	check_eq(layers, sorted, "planks are added from the back layer to the front")
+	var s := Levels.swing_level()
+	var fall_scene := Kit.make_scene(self, s, false)
+	await Kit.settle(self, fall_scene)
+	fall_scene.tap_screw(Levels.SWING_SOLUTION[0])
+	await Kit.settle(self, fall_scene)
+	fall_scene.tap_screw(Levels.SWING_SOLUTION[1])
+	await frames(10)
+	var fall_planks: Array = fall_scene.get("_planks")
+	var root: Node = (fall_planks[0].view as Node).get_parent()
+	check_eq((fall_planks[0].view as Node).get_index(), root.get_child_count() - 1, "the falling plank is drawn last among the planks")

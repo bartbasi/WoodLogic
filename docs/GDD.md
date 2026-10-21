@@ -5,7 +5,9 @@ the library of 40 blueprints (section 10), the tutorial files (section 8), data/
 (section 9.4), rule B13 (section 9.2), and wider layer ranges and new covering targets for the
 tiers (section 6.1). Approved by Bart at Hard Stop 2, 19 October 2026 (section 0). Phase 3
 updates: the cover rule G8 and the soft step G9 (section 6.4), and covering added to eight
-blueprints plus three new ones, 43 in all (section 10). Each change says why.
+blueprints plus three new ones, 43 in all (section 10). Bart's decisions of 21 October 2026
+(section 0) and Phase 4 updates: R35a and R36a (section 2.10), skyline and bookshelf retuned
+(section 10.2). Each change says why.
 
 Board sizes come from docs/UX.md (section 3.2.1). The layout counts are the brief's defaults
 and are unchanged. The data formats in section 9 are the ones docs/ARCHITECTURE.md section 3
@@ -88,9 +90,28 @@ at 50, cherry at 100, ebony at 150, copper screws at a 3 day daily streak, black
    least ceil(screws / 3) taps, and the fewest tray use solution does not put all its tray uses
    in the first third. After measuring I propose a change, waiting for Bart: require the
    survival part on tiers 7 and 8 only, and report (not require) the tray use position, because
-   as approved 73 to 98 percent of hard levels would fall back to stored ones (6.4.1).
+   as approved 73 to 98 percent of hard levels would fall back to stored ones (6.4.1). Bart
+   approved that change on 21 October 2026.
 7. More variety: covering for eight blueprints and three new round ones, so every tier from 7 to
    10 has at least 8 boards (section 10.1).
+
+**Decided by Bart on 21 October 2026** (after playing Phase 3 on his phone; Gate 1 passed).
+
+1. G9 as proposed: G9a (the novice survives at least ceil(screws / 3) taps) required on tiers 7
+   and 8 and reported on 9 and 10; G9b (the last tray use's position) reported only (6.4.1).
+2. V1 instead of a blueprint rule B14: hanging planks are drawn clipped to the board panel and
+   under the bars (9.2).
+3. Skyline and bookshelf are retuned rather than kept off tiers 7 and 8 (10.2).
+4. The Buy me a coffee button appears in more places: the title, the top bar of a level from
+   level 4, Pause, Settings, Info, the progress map and Stats, and About keeps its Supporting
+   block (UX 1.7). It never interrupts play: tapping it during a level pauses the level first
+   (R36a, S6).
+5. Settings opens from Pause in one tap and returns to the same paused level (R36a).
+6. One nav dock on every menu screen; moving between menus keeps a paused level (R36a).
+7. The progress map replaces the plain levels list (R35a): cleared levels can be replayed, the
+   next level can be played, and a few locked levels beyond it are shown but can't be played.
+8. Info is "How to play": the rules in a few lines, the helpers and the stars (UX 3.14). Its
+   numbers come from this document.
 
 ## 1. Board, units and geometry
 
@@ -280,6 +301,17 @@ Each rule has an id so a unit test can name it.
 - **R36.** If the player quits mid level or the app is closed, the next Play opens the same
   level restarted from the beginning (R4), with a fresh clock. Helpers spent in the abandoned
   attempt stay spent. A brand new player skips the title and opens straight into level 1.
+- **R35a. The progress map** (Bart, 21 October 2026; UX 3.6). Levels 1 to the highest cleared
+  are replays (R35, S5), the next level (the one Play continues at) starts as usual, and the few
+  levels shown beyond it are locked: a tap on one plays nothing. Starting any level from the map
+  drops a paused level (R36a).
+- **R36a. A paused level** (Bart, 21 October 2026; UX 4.1). From Pause the player can open
+  Settings and move between the menu screens with the nav dock (or tap the coffee button); the
+  level stays paused, unchanged in every way (board, tray, boxes, clock, helpers used, Extra
+  slot), and "Back to level" returns straight into it. The clock stays stopped the whole time
+  and starts again when the board is showing (S6). A paused level is dropped, and comes back
+  restarted from the beginning under R36, when the player quits to the title, starts another
+  level (from the map, Daily or Relaxed), resets progress, or the app is closed.
 
 ### 2.11 Worked examples (seeds for unit tests)
 
@@ -336,8 +368,9 @@ These use the shipped blueprints in data/blueprints/.
 - **S5.** A level's record is its best star count. Replaying adds to the star bank only the
   stars above that record (the record is the best total, not a per star memory).
 - **S6. Clock.** Starts at the first action (tap or helper use) of the attempt. Stops while
-  paused (the pause screen covers the board, so pausing gives no free thinking time), while a
-  helper sheet or the buy dialog is open, at the win and at the loss. The win
+  paused (the pause screen covers the board, so pausing gives no free thinking time), while
+  a menu opened from Pause is showing (R36a), while a helper sheet or the buy dialog is open, at
+  the win and at the loss. A tap on the coffee button during a level pauses it first. The win
   time is taken at the winning tap (the logic moment), not after the animation. It is compared
   in milliseconds against the par in whole seconds.
 - **S7. Tray par** is the fewest tray uses the solver found plus the slack in section 3.
@@ -507,8 +540,9 @@ the same picture: of 148 hard levels (151 to 350), the novice is out by tap 7 on
 solver's solution makes its last tray use by tap 7 on 133.
 
 **Where it applies.** Every generated level of tiers 7 to 10: numbered, Relaxed (hard band) and
-the stored fallback levels. Not the daily (tier 6) or the tutorial. As proposed below, G9a is
-required on tiers 7 and 8 and reported on 9 and 10, and G9b is reported only.
+the stored fallback levels. Not the daily (tier 6) or the tutorial. As approved by Bart on 21
+October 2026, G9a is required on tiers 7 and 8 and reported on 9 and 10, and G9b is reported
+only.
 
 **G9a. Survival.** Let n be the level's screws. Play the novice policy (section 6.4) from the
 start, exactly as `Solver.measure` does for `SolveResult.novice_won`. Its survival s is the
@@ -518,7 +552,7 @@ tap, because it only taps a screw that has a destination, and it uses no helpers
 requires it to lose on these tiers, so s is below n. The rule:
 
   **s >= ceil(n / 3)**, required on tiers 7 and 8; on tiers 9 and 10 reported, not required
-  (proposed, waiting for Bart; approved was required on all four).
+  (approved by Bart on 21 October 2026; at Hard Stop 2 it was required on all four).
 
 | Screws | 27 | 28 to 30 | 31 to 33 | 34 to 36 |
 |-|-|-|-|-|
@@ -528,9 +562,9 @@ requires it to lose on these tiers, so s is below n. The rule:
 per screw, the order that reaches the fewest tray uses) from 1 to n. A tap is a tray use when its
 screw goes to the tray (R12; the tap that R13 step 4 counts). A tray use's position is its tap
 number p. The solution puts all its tray uses in the first third when every tray use has
-3p <= n. Approved: such a coloring is turned down. Proposed (waiting for Bart): tools/levels and
-the bot report show the last tray use's position for every level, and nothing is turned down for
-it.
+3p <= n. At Hard Stop 2 such a coloring was to be turned down; as approved on 21 October 2026,
+tools/levels and the bot report show the last tray use's position for every level, and nothing
+is turned down for it.
 
 **When a coloring fails G9.** It is turned down like a coloring that fails G4: the generator
 goes on to its next attempt (the next coloring of the same variation, then the next variation),
@@ -611,6 +645,11 @@ loses, just not in the opening.
   skyline suits only tiers 7 and 8, so dropping it there drops it from the game and leaves tier 7
   with 7 boards, and bookshelf fails on tiers 9 and 10 too. Then measure again against this gate,
   and check that no two levels within 5 of each other hand out the same stored level.
+- **Decided by Bart on 21 October 2026.** Gate 1 passed as it was, and the two boards are
+  retuned rather than kept off tiers 7 and 8. Done in Phase 4 (section 10.2): on its own board
+  skyline now falls back 8 percent of the time on tier 7 (was 35) and 0 on tier 8 (was 13), and
+  bookshelf 13 percent on tier 8 (was 78), 5 on tier 9 (was 73) and 0 on tier 10 (was 63).
+  Generator version 5 measures the whole gate again.
 
 ### 6.5 Evidence so far
 
@@ -775,9 +814,8 @@ An example showing all four shapes (data/blueprints/ holds the real files):
   one of its holes as pivot, the distance r from the pivot to the centroid is below 0.25 or
   above 0.75 units, never in between, so no phone can disagree about whether it turns.
 
-**Planks hanging below the core: a view rule, not a B14** (asked for in Phase 3 review; I
-propose this instead, waiting for the lead and Bart). A plank on its last screw hangs straight
-below it (R16), so a long plank near the bottom hangs far below the 90 gu core: in level 40 the
+**Planks hanging below the core: a view rule, not a B14** (asked for in Phase 3 review;
+approved by Bart on 21 October 2026). A plank on its last screw hangs straight below it (R16), so a long plank near the bottom hangs far below the 90 gu core: in level 40 the
 weave's full width bar (86 gu long) hangs from (67, 55) down to y 122. On the base phone UX
 3.2.1 leaves no room for that: the board panel is exactly the core, with 8 units (2 gu) of gap
 above, below and at each side before the tray, the helper bar or the screen edge. I measured the
@@ -900,9 +938,9 @@ neighboring tier too. The table is sorted by screws.
 | robot | Robot | silhouette | 27 | 16 | 4 | 20 | 7 (26%) | 6, 7 | Phase 2, covered more in Phase 3 |
 | steamboat | Steamboat | silhouette | 27 | 12 | 4 | 21 | 6 (22%) | 6, 7 | Phase 2, covered more in Phase 3 |
 | dominoes | Dominoes | pattern | 30 | 14 | 5 | 20 | 10 (33%) | 7, 8 | Phase 2 |
-| skyline | City skyline | silhouette | 30 | 6 | 4 | 22 | 8 (27%) | 7, 8 | Phase 2 |
+| skyline | City skyline | silhouette | 30 | 9 | 5 | 22 | 8 (27%) | 7, 8 | Phase 2, rebuilt in Phase 4 |
 | ziggurat | Step temple | silhouette | 30 | 5 | 5 | 21 | 9 (30%) | 7, 8 | Phase 2 |
-| bookshelf | Bookshelf | silhouette | 33 | 16 | 4 | 22 | 11 (33%) | 8, 9, 10 | Phase 2 |
+| bookshelf | Bookshelf | silhouette | 33 | 16 | 4 | 16 | 17 (52%) | 8, 9, 10 | Phase 2, retuned in Phase 4 |
 | catface | Cat | silhouette | 33 | 7 | 4 | 23 | 10 (30%) | 8, 9, 10 | Phase 2 |
 | falling-blocks | Falling blocks | pattern | 33 | 13 | 5 | 23 | 10 (30%) | 8, 9, 10 | Phase 2 |
 | ferris-wheel | Ferris wheel | silhouette | 33 | 15 | 5 | 19 | 14 (42%) | 8, 9, 10 | Phase 3 |
@@ -967,12 +1005,44 @@ What changed (pictures in build/blueprints-p3/, before and after):
 - My house rules hold for all eleven boards: every covered screw is at least 2 units (8 du)
   under its wood, and every one hole plank hangs exactly on the vertical through its hole.
 - B11 margin: in every rest pose of the eleven boards, no screw comes within 0.44 units (1.8
-  du) of the covering threshold. The closest in the whole library is still the windmill (0.32
-  units).
+  du) of the covering threshold. The closest in the whole library was the windmill (0.32
+  units) until the Phase 4 skyline (0.31, section 10.2).
 - The counts above come from a scratch script that calls `LevelCatalog.suits_tier` for every
   blueprint and tier, before and after the change.
 
-### 10.2 Phase 2 checks and notes (still true)
+### 10.2 Phase 4 changes: skyline and bookshelf retuned
+
+Why: with generator version 4 these two boards caused most of the fallbacks on tiers 7 and 8
+(section 6.4.1). Bart approved retuning them on 21 October 2026, rather than keeping them off
+those tiers.
+
+- **skyline**, rebuilt on a wider grid (screws 14 apart across and 14 down), so every free screw
+  is 7 units from the nearest edge in front of it and every covered one 7 under: nine buildings
+  on five layers (was six on four), the same 30 screws and 8 covered, but the covered screws now
+  sit one, two or three buildings deep instead of all behind one big block. The picture is the
+  same idea: a tall tower, a thin needle, a wide block, and low buildings in front.
+- **bookshelf**: the two side panels moved in front of the shelves (layer 0, the shelves layer 1),
+  so they now cover the six shelf ends. A shelf only comes down after both side panels, and the
+  books behind it after that. 17 screws covered instead of 11, and 16 free instead of 22. The
+  picture is unchanged.
+
+**Measured** with the real generator (`Generator._try`, version 4 with its G9 budget) on 40 seeds
+per tier, building a level from that one board, percent that ran out of attempts:
+
+| Board, tier | Before | After |
+|-|-|-|
+| skyline, tier 7 | 35% | 8% |
+| skyline, tier 8 | 13% | 0% |
+| bookshelf, tier 8 | 78% | 13% |
+| bookshelf, tier 9 | 73% | 5% |
+| bookshelf, tier 10 | 63% | 0% |
+
+On the accepted tier 7 and 8 levels the novice survives a median of 12 or 13 taps. Both boards
+pass the validator; skyline's closest swing comes 0.31 units from the covering threshold, the
+bookshelf's 0.50; the shallowest covered screw is 3 units deep. Level-engine-dev measures the
+whole gate again with generator version 5.
+
+### 10.3 Phase 2 checks and notes (still true)
 
 **What I checked, and how.** Every file was checked by my scratch validator (Python, outside the
 repo) against B1 to B13 and my house rules (section 9.2), and drawn and looked at. B11 and B13
@@ -1082,6 +1152,11 @@ Walk these on Windows (tests and bots) and on the phone. Each item names how to 
     and the sheet never offers a purchase.
 13c. R38: a helper at count 0 asks "Get and use" only after the player taps it, and never in
     Relaxed.
+13d. R35a: on the progress map a cleared level replays, the next level plays, and a locked level
+    plays nothing.
+13e. R36a: Pause, then Settings, other menus and Back to level: the board, tray, boxes, clock
+    and helpers are exactly as they were, and the clock did not run in between. Quit to title
+    or starting another level restarts the paused one from the beginning next time.
 
 **Data**
 
@@ -1124,7 +1199,7 @@ Walk these on Windows (tests and bots) and on the phone. Each item names how to 
 **Fun checks (Gate playtests and the designer's review)**
 
 29. Level 1 cleared in under 30 seconds by a new player, no text read.
-30. A hard level is followed by a breather in the level list (tiers 10 to 11, 15 to 16, ...).
+30. A hard level is followed by a breather on the progress map (levels 10 and 11, 15 and 16, ...).
 31. The fun checklist in section 11, item by item, with notes.
 
 ## 13. Notes for the other roles

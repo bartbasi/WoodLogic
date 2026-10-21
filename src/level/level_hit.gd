@@ -20,6 +20,22 @@ static func covered_screw(state: PlayState, p: Vector2) -> int:
 	return _nearest(state, p, false)
 
 
+## The screw on the board nearest to p within the same circle, free or covered, or -1 (the
+## Screwdriver may pick either, R31).
+static func any_screw(state: PlayState, p: Vector2) -> int:
+	var level := state.level()
+	var best := -1
+	var best_d := RADIUS_GU * RADIUS_GU
+	for s: int in level.screw_count():
+		if not state.is_on_board(s):
+			continue
+		var d := p.distance_squared_to(level.screw_center(s))
+		if d <= best_d:
+			best_d = d
+			best = s
+	return best
+
+
 ## The frontmost plank still on the board whose current outline holds p, or -1.
 static func plank(state: PlayState, p: Vector2) -> int:
 	var level := state.level()

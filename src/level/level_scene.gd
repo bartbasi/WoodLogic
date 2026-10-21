@@ -8,8 +8,10 @@ extends Control
 ## while the last screw is still flying. If the view and the model disagree, the model is right
 ## and the view is the bug: reconcile() puts the view right and counts the times it had to.
 ##
-## Phase 3: the helpers are stubs (no helper row), the look is the placeholder views made in
-## LevelViews, and Pause, Out of room and Level clear are the app flow's screens.
+## The helpers (Undo, Extra slot, Screwdriver), the timer and pips, the star bank and the coffee
+## cup are here (docs/ARCHITECTURE.md 6 and 11.3). The looks are the placeholder views made in
+## LevelViews until the real renderers are swapped in there. Pause, Out of room, Level clear and
+## the helper sheets are the app flow's screens.
 
 signal won(result: LevelResult)
 signal lost(level: LevelData)
@@ -17,6 +19,7 @@ signal pause_requested
 signal helper_used(helper: String)
 signal helper_buy_requested(helper: String)
 signal first_action
+signal coffee_requested
 
 ## Timings in seconds (UX 6.1, DESIGN.md 9).
 const UNSCREW := 0.22
@@ -32,17 +35,7 @@ const FALL_HANG := 0.08
 const WIN_DELAY := 0.5
 const LOSS_DELAY := 0.3
 const IDLE_HINT := 8.0
-## Draw order inside the layers.
-const Z_SCREW := 10
-const Z_SCREW_FLYING := 30
-const Z_MARKS := 60
-const Z_HINT := 70
-const Z_HUD := 100
 
-const PEGBOARD := Color("7a5a3d")
-const BOARD_BACK := Color("4a2b1a")
-const BOARD_CORE := Color("55321f")
-const BAND := Color(0.11, 0.07, 0.04, 0.35)
 const RING_COLOR := Color("fff1c9")
 
 var dp_per_unit := 0.0
@@ -66,7 +59,6 @@ var _inset_bottom := 16.0
 var _inset_left := 0.0
 var _inset_right := 0.0
 var _insets_set := false
-var _pause_down := false
 var _last_timer_second := -1
 
 var _content: Node2D
@@ -79,9 +71,17 @@ var _box_root: Node2D
 var _screw_layer: Node2D
 var _marks: LevelMarks
 var _hint: LevelHint
+## The pegboard and the back panels, behind everything (src/render/BoardView).
+var _board_view: Node2D
+## Only a tutorial level with a hint list ever shows the hand.
+var _hint_possible := false
+var _board_area := Vector2.ZERO
+var _board_panels: Array[Rect2] = []
 var _hud: LevelHud
 var _tray_view: Node2D
 var _audio: Node
+## While animations are finished in one go (an undo, a resize) their sounds stay silent.
+var _muted := false
 
 var _anims: Array[LevelAnim] = []
 var _screws: Array[LevelScrewSlot] = []
@@ -109,6 +109,18 @@ var _action_land := 0.0
 var _action_arrive := 0.0
 var _pending: Array[Callable] = []
 var _end_anim: LevelAnim
+## Helpers: the counts the app flow gave, which buttons show, the star bank, the Screwdriver mode,
+## the control a touch went down on, and the badge shown while a first-time count ticks up.
+var _counts := {}
+var _shown := PackedStringArray()
+var _bank := 0
+var _bank_shown_value := 0
+var _bank_known := false
+var _coffee := false
+var _driver := false
+var _press_id := ""
+var _highlight := ""
+var _badge_override := {}
 ## The slide each box view is in, so a new slide takes over from where the old one got to.
 var _moves := {}
 ## A resize came while paused; the views are placed at resume().
@@ -137,6 +149,31 @@ func play(level: LevelData, replay: bool) -> void:
 	_start_attempt()
 
 
+## Sets every view up again from Looks.current (wood, metal, the symbols setting) and keeps the
+## state: the screws and planks stay where they are, with their poses, and so do the boxes, the
+## tray and the hand. Then it bakes again. The app flow calls it after Settings changed while the
+## level was paused, so Back to level shows the new choice (UX 3.8).
+func refresh_looks() -> void:
+	if _state == null or _board_view == null:
+		return
+	for slot: LevelPlankSlot in _planks:
+		var data := _level.planks[slot.plank]
+		LevelViews.reset_plank(slot.view, slot.outline_gu, data.inner_outline(), data.layer, data.holes, slot.plank * 7919 + _level.number)
+	for slot: LevelScrewSlot in _screws:
+		LevelViews.resize_screw(slot.view, _level.screw_colors[slot.screw], LevelViews.SCREW_BOARD)
+	for pos: int in _box_views.size():
+		if _box_views[pos] != null:
+			LevelViews.reset_box(_box_views[pos], _box_color[pos], false)
+	for k: int in _preview_views.size():
+		LevelViews.reset_box(_preview_views[k], _preview_colors[k], true)
+	LevelViews.setup_tray(_tray_view, _tray_screws.size())
+	_refresh_tray()
+	_board_area = Vector2.ZERO
+	_set_board_view()
+	if not _instant:
+		_bake_planks()
+
+
 ## Starts the same level again from the beginning (GDD R34).
 func retry() -> void:
 	if _level != null:
@@ -149,9 +186,11 @@ func pause() -> void:
 		return
 	_paused = true
 	_clock.set_paused(true, Time.get_ticks_msec())
-	_pause_down = false
+	_press_id = ""
+	_sync_hud()
 	if _content != null:
 		_content.visible = false
+		_board_view.visible = false
 		_content.process_mode = Node.PROCESS_MODE_DISABLED
 
 
@@ -162,44 +201,115 @@ func resume() -> void:
 	_clock.set_paused(false, Time.get_ticks_msec())
 	if _content != null:
 		_content.visible = true
+		_board_view.visible = true
 		_content.process_mode = Node.PROCESS_MODE_INHERIT
 	if _layout_due:
 		_apply_layout()
+	_sync_hud()
 
 
 ## Stops the clock with the board still showing (a sheet or a dialog is open).
 func hold_clock(on: bool) -> void:
 	_held = on
+	_press_id = ""
 	_clock.set_held(on, Time.get_ticks_msec())
+	_sync_hud()
 
 
-## Phase 3 has no mode to leave, so Back is never handled here.
+## Back leaves the Screwdriver mode first (UX 3.2.3); otherwise the app flow opens Pause.
 func handle_back() -> bool:
+	if _driver:
+		_leave_driver(true)
+		return true
 	return false
 
 
-@warning_ignore("unused_parameter")
+## The star bank in the top bar. A drop (buying with "Get and use") counts down over 400 ms.
 func set_star_bank(stars: int) -> void:
-	pass
+	var old := _bank_shown_value
+	_bank = stars
+	if _hud == null:
+		return
+	if _bank_known and not _instant and stars < old:
+		_anims.append(LevelAnims.Timed.new(0.0, 0.4, _bank_step.bind(old, stars)))
+	else:
+		_bank_shown_value = stars
+	_bank_known = true
+	_refresh_helpers()
+	_sync_hud()
 
 
-@warning_ignore("unused_parameter")
+func _bank_step(p: float, from: int, to: int) -> void:
+	_bank_shown_value = roundi(lerpf(float(from), float(to), p))
+	_sync_hud()
+
+
+## Which helper buttons show and how many of each the player owns (the app flow keeps both).
 func set_helpers(counts: Dictionary, shown: PackedStringArray) -> void:
-	pass
+	_counts = counts.duplicate()
+	_shown = shown
+	_refresh_helpers()
 
 
-@warning_ignore("unused_parameter")
+## The coffee cup in the top bar (UX 1.7); the app flow passes Links.coffee_visible().
+func set_coffee(on: bool) -> void:
+	_coffee = on
+	_sync_hud()
+
+
+## The steady ring and arrow on a helper's button after its first-time sheet (UX 3.13.1), and
+## its count ticking up from 0, one tick every 200 ms.
 func highlight_helper(helper: String) -> void:
-	pass
+	_highlight = helper
+	if _hud == null:
+		return
+	_hud.set_highlight(helper)
+	var n := _helper_count(helper)
+	if _instant or n <= 0 or not _shown.has(helper):
+		return
+	_badge_override[helper] = 0
+	_refresh_helpers()
+	for i: int in range(1, n + 1):
+		_anims.append(LevelAnims.after(0.2 * i, _tick_badge.bind(helper, i, i == n)))
 
 
-@warning_ignore("unused_parameter")
+func _tick_badge(helper: String, value: int, last: bool) -> void:
+	_sfx("tick")
+	if last:
+		_badge_override.erase(helper)
+	else:
+		_badge_override[helper] = value
+	_refresh_helpers()
+
+
+## Uses a helper: after "Get and use" (R38), or from the Out of room sheet (R37). The app flow
+## has already taken care of the count; helper_used says it took effect.
 func use_helper(helper: String) -> void:
-	pass
+	if _state == null or _paused:
+		return
+	_run_helper(helper)
 
 
+## The owned helpers that can clear this loss (R37): Undo with something to take back, Extra
+## slot not yet used this try, Screwdriver when some screw on the board, covered or not, fits an
+## open box. Not in Relaxed, where only the free Undo exists.
 func usable_after_loss() -> PackedStringArray:
-	return PackedStringArray()
+	var out := PackedStringArray()
+	if _state == null or _level == null:
+		return out
+	var relaxed := _level.kind == LevelData.RELAXED
+	if (relaxed or _helper_count("undo") >= 1) and _state.can_undo():
+		out.append("undo")
+	if relaxed:
+		return out
+	if _helper_count("extra_slot") >= 1 and not _state.extra_slot_used():
+		out.append("extra_slot")
+	if _helper_count("screwdriver") >= 1:
+		for s: int in _level.screw_count():
+			if _state.is_on_board(s) and _state.destination(s).x != PlayState.NONE:
+				out.append("screwdriver")
+				break
+	return out
 
 
 ## Tests only: every animation jumps to its end, and later ones are not played.
@@ -249,7 +359,14 @@ func is_over() -> bool:
 func tap_at(p: Vector2) -> void:
 	if _state == null or _paused or _held or _layout == null:
 		return
+	# The board only listens inside the board panel (UX 6.1): a touch that began in the top bar,
+	# the boxes, the tray or the helper bar never gets here.
+	if not _layout.panel.has_point(p):
+		return
 	_idle = 0.0
+	if _driver:
+		_driver_tap(p)
+		return
 	if _state.status() != PlayState.PLAYING:
 		return
 	var gu := _layout.scene_to_gu(p)
@@ -262,10 +379,10 @@ func tap_at(p: Vector2) -> void:
 	var plank := LevelHit.plank(_state, gu)
 	if plank >= 0:
 		_press_plank(_planks[plank])
-		_sfx("knock_dull", 1.5, -18.0)
-	elif _layout.panel.has_point(p):
+		_sfx("tap", 1.0, -6.0)
+	else:
 		_marks.add_ripple(p, 22.0, Color(RING_COLOR, 0.7))
-		_sfx("knock_dull", 1.7, -20.0)
+		_sfx("tap", 1.3, -9.0)
 
 
 ## Taps a screw by id: asks the logic, applies its answer, animates it. Returns the logic's
@@ -287,11 +404,188 @@ func tap_screw(screw: int) -> TapResult:
 	return r
 
 
+## Frees a box, a preview or the tray (a view that may be gone already).
+func _free_view(node: Variant) -> void:
+	if is_instance_valid(node):
+		(node as Node).queue_free()
+
+
+# == Helpers, the Screwdriver mode and the coffee cup ==
+
+func _helper_count(helper: String) -> int:
+	return int(_counts.get(helper, 0))
+
+
+func _helper_price(helper: String) -> int:
+	return int((Tuning.helpers[helper] as Dictionary).get("price", 0))
+
+
+## Tells the HUD which helper buttons to draw and what each badge says (UX 3.2.2).
+func _refresh_helpers() -> void:
+	if _hud == null or _level == null:
+		return
+	var infos: Array[Dictionary] = []
+	var relaxed := _level.kind == LevelData.RELAXED
+	for helper: String in LevelHud.HELPERS:
+		if not _shown.has(helper) or (relaxed and helper != "undo"):
+			continue
+		var info := {"id": helper, "badge": "", "star": false, "dim": false, "disabled": false}
+		if relaxed:
+			info["badge"] = "Free"
+		elif helper == "extra_slot" and _state != null and _state.extra_slot_used():
+			info["badge"] = "Used"
+			info["disabled"] = true
+		elif _badge_override.has(helper):
+			info["badge"] = str(_badge_override[helper])
+		elif _helper_count(helper) > 0:
+			info["badge"] = str(_helper_count(helper))
+		else:
+			info["badge"] = str(_helper_price(helper))
+			info["star"] = true
+			info["dim"] = _bank < _helper_price(helper)
+		infos.append(info)
+	_hud.set_buttons(infos)
+
+
+## The cup shows from level 4 (and in Daily and Relaxed), and never while a sheet, a dialog,
+## the clear screen or the loss shows (UX 1.7).
+func _cup_visible() -> bool:
+	if not _coffee or _level == null or _held or _over or _paused:
+		return false
+	match _level.kind:
+		LevelData.DAILY, LevelData.RELAXED:
+			return true
+	return _level.number >= 4
+
+
+func _sync_hud() -> void:
+	if _hud == null or _level == null:
+		return
+	_hud.set_cup(_cup_visible())
+	_hud.set_star_bank(_timer_visible(), _bank_shown_value)
+
+
+## A touch on a control acts on release, and only if it went down on it and is still on it.
+func _activate(id: String) -> void:
+	match id:
+		"pause":
+			if _driver:
+				_leave_driver(false)
+			pause_requested.emit()
+		"cup":
+			pause()
+			coffee_requested.emit()
+		"cancel":
+			_leave_driver(true)
+		_:
+			if LevelHud.HELPERS.has(id):
+				_helper_button(id)
+
+
+func _helper_button(helper: String) -> void:
+	if _state == null:
+		return
+	_set_highlight("")
+	if _level.kind == LevelData.RELAXED and helper == "undo":
+		_run_helper(helper)
+	elif helper == "extra_slot" and _state.extra_slot_used():
+		return
+	elif _helper_count(helper) > 0:
+		_run_helper(helper)
+	elif _bank >= _helper_price(helper):
+		helper_buy_requested.emit(helper)
+	else:
+		_hud.shake(helper)
+		_hud.show_toast("Not enough stars. %d needed." % _helper_price(helper))
+		_sfx("knock_dull", 1.0, 0.0)
+
+
+func _set_highlight(helper: String) -> void:
+	_highlight = helper
+	if _hud != null:
+		_hud.set_highlight(helper)
+
+
+func _run_helper(helper: String) -> void:
+	match helper:
+		"undo":
+			var r := _state.undo()
+			if r.ok:
+				_sfx("undo")
+				_helper_action(r, "undo")
+			elif r.reason == TapResult.NOTHING_TO_UNDO:
+				_hud.show_toast("Nothing to undo.")
+				_sfx("knock_dull", 0.85)
+		"extra_slot":
+			var r := _state.use_extra_slot()
+			if r.ok:
+				_sfx("wood_pop")
+				_helper_action(r, "extra_slot")
+		"screwdriver":
+			_enter_driver()
+
+
+## A helper took effect: apply what the logic said, then tell the app flow.
+func _helper_action(r: TapResult, helper: String) -> void:
+	_after_accepted_action()
+	_begin_action()
+	_apply_events(r.events)
+	_hint.hide_hint()
+	_end_action()
+	helper_used.emit(helper)
+
+
+func _enter_driver() -> void:
+	if _driver or _state.status() == PlayState.WON:
+		return
+	_driver = true
+	_hud.set_banner(true)
+	_set_bright(true)
+	_sfx("tick")
+	_sync_hud()
+
+
+## Leaves the mode and keeps the helper. After a loss the Out of room sheet is gone, so a
+## cancel there announces the loss again and the sheet comes back.
+func _leave_driver(cancelled: bool) -> void:
+	if not _driver:
+		return
+	_driver = false
+	_hud.set_banner(false)
+	_set_bright(false)
+	if cancelled and _state.status() == PlayState.LOST:
+		lost.emit(_level)
+
+
+func _set_bright(on: bool) -> void:
+	for slot: LevelScrewSlot in _screws:
+		LevelViews.set_bright(slot.view, on and slot.kind == LevelScrewSlot.BOARD)
+
+
+## A touch in Screwdriver mode: any screw on the board, covered or free, is chosen (R31).
+func _driver_tap(p: Vector2) -> void:
+	var s := LevelHit.any_screw(_state, _layout.scene_to_gu(p))
+	if s < 0:
+		return
+	var r := _state.use_screwdriver(s)
+	if r.ok:
+		_leave_driver(false)
+		if not _instant:
+			_marks.add_icon(_layout.gu_to_scene(_level.screw_center(s)) + Vector2(10.0, -10.0) * _layout.b, "screwdriver", 30.0 * _layout.b, Color(RING_COLOR, 0.95), 0.12)
+		_helper_action(r, "screwdriver")
+	elif r.reason == TapResult.REFUSED:
+		_sfx("knock_dull", 0.85)
+		_hud.show_toast("That screw has nowhere to go.")
+		_shake_screw(s)
+
+
 # == Building the level ==
 
 func _ensure_nodes() -> void:
 	if _content != null:
 		return
+	_board_view = LevelViews.make_board(Vector2(360.0, 640.0), [] as Array[Rect2])
+	add_child(_board_view)
 	_content = Node2D.new()
 	add_child(_content)
 	_plank_clip = Control.new()
@@ -307,13 +601,10 @@ func _ensure_nodes() -> void:
 	_screw_layer = Node2D.new()
 	_content.add_child(_screw_layer)
 	_marks = LevelMarks.new()
-	_marks.z_index = Z_MARKS
 	_content.add_child(_marks)
 	_hint = LevelHint.new()
-	_hint.z_index = Z_HINT
 	_content.add_child(_hint)
 	_hud = LevelHud.new()
-	_hud.z_index = Z_HUD
 	_content.add_child(_hud)
 
 
@@ -334,15 +625,41 @@ func _start_attempt() -> void:
 	_end_anim = null
 	_pending.clear()
 	_clock.reset()
-	_clock.set_paused(_paused, Time.get_ticks_msec())
+	_force_unpaused()
 	_relayout()
 	_build_views()
+	_driver = false
+	_press_id = ""
+	_highlight = ""
+	_hint_possible = _level.kind == LevelData.TUTORIAL and not _level.hint.is_empty()
+	_badge_override.clear()
 	_hud.configure(_layout, _label(), _timer_visible(), _level.line)
+	_refresh_helpers()
+	_sync_hud()
 	_apply_layout(true)
 	_update_pips()
 	if not _instant:
 		_play_intro()
-	queue_redraw()
+		_bake_planks()
+
+
+## A new attempt always starts unpaused, shown and listening, whatever state the scene was in
+## (the app flow keeps a paused level alive while the menus show).
+func _force_unpaused() -> void:
+	_paused = false
+	_held = false
+	_layout_due = false
+	_pause_pressed_reset()
+	if _content != null:
+		_content.visible = true
+		_board_view.visible = true
+		_content.process_mode = Node.PROCESS_MODE_INHERIT
+
+
+func _pause_pressed_reset() -> void:
+	_press_id = ""
+	if _hud != null:
+		_hud.set_pressed("")
 
 
 func _clear_views() -> void:
@@ -371,7 +688,6 @@ func _build_views() -> void:
 		slot.plank = p
 		slot.outline_gu = data.outline()
 		slot.view = LevelViews.make_plank(slot.outline_gu, data.inner_outline(), data.layer, data.holes, p * 7919 + _level.number)
-		slot.view.z_index = 4 - data.layer
 		_planks_root.add_child(slot.view)
 		_planks.append(slot)
 		slot.state = ps.plank_state(p)
@@ -384,13 +700,24 @@ func _build_views() -> void:
 			slot.pose(Vector2(pose.x, pose.y) * LevelLayout.GRID_DU, pose.z)
 		else:
 			slot.pose(Vector2.ZERO, 0.0)
+	# Draw order is tree order, never z: the back layers first, so a plank in front is drawn over
+	# one behind it. The screws are in their own layer above all planks, so a plank that swings
+	# across a free screw never covers it.
+	var order: Array[int] = []
+	for p: int in _level.planks.size():
+		order.append(p)
+	order.sort_custom(func(a: int, b: int) -> bool:
+		var la := _level.planks[a].layer
+		var lb := _level.planks[b].layer
+		return la > lb if la != lb else a < b)
+	for i: int in order.size():
+		_planks_root.move_child(_planks[order[i]].view, i)
 	for s: int in _level.screw_count():
 		var slot := LevelScrewSlot.new()
 		slot.screw = s
 		slot.view = LevelViews.make_screw(_level.screw_colors[s], LevelViews.SCREW_BOARD)
 		slot.covered = not ps.is_free(s)
 		LevelViews.set_covered(slot.view, slot.covered)
-		slot.view.z_index = Z_SCREW
 		_screw_layer.add_child(slot.view)
 		_screws.append(slot)
 	var open := Tuning.open_boxes
@@ -439,6 +766,22 @@ func _pivot_screw(plank: int) -> int:
 	return -1
 
 
+## The workbench behind everything, full bleed, with the board panel (and the rail when the
+## screen is split). It is made again, and baked, only when those rectangles change.
+func _set_board_view() -> void:
+	var area := _area()
+	var panels: Array[Rect2] = [_layout.panel]
+	if _layout.split:
+		panels.append(_layout.rail)
+	if area == _board_area and panels == _board_panels:
+		return
+	_board_area = area
+	_board_panels = panels
+	LevelViews.setup_board(_board_view, area, panels)
+	if not _instant and is_inside_tree():
+		LevelViews.bake(_board_view)
+
+
 ## Places every view for the current layout. While paused it only notes that this is due: placing
 ## views finishes running animations, which would announce a pending win or loss under the pause
 ## screen. resume() does it, and the ending is announced then.
@@ -450,6 +793,7 @@ func _apply_layout(force: bool = false) -> void:
 		queue_redraw()
 		return
 	_layout_due = false
+	_set_board_view()
 	_plank_clip.position = _layout.panel.position
 	_plank_clip.size = _layout.panel.size
 	_board_root.position = _layout.core_origin - _layout.panel.position
@@ -475,6 +819,15 @@ func _apply_layout(force: bool = false) -> void:
 	queue_redraw()
 
 
+## Draws every plank into its textures (until then a plain stand-in shows). The planks are
+## fading in at the start of a level, so this is the one moment the board is not yet in play.
+func _bake_planks() -> void:
+	if not is_inside_tree():
+		return
+	for slot: LevelPlankSlot in _planks:
+		LevelViews.bake(slot.view)
+
+
 @warning_ignore("integer_division")
 func _play_intro() -> void:
 	var n := _planks.size()
@@ -490,7 +843,7 @@ func _play_intro() -> void:
 		plank.anim = drop
 		_anims.append(drop)
 		if i % sound_step == 0:
-			_anims.append(LevelAnims.after(wait, _sfx.bind("knock", 1.0 + 0.04 * i, -18.0)))
+			_anims.append(LevelAnims.after(wait, _sfx.bind("tap", 1.0 + 0.04 * i, -12.0)))
 		for s: int in _level.planks[plank.plank].screws:
 			var slot := _screws[s]
 			slot.view.modulate.a = 0.0
@@ -561,26 +914,6 @@ func _notification(what: int) -> void:
 			slot.anim = null
 
 
-func _draw() -> void:
-	draw_rect(Rect2(Vector2.ZERO, _area()), PEGBOARD)
-	if _layout == null:
-		return
-	var l := _layout
-	draw_rect(Rect2(l.content.position.x, 0.0, l.content.size.x, l.top_bar.end.y + 2.0), BAND)
-	draw_rect(l.panel.grow(4.0), BOARD_BACK)
-	draw_rect(Rect2(l.core_origin, Vector2(LevelLayout.CORE_W, LevelLayout.CORE_H) * l.b), BOARD_CORE)
-	if l.split:
-		draw_rect(l.rail.grow(4.0), BOARD_BACK)
-	else:
-		draw_rect(l.boxes_bar, BAND)
-		draw_rect(l.tray_bar, BAND)
-	if l.open_pos.size() > 0 and l.preview_pos.size() > 0:
-		var x: float = l.open_pos[l.open_pos.size() - 1].x + (LevelLayout.OPEN_W + 2.0) * l.box_scale
-		var y: float = l.open_pos[0].y + 28.0 * l.box_scale
-		var c := 4.0 * l.box_scale
-		draw_colored_polygon(PackedVector2Array([Vector2(x, y - c), Vector2(x + c, y), Vector2(x, y + c)]), Color(RING_COLOR, 0.8))
-
-
 # == Input ==
 
 func _gui_input(event: InputEvent) -> void:
@@ -597,19 +930,22 @@ func _gui_input(event: InputEvent) -> void:
 
 
 func _touch(p: Vector2, pressed: bool) -> void:
-	var target := _hud.pause_target()
+	if _held or _layout == null:
+		return
 	if pressed:
-		if target.has_point(p):
-			_pause_down = true
-			_hud.set_pause_pressed(true)
+		var id := _hud.hit(p) if (not _over or _driver) else ""
+		if id != "":
+			_press_id = id
+			_hud.set_pressed(id)
 			_sfx("knock_dull", 1.3, -12.0)
 			return
 		tap_at(p)
-	elif _pause_down:
-		_pause_down = false
-		_hud.set_pause_pressed(false)
-		if target.has_point(p):
-			pause_requested.emit()
+	elif _press_id != "":
+		var id := _press_id
+		_press_id = ""
+		_hud.set_pressed("")
+		if _hud.hit(p) == id:
+			_activate(id)
 
 
 # == Applying what the logic said ==
@@ -641,6 +977,7 @@ func _update_hint_after_tap() -> void:
 
 
 func _after_accepted_action() -> void:
+	_set_highlight("")
 	if _clock.start(Time.get_ticks_msec()):
 		first_action.emit()
 
@@ -656,6 +993,8 @@ func _end_action() -> void:
 	_reconcile()
 	_update_pips()
 	_hud.set_timer_text(_timer_text())
+	_refresh_helpers()
+	_sync_hud()
 	var calls := _pending.duplicate()
 	_pending.clear()
 	for c: Callable in calls:
@@ -739,6 +1078,7 @@ func _ev_plank_swung(e: LogicEvent) -> void:
 	if absf(from - e.angle) < 0.01:
 		slot.pose(about, e.angle)
 		return
+	_sfx("creak")
 	var swing := LevelAnims.Swing.new(slot, about, from, e.angle)
 	slot.anim = swing
 	_anims.append(swing)
@@ -789,7 +1129,7 @@ func _ev_box_closed(e: LogicEvent) -> void:
 		for n: Node2D in group:
 			n.visible = false
 		if box != null:
-			box.queue_free()
+			_free_view(box)
 		return
 	var wait := start - _anim_time
 	if box != null:
@@ -806,7 +1146,7 @@ func _ev_box_closed(e: LogicEvent) -> void:
 func _close_box(box: Variant) -> void:
 	if is_instance_valid(box):
 		LevelViews.close_box(box)
-		_sfx("knock", 1.25, -6.0)
+		_sfx("lid")
 
 
 func _ev_box_arrived(e: LogicEvent) -> void:
@@ -865,8 +1205,20 @@ func _open_look(box: Variant, color: int) -> void:
 
 
 func _ev_tray_extended(_e: LogicEvent) -> void:
+	# Screws still flying to the tray land first: their targets were worked out for five slots.
+	for slot: LevelScrewSlot in _screws:
+		if slot.kind == LevelScrewSlot.TRAY and slot.anim != null and not slot.anim.done:
+			slot.anim.finish()
 	_tray_screws = _state.tray()
 	LevelViews.setup_tray(_tray_view, _tray_screws.size())
+	# The frame widens around its center, so the screws in it slide to their new slots (250 ms).
+	for slot: LevelScrewSlot in _screws:
+		if slot.kind != LevelScrewSlot.TRAY:
+			continue
+		if _instant:
+			_place_screw_now(slot)
+		else:
+			_slide(slot.view, _screw_rest(slot), 0.0, 0.25, LevelAnims.EASE_OUT_CUBIC, 1.0)
 	_refresh_tray()
 
 
@@ -899,7 +1251,6 @@ func _ev_undone(e: LogicEvent) -> void:
 		var slot := _screws[s]
 		if s == e.screw and kind == LevelScrewSlot.BOARD and not _instant:
 			_fly_screw(slot, kind, a, b, 0.0, true, false, 0.0, 1.0)
-			_sfx("ratchet", 0.7, -8.0)
 			continue
 		slot.kind = kind
 		slot.a = a
@@ -1013,7 +1364,6 @@ func _place_screw_now(slot: LevelScrewSlot) -> void:
 	v.position = _screw_rest(slot)
 	v.scale = Vector2.ONE * _screw_scale(slot.kind)
 	v.modulate.a = 1.0
-	v.z_index = Z_SCREW
 	LevelViews.set_lift(v, 0.0)
 	LevelViews.set_turn(v, 0.0)
 
@@ -1073,8 +1423,6 @@ func _fly_screw(slot: LevelScrewSlot, kind: int, a: int, b: int, wait: float, ho
 		start_scale = _screw_scale(was.kind)
 	var flight := LevelAnims.Flight.new(v, from, to, start_scale, _screw_scale(kind), delay, unscrew, fly)
 	flight.arc = (30.0 if hop and chain else clampf(from.distance_to(to) * 0.25, 40.0, 60.0)) * maxf(1.0, _layout.box_scale)
-	flight.z_rest = Z_SCREW
-	flight.z_fly = Z_SCREW_FLYING
 	if not hop:
 		flight.on_pop = _sfx.bind("pop")
 	flight.on_land = _on_screw_landed.bind(slot.screw, kind, a, pitch, _epoch)
@@ -1102,7 +1450,7 @@ func _on_screw_landed(screw: int, kind: int, position: int, pitch: float, epoch:
 		_refresh_tray()
 		if _tray_tick_due:
 			_tray_tick_due = false
-			_sfx("knock_dull", 1.6, -14.0)
+			_sfx("tick")
 
 
 func _refresh_tray() -> void:
@@ -1131,7 +1479,7 @@ func _sync_previews() -> void:
 	var wait := maxf(0.0, _action_arrive - _anim_time)
 	while _preview_views.size() > want.size():
 		var gone: Node2D = _preview_views.pop_back()
-		gone.queue_free()
+		_free_view(gone)
 		_preview_colors.resize(_preview_views.size())
 	for k: int in want.size():
 		var target := _layout.preview_pos[mini(k, _layout.preview_pos.size() - 1)]
@@ -1140,7 +1488,7 @@ func _sync_previews() -> void:
 			view = _preview_views[k]
 		else:
 			if k < _preview_views.size():
-				_preview_views[k].queue_free()
+				_free_view(_preview_views[k])
 			view = LevelViews.make_box(want[k], true)
 			_box_root.add_child(view)
 			view.scale = Vector2.ONE * _layout.box_scale
@@ -1160,6 +1508,35 @@ func _sync_previews() -> void:
 			_slide(view, target, wait, BOX_ARRIVE, LevelAnims.EASE_OUT_CUBIC, 1.0)
 
 
+## A box that an undo brought back slides down into its place again with the screws in it.
+func _reopen_box(box: Node2D, inside: PackedInt32Array) -> void:
+	var rise := Vector2(0.0, -70.0 * _layout.box_scale)
+	var group: Array[Node2D] = [box]
+	for s: int in inside:
+		if s >= 0:
+			group.append(_screws[s].view)
+	for n: Node2D in group:
+		n.position += rise
+		n.modulate.a = 0.0
+	var mover := LevelAnims.GroupMove.new(group, -rise, 0.0, 0.25, LevelAnims.EASE_OUT_CUBIC)
+	mover.alpha_end = 1.0
+	_anims.append(mover)
+
+
+## A plank that an undo brought back rises onto the board from below and fades in (250 ms).
+func _raise_plank(slot: LevelPlankSlot) -> void:
+	var base := slot.view.position
+	slot.view.modulate.a = 0.0
+	slot.anim = LevelAnims.Timed.new(0.0, 0.25, _raise_step.bind(slot, base))
+	_anims.append(slot.anim)
+
+
+func _raise_step(p: float, slot: LevelPlankSlot, base: Vector2) -> void:
+	var e := LevelAnim.out_cubic(p)
+	slot.view.position = base + Vector2(0.0, 60.0 * (1.0 - e))
+	slot.view.modulate.a = e
+
+
 ## Puts boxes, previews and planks right after an undo.
 func _rebuild_boxes_and_planks() -> void:
 	var wells := Tuning.box_slots
@@ -1170,7 +1547,7 @@ func _rebuild_boxes_and_planks() -> void:
 			_box_wells[pos * wells + w] = inside[w]
 		if _box_color[pos] != want or (_box_views[pos] == null) != (want < 0):
 			if _box_views[pos] != null:
-				_box_views[pos].queue_free()
+				_free_view(_box_views[pos])
 				_box_views[pos] = null
 			_box_color[pos] = want
 			if want >= 0:
@@ -1179,8 +1556,10 @@ func _rebuild_boxes_and_planks() -> void:
 				box.position = _layout.open_pos[pos]
 				box.scale = Vector2.ONE * _layout.box_scale
 				_box_views[pos] = box
+				if not _instant:
+					_reopen_box(box, inside)
 	for k: int in _preview_views.size():
-		_preview_views[k].queue_free()
+		_free_view(_preview_views[k])
 	_preview_views.clear()
 	_preview_colors.clear()
 	for color: int in _state.preview():
@@ -1193,7 +1572,11 @@ func _rebuild_boxes_and_planks() -> void:
 	for slot: LevelPlankSlot in _planks:
 		var st := _state.plank_state(slot.plank)
 		var pose := _state.plank_pose(slot.plank)
+		var was := slot.state
+		var was_pivot := slot.pivot
+		var was_angle := slot.angle
 		slot.stop()
+		LevelViews.set_shadow(slot.view, 1.0)
 		slot.state = st
 		slot.view.modulate.a = 1.0
 		slot.view.visible = st != PlayState.FALLEN
@@ -1201,8 +1584,18 @@ func _rebuild_boxes_and_planks() -> void:
 		slot.rest = pose.z
 		if st == PlayState.FIXED:
 			slot.pose(Vector2.ZERO, 0.0)
+			if was == PlayState.FALLEN and not _instant:
+				_raise_plank(slot)
+			elif was == PlayState.HANGING and not _instant and absf(was_angle) > 0.01:
+				# A swung plank swings back to where it was.
+				slot.pose(was_pivot, was_angle)
+				var back := LevelAnims.Swing.new(slot, was_pivot, was_angle, 0.0)
+				slot.anim = back
+				_anims.append(back)
 		elif st == PlayState.HANGING:
 			slot.pose(Vector2(pose.x, pose.y) * LevelLayout.GRID_DU, pose.z)
+			if was == PlayState.FALLEN and not _instant:
+				_raise_plank(slot)
 	_refresh_tray()
 
 
@@ -1232,11 +1625,7 @@ func _refused_tap(screw: int) -> void:
 	_hud.show_toast("The tray is full. Tap a screw that fits an open box.")
 	if _instant:
 		return
-	var slot := _screws[screw]
-	if slot.anim != null:
-		slot.anim.finish()
-	slot.anim = LevelAnims.Timed.new(0.0, 0.16, _refuse_shake.bind(slot))
-	_anims.append(slot.anim)
+	_shake_screw(screw)
 	_anims.append(LevelAnims.Timed.new(0.0, 0.2, _nudge_tray))
 	for s: int in _level.screw_count():
 		if _state.is_free(s) and _state.destination(s).x == PlayState.BOX:
@@ -1263,6 +1652,17 @@ func _press_step(p: float, slot: LevelPlankSlot) -> void:
 	center = center * LevelLayout.GRID_DU / maxf(1.0, slot.outline_gu.size())
 	slot.view.scale = Vector2.ONE * (1.0 - shrink)
 	slot.view.position += (center * shrink).rotated(slot.view.rotation)
+
+
+## The screw lifts a little, turns back about 30 degrees and settles in its hole (160 ms).
+func _shake_screw(screw: int) -> void:
+	if _instant:
+		return
+	var slot := _screws[screw]
+	if slot.anim != null:
+		slot.anim.finish()
+	slot.anim = LevelAnims.Timed.new(0.0, 0.16, _refuse_shake.bind(slot))
+	_anims.append(slot.anim)
 
 
 func _refuse_shake(p: float, slot: LevelScrewSlot) -> void:
@@ -1371,7 +1771,7 @@ func _process(delta: float) -> void:
 		if not _clock.started and _idle >= IDLE_HINT and _level.kind == LevelData.TUTORIAL and _level.number == 1 and _hud.get_line() == "":
 			_hud.set_line("Tap a screw.")
 		# The hand appears half a second after the level starts, and again after 8 idle seconds.
-		if not _hint.is_showing() and _idle >= (IDLE_HINT if _clock.started else 0.5):
+		if _hint_possible and not _hint.is_showing() and _idle >= (IDLE_HINT if _clock.started else 0.5):
 			_point_hint(false)
 
 
@@ -1389,6 +1789,7 @@ func _step_anims(dt: float) -> void:
 
 
 func _finish_anims() -> void:
+	_muted = true
 	var guard := 0
 	while not _anims.is_empty() and guard < 100:
 		var list := _anims.duplicate()
@@ -1400,6 +1801,7 @@ func _finish_anims() -> void:
 		slot.anim = null
 	for slot: LevelPlankSlot in _planks:
 		slot.anim = null
+	_muted = false
 	_moves.clear()
 	_tray_shift = 0.0
 
@@ -1407,6 +1809,7 @@ func _finish_anims() -> void:
 ## Finishes every animation but `keep` (which may be null). Finishing one can start others;
 ## they are finished too.
 func _finish_anims_except(keep: LevelAnim) -> void:
+	_muted = true
 	var guard := 0
 	while guard < 100:
 		var work: Array[LevelAnim] = []
@@ -1419,6 +1822,7 @@ func _finish_anims_except(keep: LevelAnim) -> void:
 			_anims.erase(a)
 			a.finish()
 		guard += 1
+	_muted = false
 	_moves.clear()
 
 
@@ -1466,7 +1870,7 @@ func _timer_visible() -> bool:
 ## Plays an effect through the Audio autoload (looked up by name, so this script compiles
 ## whether or not the autoload exists yet, for example in a tool run with -s).
 func _sfx(effect: String, pitch: float = 1.0, volume_db: float = 0.0) -> void:
-	if _instant:
+	if _instant or _muted:
 		return
 	if _audio == null:
 		_audio = get_node_or_null("/root/Audio")
@@ -1548,6 +1952,16 @@ func debug_snapshot() -> Dictionary:
 		"over": _over,
 		"elapsed_ms": _clock.elapsed_ms(Time.get_ticks_msec()),
 		"clock_running": _clock.is_running(),
+		"paused": _paused,
+		"board_covered": _content != null and not _content.visible and not _board_view.visible,
+		"timer_shown": _hud.is_timer_shown(),
+		"pips": _hud.pips(),
+		"cup": _hud.is_cup_shown(),
+		"helpers": _hud.button_ids(),
+		"driver": _driver,
+		"banner": _hud.is_banner_shown(),
+		"highlight": _hud.get_highlight(),
+		"bank": _bank_shown_value,
 		"marks": _marks.active_count(),
 		"hint": _hint.is_showing(),
 		"hint_at": _layout.scene_to_gu(_hint.get_target()) if _hint.is_showing() else Vector2(-1000.0, -1000.0),

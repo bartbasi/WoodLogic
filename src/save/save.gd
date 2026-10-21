@@ -143,9 +143,13 @@ func next_level() -> int:
 	return _progress["next_level"]
 
 
-## The next level to play, kept by hand (tests, and screens that move the player on).
+## TESTS ONLY. Sets the next level by hand and raises highest_cleared to match, which opens
+## Daily, Relaxed and the unlocks without any level records. No screen may call this: levels
+## move on only through record_win.
 func set_next_level(n: int) -> void:
 	_progress["next_level"] = clampi(n, 1, MAX_LEVEL)
+	# Keep the rule that next_level is at most highest_cleared + 1.
+	_progress["highest_cleared"] = maxi(int(_progress["highest_cleared"]), int(_progress["next_level"]) - 1)
 	save_progress()
 	progress_changed.emit()
 
@@ -205,18 +209,205 @@ func record_win(level: LevelData, elapsed_ms: int, stars: Vector3i) -> int:
 		stats["cleared"] = mini(MAX_COUNT, int(stats["cleared"]) + 1)
 	if total == 3 and old_stars < 3:
 		stats["three_star"] = mini(MAX_COUNT, int(stats["three_star"]) + 1)
-	if GROUPS.has(level.group):
-		var time: Dictionary = stats["time"]
-		var g: Dictionary = time[level.group]
-		g["n"] = mini(MAX_COUNT, int(g["n"]) + 1)
-		g["total_ms"] = mini(MAX_TOTAL_MS, int(g["total_ms"]) + ms)
-		g["best_ms"] = ms if int(g["best_ms"]) <= 0 else mini(int(g["best_ms"]), ms)
+	_note_time(level.group, ms)
 	_progress["highest_cleared"] = maxi(int(_progress["highest_cleared"]), n)
 	if n >= int(_progress["next_level"]):
 		_progress["next_level"] = mini(n + 1, MAX_LEVEL)
 	save_progress()
 	progress_changed.emit()
 	return gain
+
+
+# helpers, stars spent, unlocks, the daily and Relaxed
+
+## Owned count of a helper ("undo", "extra_slot" or "screwdriver").
+func helper_count(helper: String) -> int:
+	var helpers: Dictionary = _progress["helpers"]
+	return int(helpers.get(helper, 0))
+
+
+func helper_counts() -> Dictionary:
+	return (_progress["helpers"] as Dictionary).duplicate()
+
+
+func add_helper(helper: String, count: int) -> void:
+	if not HELPERS.has(helper) or count <= 0:
+		return
+	var helpers: Dictionary = _progress["helpers"]
+	helpers[helper] = mini(MAX_HELPERS, int(helpers[helper]) + count)
+	_progress_changed()
+
+
+## Takes one helper from the count. False (and nothing changes) if none is owned.
+func take_helper(helper: String) -> bool:
+	if helper_count(helper) <= 0:
+		return false
+	var helpers: Dictionary = _progress["helpers"]
+	helpers[helper] = int(helpers[helper]) - 1
+	_progress_changed()
+	return true
+
+
+## Counts one helper use in the stats ("helpers used"), in every mode.
+func note_helper_used() -> void:
+	var stats: Dictionary = _progress["stats"]
+	stats["helpers_used"] = mini(MAX_COUNT, int(stats["helpers_used"]) + 1)
+	_progress_changed()
+
+
+func is_helper_met(helper: String) -> bool:
+	return (_progress["helpers_met"] as Array).has(helper)
+
+
+## The first-time explanation of a helper was shown: remember it and give its free ones.
+## Returns false if it was already met (nothing is given twice).
+func mark_helper_met(helper: String, free_count: int) -> bool:
+	if not HELPERS.has(helper) or is_helper_met(helper):
+		return false
+	(_progress["helpers_met"] as Array).append(helper)
+	var helpers: Dictionary = _progress["helpers"]
+	helpers[helper] = mini(MAX_HELPERS, int(helpers[helper]) + clampi(free_count, 0, MAX_HELPERS))
+	_progress_changed()
+	return true
+
+
+## Spends stars from the bank (never from stars_earned). False if the bank is short.
+func spend_stars(amount: int) -> bool:
+	if amount < 0 or amount > int(_progress["star_bank"]):
+		return false
+	_progress["star_bank"] = int(_progress["star_bank"]) - amount
+	_progress_changed()
+	return true
+
+
+## Remembers an unlocked theme. kind is "wood" or "metal". False if it was already there.
+func add_unlock(kind: String, id: String) -> bool:
+	if (kind != "wood" and kind != "metal") or not _is_id(id):
+		return false
+	var unlocked: Dictionary = _progress["unlocked"]
+	var list: Array = unlocked[kind]
+	if list.has(id) or list.size() >= 32:
+		return false
+	list.append(id)
+	_progress_changed()
+	return true
+
+
+func unlocked_ids(kind: String) -> PackedStringArray:
+	var out := PackedStringArray()
+	var unlocked: Dictionary = _progress["unlocked"]
+	for id: Variant in unlocked.get(kind, []):
+		out.append(str(id))
+	return out
+
+
+## The daily record: {"last_date", "streak", "best_streak", "solved", "days"} (a copy).
+func daily_record() -> Dictionary:
+	return (_progress["daily"] as Dictionary).duplicate(true)
+
+
+## True if the daily of this date ("YYYY-MM-DD") has been solved.
+func daily_done(date: String) -> bool:
+	var days: Dictionary = (_progress["daily"] as Dictionary)["days"]
+	return days.has(date)
+
+
+## Records a solved daily (GDD 6.6). Stars add only above that day's best (S5). The streak
+## counts only if the date is later than the last counted date: one more if that was the day
+## before, otherwise 1. Returns {"gain": stars added, "streak": the current streak,
+## "counted": whether the streak moved}.
+func record_daily(date: String, elapsed_ms: int, stars: Vector3i, group: String = "medium") -> Dictionary:
+	var out := {"gain": 0, "streak": int((_progress["daily"] as Dictionary)["streak"]), "counted": false}
+	if not _is_date(date):
+		return out
+	var daily: Dictionary = _progress["daily"]
+	var days: Dictionary = daily["days"]
+	var total := clampi(stars.x + stars.y + stars.z, 0, 3)
+	var ms := clampi(elapsed_ms, 1, MAX_MS)
+	var old: Dictionary = days.get(date, {"stars": 0, "best_ms": 0})
+	var gain := maxi(0, total - int(old["stars"]))
+	var best := int(old["best_ms"])
+	days[date] = {"stars": maxi(total, int(old["stars"])), "best_ms": ms if best <= 0 else mini(best, ms)}
+	while days.size() > MAX_DAYS:
+		var oldest := ""
+		for key: Variant in days:
+			if oldest == "" or str(key) < oldest:
+				oldest = str(key)
+		days.erase(oldest)
+	var last := str(daily["last_date"])
+	if last == "" or date > last:
+		var streak := 1
+		if last != "" and _day_gap(last, date) == 1:
+			streak = mini(MAX_COUNT, int(daily["streak"]) + 1)
+		daily["streak"] = streak
+		daily["best_streak"] = maxi(int(daily["best_streak"]), streak)
+		daily["solved"] = mini(MAX_COUNT, int(daily["solved"]) + 1)
+		daily["last_date"] = date
+		out["counted"] = true
+	out["streak"] = int(daily["streak"])
+	out["gain"] = gain
+	_progress["star_bank"] = mini(MAX_COUNT, int(_progress["star_bank"]) + gain)
+	_progress["stars_earned"] = mini(MAX_COUNT, int(_progress["stars_earned"]) + gain)
+	_note_time(group, ms)
+	save_progress()
+	progress_changed.emit()
+	return out
+
+
+## Whole days from date a to date b (both "YYYY-MM-DD").
+func _day_gap(a: String, b: String) -> int:
+	return Seeds.day_number(int(b.substr(0, 4)), int(b.substr(5, 2)), int(b.substr(8, 2))) - Seeds.day_number(int(a.substr(0, 4)), int(a.substr(5, 2)), int(a.substr(8, 2)))
+
+
+## The stream index of the next Relaxed level of a band ("easy", "medium" or "hard").
+func relaxed_next(band: String) -> int:
+	var next: Dictionary = (_progress["relaxed"] as Dictionary)["next"]
+	return int(next.get(band, 0))
+
+
+## The band last played, or "" if none yet.
+func relaxed_last_band() -> String:
+	return str((_progress["relaxed"] as Dictionary)["last_band"])
+
+
+## A Relaxed level of this band was cleared: its stream moves on and the band is remembered.
+## Relaxed does not touch the level count or the stats beyond helpers used.
+func record_relaxed(band: String) -> void:
+	if not BANDS.has(band):
+		return
+	var relaxed: Dictionary = _progress["relaxed"]
+	var next: Dictionary = relaxed["next"]
+	next[band] = mini(MAX_COUNT, int(next[band]) + 1)
+	relaxed["last_band"] = band
+	_progress_changed()
+
+
+## Erases the progress (levels, stars, helpers, streaks, stats, unlocks and the saved next
+## level). The settings stay as they are (UX 3.8). The files are rewritten at once.
+func reset_progress() -> void:
+	_progress = default_progress()
+	clear_next_level()
+	var bad := _path(PROGRESS_FILE + ".bad")
+	if FileAccess.file_exists(bad):
+		DirAccess.remove_absolute(bad)
+	save_progress()
+	progress_changed.emit()
+
+
+func _progress_changed() -> void:
+	save_progress()
+	progress_changed.emit()
+
+
+func _note_time(group: String, ms: int) -> void:
+	if not GROUPS.has(group):
+		return
+	var stats: Dictionary = _progress["stats"]
+	var time: Dictionary = stats["time"]
+	var g: Dictionary = time[group]
+	g["n"] = mini(MAX_COUNT, int(g["n"]) + 1)
+	g["total_ms"] = mini(MAX_TOTAL_MS, int(g["total_ms"]) + ms)
+	g["best_ms"] = ms if int(g["best_ms"]) <= 0 else mini(int(g["best_ms"]), ms)
 
 
 # settings
@@ -476,6 +667,9 @@ func _clean_progress(raw: Dictionary) -> Dictionary:
 		_whole(raw["format"], 0, 1_000_000, FORMAT, "format")
 	out["next_level"] = _whole_in(raw, "next_level", 1, MAX_LEVEL, 1, "progress")
 	out["highest_cleared"] = _whole_in(raw, "highest_cleared", 0, MAX_LEVEL, 0, "progress")
+	# The next level can never be past the one after the highest cleared, so a hand edited
+	# file can not skip the game ahead.
+	out["next_level"] = clampi(int(out["next_level"]), 1, mini(MAX_LEVEL, int(out["highest_cleared"]) + 1))
 	out["star_bank"] = _whole_in(raw, "star_bank", 0, MAX_COUNT, 0, "progress")
 	out["stars_earned"] = _whole_in(raw, "stars_earned", 0, MAX_COUNT, 0, "progress")
 	out["levels"] = _clean_levels(_dict_in(raw, "levels", "progress"))

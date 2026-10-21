@@ -41,7 +41,13 @@ func _run() -> void:
 	# One mid flight frame and one mid swing frame, on the phone size.
 	await _shoot_flight(g)
 	await _shoot_swing()
-	await _shoot_hang()
+	await _shoot_hang(Vector2i(360, 640))
+	await _shoot_hang(Vector2i(533, 640))
+	await _shoot_intro()
+	await _shoot_helpers(Vector2i(360, 640))
+	await _shoot_helpers(Vector2i(533, 640))
+	await _shoot_helpers(Vector2i(360, 922))
+	await _shoot_helpers(Vector2i(412, 915))
 	await _shoot_hand()
 	await _shoot_cascade()
 	print("done")
@@ -92,7 +98,7 @@ func _shoot_size(entry: Array, g: GeneratedLevel) -> void:
 	for i: int in 4:
 		scene.tap_screw(g.solve.solution[i])
 	scene.set_instant(false)
-	await create_timer(0.4).timeout
+	await create_timer(0.6).timeout
 	var l: LevelLayout = scene.get_layout()
 	print("%s: units %s, split %s, b %.2f, f %.2f" % [entry[0], str(_units(entry[1])), str(l.split), l.b, l.f])
 	await _save(vp, "%s.png" % entry[0])
@@ -206,17 +212,62 @@ func _shoot_tiers() -> void:
 		await process_frame
 
 
-## A bar hanging far below the board: it is cut off at the board panel (GDD V1).
-func _shoot_hang() -> void:
+## A bar hanging far below the board, cut off at the board panel (GDD V1), and then the same bar
+## falling.
+func _shoot_hang(pixels: Vector2i) -> void:
 	var levels: GDScript = load("res://tests/level/levels.gd")
 	var level: LevelData = levels.hang_level()
+	var made := _scene_in(pixels, 0.0)
+	var vp: SubViewport = made[0]
+	var scene: Variant = made[1]
+	scene.play(level, false)
+	await create_timer(0.6).timeout
+	scene.tap_screw(0)
+	await create_timer(1.2).timeout
+	await _save(vp, "hang-clipped-%dx%d.png" % [pixels.x, pixels.y])
+	scene.tap_screw(1)
+	await create_timer(0.38).timeout
+	await _save(vp, "fall-%dx%d.png" % [pixels.x, pixels.y])
+	vp.queue_free()
+	await process_frame
+
+
+## The first moments of a level: planks drop in and fade (modulate on the real views).
+func _shoot_intro() -> void:
+	var g := LevelCatalog.get_level(LevelData.NUMBERED, 40, "")
 	var made := _scene_in(Vector2i(360, 640), 0.0)
 	var vp: SubViewport = made[0]
 	var scene: Variant = made[1]
+	scene.play(g.level, false)
+	await create_timer(0.12).timeout
+	await _save(vp, "intro-360x640.png")
+	vp.queue_free()
+	await process_frame
+
+
+## The Phase 4 level screen: the top bar with the cup, timer, pips and star bank, the helper row
+## with counts and a price, the first-time ring, and the Screwdriver banner.
+func _shoot_helpers(pixels: Vector2i) -> void:
+	var g := LevelCatalog.get_level(LevelData.NUMBERED, 40, "")
+	var made := _scene_in(pixels, 0.0)
+	var vp: SubViewport = made[0]
+	var scene: Variant = made[1]
 	scene.set_instant(true)
-	scene.play(level, false)
-	scene.tap_screw(0)
-	await create_timer(0.3).timeout
-	await _save(vp, "hang-clipped-360x640.png")
+	scene.play(g.level, false)
+	scene.set_coffee(true)
+	scene.set_star_bank(12)
+	scene.set_helpers({"undo": 2, "extra_slot": 0, "screwdriver": 1}, PackedStringArray(["undo", "extra_slot", "screwdriver"]))
+	for i: int in 4:
+		scene.tap_screw(g.solve.solution[i])
+	scene.use_helper("undo")
+	scene.set_instant(false)
+	await create_timer(0.4).timeout
+	await _save(vp, "helpers-%dx%d.png" % [pixels.x, pixels.y])
+	scene.highlight_helper("screwdriver")
+	await create_timer(0.1).timeout
+	await _save(vp, "helpers-highlight-%dx%d.png" % [pixels.x, pixels.y])
+	scene.use_helper("screwdriver")
+	await create_timer(0.4).timeout
+	await _save(vp, "screwdriver-%dx%d.png" % [pixels.x, pixels.y])
 	vp.queue_free()
 	await process_frame

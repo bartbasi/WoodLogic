@@ -9,6 +9,8 @@ set -uo pipefail
 
 GODOT="${GODOT:-/c/Tools/Godot/Godot_v4.7.2-stable_win64_console.exe}"
 cd "$(dirname "$0")/.."
+# build/ holds screenshots and reports; .gdignore keeps Godot from importing them.
+mkdir -p build && touch build/.gdignore
 
 import_log="$("$GODOT" --headless --path . --import 2>&1)"
 if [ $? -ne 0 ] || grep -q "ERROR" <<<"$import_log"; then

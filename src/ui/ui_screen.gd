@@ -24,6 +24,8 @@ var _wide: Array[Control] = []
 func _init() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_STOP
+	# Belt and braces with the app flow's canvas layer: above any z inside a level scene.
+	z_index = 1000
 	background.color = UiTheme.PEGBOARD
 	background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	background.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -127,6 +129,24 @@ func row(a: Button, b: Button) -> HBoxContainer:
 		h.add_child(button)
 	wide(h)
 	return h
+
+
+## One effect through the Audio autoload, found by node so a script run with -s still loads
+## this class. Does nothing if there is no Audio (or sound is off: Audio decides).
+func play_sound(effect: String, pitch: float = 1.0, volume_db: float = 0.0) -> void:
+	var audio := get_node_or_null("/root/Audio")
+	if audio != null:
+		audio.call("play", effect, pitch, volume_db)
+
+
+## Nudges a control 4 units sideways twice (200 ms): a locked thing was tapped.
+static func shake(c: Control) -> void:
+	var x := c.position.x
+	var t := c.create_tween()
+	t.tween_property(c, "position:x", x + 4.0, 0.05)
+	t.tween_property(c, "position:x", x - 4.0, 0.05)
+	t.tween_property(c, "position:x", x + 4.0, 0.05)
+	t.tween_property(c, "position:x", x, 0.05)
 
 
 ## The button with this label, or null. For tests.

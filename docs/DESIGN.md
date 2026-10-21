@@ -136,6 +136,8 @@ A covered screw shows faintly through the plank in front of it (docs/UX.md 3.2.2
   blue and purple);
 - a dashed ring at the head's radius: 12 dashes, 55 percent on, 1.6 units wide, #2a1708 at 70
   percent;
+- on dark woods (ebony) the symbol ink and the dashed ring are light (the cap color lightened
+  60 percent, and cream), so they still show through;
 - when the covering plank leaves, the ghost becomes the real head over 150 ms (opacity and
   shading together, no flash);
 - in Screwdriver mode every ghost shows its symbol at full strength (docs/UX.md 3.2.3).
@@ -169,8 +171,8 @@ never change with the finish.
 | Finish | Rim light | Rim dark | Cap gloss | Notes |
 |-|-|-|-|-|
 | **Steel** (default) | #f4f1ea | #4c463e | 0.55, highlight power 26 | polished, neutral |
-| Brass | #f6dc93 | #6e5016 | 0.5, power 22 | warm; matches the brass controls |
-| Copper | #f3b48a | #6a3218 | 0.5, power 22 | check against orange and red caps |
+| Brass | #f6dc93 | #3d2c0b | 0.5, power 22 | warm; matches the brass controls |
+| Copper | #f3b48a | #3f1a0b | 0.5, power 22 | check against orange and red caps |
 | Black | #9a9aa0 | #1c1c1f | 0.35, power 14 | black oxide, satin; the recess floor on dark caps stays light grey #c8c8cc so the symbol still reads |
 
 ## 7. Light, bevels and edges
@@ -200,9 +202,12 @@ never change with the finish.
 
 - Every plank casts a soft shadow on everything behind it, in `shadow`, offset (5, 8) units,
   blur 6, opacity 55 percent.
-- The offset grows by 40 percent per layer in front of the back layer: layer 0 (5, 8), layer 1
-  (7, 11.2), layer 2 (9, 14.4), and so on. Front planks look higher, and a front plank's shadow
-  falls on the planks below it.
+- Layer 0 is the front and layer 4 the back (GDD). The offset grows by 25 percent for each layer
+  nearer the front: layer 4 (5, 8), layer 3 (6.25, 10), and so on to layer 0 (10, 16). Front planks
+  look higher, and a front plank's shadow falls on the planks below it.
+- Each layer further back is also 3.5 percent darker (layer 4 by 14 percent), as if less light
+  reached it. Planks are one wood per board, so this is what parts two overlapping planks besides
+  the edge and the shadow.
 - The back board casts its shadow on the pegboard: offset (4, 12), blur 16, opacity 70 percent.
 - A screw's contact shadow is part of its head (section 3.1). While a screw lifts out, its shadow
   moves further down right and softens (offset up to twice, blur up to three times), so height
@@ -240,63 +245,67 @@ nothing loops faster than one cycle per 1.2 seconds. The star pop changes scale,
 ## 10. Performance plan
 
 Target: 60 fps on a mid-range Android phone with the Mobile renderer, with a frame under 13 ms so
-there is room to spare. Measured on Bart's phone in Phase 3 and 4 with Godot's monitors (frame
-time, draw calls).
+there is room to spare. Measured on Bart's phone at Gate 2 with Godot's monitors (frame time,
+draw calls); the numbers below are from this PC (Phase 4).
 
-- **Still planks are drawn to a texture once per level.** When a level loads, each plank's face,
-  grain, bevel and holes are rendered once by the wood shader into a texture (in plank space,
-  at the device's pixel scale, at most 1024 pixels on a side), and so is a blurred silhouette of
-  it. Each frame a plank is then three cheap passes: its shadow (the silhouette, offset in screen
-  space), its edge (the face texture's alpha sampled 4 times along the screen down direction, so
-  the edge stays at the bottom when a plank swings) and its face. About 6 texture samples a
-  pixel instead of about 300 operations.
-- **The back board and pegboard are one texture** made at level load, because they never move.
+- **Still planks are drawn to textures once per level** (`PlankView.bake()`). The bake shader
+  works from the logic's outline polygon (simplified to within 0.3 units, at most 128 points, and
+  a ring's hole at most 64) in one loop that gives the signed distance and the outward direction,
+  and writes two textures at the device's pixel scale (at most 3 texels a unit and 1024 a side):
+  the face (grain and coverage) and the shape (bevel slope, rim line, shadow silhouette). Each
+  frame a plank is then one quad with seven texture samples a pixel: shadow, four for the edge
+  along the screen down direction (so a swinging plank keeps its edge at the bottom), face and
+  shape, and a few dozen operations for the light. The full grain and shape work runs only in the
+  bake.
+- **The back board panels bake the same way**; the pegboard is one light full screen pass.
 - **Screws stay live** in their shader: small quads, cheap, and they need to turn.
+- **Fading with `modulate` works on every view**: the plank and screw shaders multiply by the
+  node's modulate, and cached views lay down their texture premultiplied with modulate applied
+  to color and alpha (checked on the Mobile renderer).
+- **Boxes, the tray and map nodes are cached** (`CachedDrawing`): they draw live while they change
+  and, two frames after they settle, draw once into a small texture and become one textured rect.
+  Godot 4 gives every polygon, circle and panel its own draw call, so this took the box row and
+  tray from about 170 draw calls to 6.
+- **Measured** (a generated level with 10 planks, 15 screws, two boxes, two previews and the tray,
+  at 1080 x 2400): 34 draw calls for the board, boxes and tray together, about 1.4 ms a frame on
+  this PC. The level's own top bar and helper bar are on top of that; my stand-ins for them cost
+  55 more, so the level scene should cache its bars too.
 - **Budgets for the level screen:** at most 120 draw calls; at most 2.5 screens' worth of shaded
   fragments a frame (about 6.5 million at 1080 x 2400), each at most about 10 texture samples or
-  60 operations. The full wood shader runs only at load time, never per frame.
-- **Load time:** baking the planks of a level must take under 30 ms on the phone; it happens while
-  the previous level's clear is on screen, so the player never waits.
+  60 operations.
+- **Load time:** each plank's bake is two small render passes in one frame; the level scene bakes
+  while the board is hidden (behind the clear screen or before the first frame). To be measured
+  on the phone; the target is under 30 ms of GPU time for a level.
 - If a phone still misses the budget, the first step down is 2 edge samples instead of 4; the
   look doesn't change at phone distance.
 
-## 11. What Phase 4 needs from the renderers
+## 11. The renderers (built in Phase 4)
 
-Built in `src/render/` against docs/ARCHITECTURE.md section 7, with tests in tests/render/. The
-Phase 1 mock-ups draw a fixed set of shapes; the real renderers work from the logic's outline
-polygons instead (`PlankData.outline()` and `inner_outline()`, arcs already flattened), so the
-picture and the rules always use the same shape.
+In `src/render/`, against docs/ARCHITECTURE.md sections 7 and 11.1, with tests in tests/render/.
+They draw from plain values and the logic's own outline polygons (`PlankData.outline()` and
+`inner_outline()`), so the picture and the rules always use the same shape. They read the look
+only from `Looks.current`; a change of wood, metal or symbols is a rebuild (setup and bake again).
 
-1. **`Palette`:** the nine colors and symbols of section 3.2, in that index order, with their
-   names and their symbol drawing data.
-2. **`Looks`:** `wood(id)` and `metal(id)` returning the shader parameters of sections 5 and 6,
-   `WOODS` (oak, walnut, maple, cherry, ebony, and birch if the GDD adds it) and `METALS`
-   (steel, brass, copper, black). Renderers read the choice and the symbols setting from `Save`
-   and redraw on `settings_changed`.
-3. **`PlankView`:** from an outline, inner outline, layer, holes and grain seed: bake the face
-   once (distance to the outline polygon, at load time only), then draw the shadow, edge and
-   face passes of section 10 every frame. The parent places and rotates it for the swing and
-   the fall. It also plays the covered tap wiggle.
-4. **`ScrewView`:** color, `set_covered` (the ghost of section 4, with the 150 ms change back),
-   `set_turn` (the recess and the light on it turn), the symbols setting, and its three sizes
-   (board, box well, tray).
-5. **`BoxView`:** color and symbol, `set_count`, `close()` playing the lid of section 9; the
-   preview look for boxes in the queue.
-6. **`TrayView`:** five or six slots, the one-free-slot warning and the full state.
-7. **`BoardView`:** the back board (theme dependent) on the pegboard, baked once per level.
-8. **Effects:** the level clear pieces (veil, stars, shavings, motes) as timed parts the clear
-   screen can play and skip.
-9. **`Icons`:** star (earned and missed), pause, undo, extra slot, screwdriver, cup, chevron,
-   arrow, warning triangle, stopwatch and the tray pip, plus the ones still to draw: the tutorial
-   hand, padlock, check mark, speaker and note (with crossed out forms).
-10. **The app icon**, drawn in code and exported to PNG files in icons/ by a tool script.
-11. **The check script:** every pair of screw colors under the three simulations, rule 3.4 for
-    every cap, finish and wood, plank against board per theme, symbols at 16 units on a 28 unit
-    head, every text pair at 4.5:1 and every meaningful mark at 3:1.
-12. **Tokens for the Godot Theme** (section 2), for the ui-dev, who owns the Theme.
+| Class | What it is |
+|-|-|
+| `Palette` | the nine colors and symbols of 3.2 in index order, symbol outlines, ink, contrast |
+| `Looks` | `wood(id)`, `metal(id)`, `WOODS`, `METALS`, `current` (sections 5 and 6) |
+| `Tokens` | the colors of section 2 and the type sizes of docs/UX.md 1.3, and the pairs the contrast check covers |
+| `Icons` | every icon in one color: `Icons.draw(ci, name, center, size, color)`, `Icons.NAMES` |
+| `PlankView` | a plank: setup from the outline, `bake()`, `wiggle()`; a plain stand-in until baked |
+| `ScrewView` | a head in three sizes (28, 24, 32): `set_covered` (the ghost, 150 ms fade), `set_turn`, `set_lift` |
+| `BoxView` | an open box or a preview: `set_count`, `set_lid`, `close()` (section 7's look, UX 3.2.2's layout) |
+| `TrayView` | the steel tray: `set_filled`, `set_warning`, `set_full` |
+| `BoardView` | the pegboard and the theme's back board panels (one, or the board panel and the rail) |
+| `ClearEffects` | the level clear: veil, popping stars, shavings and motes; `play()`, `skip()`, `finished` |
+| `MapNodeView`, `MapTrail` | the progress map's nodes (cleared, hard, next, locked) and the path between them |
+| `CachedDrawing` | the base that turns a still view into one textured rect (section 10) |
+| `Paint`, `WoodNoise`, `RenderFonts` | small shared helpers |
 
-Additions I'll ask the lead to make to ARCHITECTURE.md section 7: a lift amount on `ScrewView`
-(0 at rest, 1 fully out, for the unscrew and flight shadow), a lid angle or an `open()` on
-`BoxView` for the next box, a `wiggle()` on `PlankView`, a warning state on `TrayView`, and a
-`bake()` step (or baking inside `setup`) so the level scene can bake while the clear screen
-shows.
+The shaders are in `src/render/shaders/`: `plank_bake`, `plank`, `wood_grain` (included by the
+bake), `screw` and `pegboard`.
+
+Tools in tools/art/: `capture.gd` (any scene to a PNG at phone size), `app_icon.gd` (writes the
+launcher, store and adaptive icon layers into icons/), and review sheets in tools/art/sheets/
+(the board on a real generated level, every part, every icon). The check script is
+tests/render/test_colors.gd: `bash tools/test.sh test_colors` prints its numbers.

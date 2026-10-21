@@ -75,3 +75,33 @@ func test_touch_targets_scale_with_the_board() -> void:
 		var edge := center + Vector2(LevelHit.RADIUS_GU, 0.0)
 		var px := l.gu_to_scene(edge).distance_to(l.gu_to_scene(center))
 		check_between(px, 24.0 * l.b, 24.0 * l.b, "target radius in units at b %.2f" % l.b)
+
+
+func test_the_top_bar_items_never_overlap_at_any_height_or_width() -> void:
+	# UX 3.2.2: cup, label, timer and pips, star bank and pause, with and without the cup, on
+	# every phone height and widths up to 480 (QA finding F7: the bank hid under Pause).
+	var sizes: Array[Vector2] = []
+	for height: float in [640.0, 700.0, 720.0, 780.0, 799.0, 860.0, 922.0, 1000.0]:
+		for width: float in [360.0, 400.0, 440.0, 480.0]:
+			sizes.append(Vector2(width, height))
+	for size: Vector2 in sizes:
+		for dpu: float in [1.0, 1.6]:
+			for cup: bool in [true, false]:
+				var layout := _layout(size.x, size.y, dpu)
+				var hud := LevelHud.new()
+				hud.configure(layout, "Level 1000", true, "")
+				hud.set_cup(cup)
+				hud.set_star_bank(true, 1280)
+				var items := hud.top_items()
+				var parts: Array[Array] = [["label", items["label"]], ["timer", items["timer"]], ["bank", items["bank"]], ["pause", hud.pause_target()]]
+				if cup:
+					parts.append(["cup", hud.cup_target()])
+				var bar := layout.top_bar
+				for i: int in parts.size():
+					var a: Rect2 = parts[i][1]
+					check(a.position.x >= bar.position.x - 0.01 and a.end.x <= bar.end.x + 0.01, "%s %s at dpu %.1f cup %s is inside the bar" % [parts[i][0], str(size), dpu, str(cup)])
+					for j: int in range(i + 1, parts.size()):
+						var b: Rect2 = parts[j][1]
+						var o := a.intersection(b)
+						check(o.size.x <= 0.01 or o.size.y <= 0.01, "%s and %s overlap at %s dpu %.1f cup %s" % [parts[i][0], parts[j][0], str(size), dpu, str(cup)])
+				hud.free()

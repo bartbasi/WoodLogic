@@ -8,30 +8,30 @@ extends RefCounted
 ## DisplayLabel, HeadingLabel, BodyLabel, SmallLabel, CaptionLabel, and the panels Plaque
 ## and Sheet.
 
-const PEGBOARD := Color("7a5a3d")
-const PLAQUE := Color(0.172, 0.114, 0.075, 0.94)
-const PLAQUE_BORDER := Color(0.847, 0.643, 0.271, 0.55)
-const TEXT := Color("f7ead4")
-const TEXT_DIM := Color("e8d6b8")
-const TEXT_GOLD := Color("f3c766")
-const PRIMARY := Color("d8a445")
-const PRIMARY_LIP := Color("8a6420")
-const PRIMARY_TEXT := Color("2a1708")
-const SECONDARY := Color("4b3121")
-const SECONDARY_LIP := Color("24160d")
-const QUIET_LINE := Color(0.847, 0.643, 0.271, 0.6)
-const DANGER := Color("8e2a1c")
-const DANGER_LIP := Color("4f160e")
-const FOCUS := Color("f7ead4")
-const VEIL := Color(0.078, 0.051, 0.031, 0.62)
+const PEGBOARD := Tokens.PEGBOARD
+const PLAQUE := Tokens.PLAQUE
+const PLAQUE_BORDER := Tokens.PLAQUE_BORDER
+const TEXT := Tokens.TEXT
+const TEXT_DIM := Tokens.TEXT_DIM
+const TEXT_GOLD := Tokens.TEXT_GOLD
+const PRIMARY := Tokens.PRIMARY
+const PRIMARY_LIP := Tokens.PRIMARY_LIP
+const PRIMARY_TEXT := Tokens.PRIMARY_TEXT
+const SECONDARY := Tokens.SECONDARY
+const SECONDARY_LIP := Tokens.SECONDARY_LIP
+const QUIET_LINE := Tokens.QUIET_LINE
+const DANGER := Tokens.DANGER
+const DANGER_LIP := Tokens.DANGER_LIP
+const FOCUS := Tokens.FOCUS
+const VEIL := Tokens.VEIL
 
-const SIZE_DISPLAY := 32
-const SIZE_HEADING := 24
-const SIZE_BUTTON_PRIMARY := 22
-const SIZE_BUTTON := 18
-const SIZE_BODY := 16
-const SIZE_SMALL := 14
-const SIZE_CAPTION := 13
+const SIZE_DISPLAY := Tokens.SIZE_DISPLAY
+const SIZE_HEADING := Tokens.SIZE_HEADING
+const SIZE_BUTTON_PRIMARY := Tokens.SIZE_BUTTON_PRIMARY
+const SIZE_BUTTON := Tokens.SIZE_BUTTON
+const SIZE_BODY := Tokens.SIZE_BODY
+const SIZE_SMALL := Tokens.SIZE_SMALL
+const SIZE_CAPTION := Tokens.SIZE_CAPTION
 
 ## The default font made heavier. (A new one each time: nothing static holds a resource, so
 ## nothing is still in use when the game quits.)
@@ -51,6 +51,7 @@ static func build() -> Theme:
 	t.set_font_size("font_size", "Label", SIZE_BODY)
 	_label_variation(t, "DisplayLabel", SIZE_DISPLAY, TEXT, true)
 	_label_variation(t, "HeadingLabel", SIZE_HEADING, TEXT, true)
+	_label_variation(t, "ButtonLabel", SIZE_BUTTON, TEXT, true)
 	_label_variation(t, "BodyLabel", SIZE_BODY, TEXT, false)
 	_label_variation(t, "SmallLabel", SIZE_SMALL, TEXT_DIM, false)
 	_label_variation(t, "CaptionLabel", SIZE_CAPTION, TEXT_DIM, false)
@@ -68,6 +69,13 @@ static func build() -> Theme:
 	_button_variation(t, "PrimaryButton", PRIMARY, PRIMARY_LIP, PRIMARY_TEXT, SIZE_BUTTON_PRIMARY)
 	_button_variation(t, "DangerButton", DANGER, DANGER_LIP, TEXT, SIZE_BUTTON)
 	_button_variation(t, "QuietButton", Color(0, 0, 0, 0), Color(0, 0, 0, 0), TEXT, SIZE_BUTTON)
+	# Flat buttons draw themselves (dock tabs, the coffee chip): nothing but a focus ring.
+	t.set_type_variation("FlatButton", "Button")
+	for state: String in ["normal", "hover", "pressed", "disabled"]:
+		var none := StyleBoxFlat.new()
+		none.bg_color = Color(0, 0, 0, 0)
+		t.set_stylebox(state, "FlatButton", none)
+	t.set_stylebox("focus", "FlatButton", focus_box())
 	var quiet := quiet_boxes()
 	for state: String in ["normal", "hover", "pressed", "disabled"]:
 		t.set_stylebox(state, "QuietButton", quiet[state])
@@ -104,6 +112,26 @@ static func quiet_boxes() -> Dictionary:
 		s.set_content_margin_all(8)
 		out[state] = s
 	return out
+
+
+## The small quiet outline behind the coffee chip and the star bank.
+static func chip_box(pressed: bool = false) -> StyleBoxFlat:
+	var s := StyleBoxFlat.new()
+	s.bg_color = Color(0.172, 0.114, 0.075, 0.94 if pressed else 0.6)
+	s.set_corner_radius_all(16)
+	s.set_border_width_all(1)
+	s.border_color = QUIET_LINE
+	return s
+
+
+## The raised plaque behind the active dock tab.
+static func raised_box() -> StyleBoxFlat:
+	var s := StyleBoxFlat.new()
+	s.bg_color = SECONDARY
+	s.set_corner_radius_all(8)
+	s.border_width_bottom = 3
+	s.border_color = SECONDARY_LIP
+	return s
 
 
 static func focus_box() -> StyleBoxFlat:

@@ -338,3 +338,17 @@ func test_good_fields_survive_a_file_with_one_bad_field() -> void:
 	check_eq(again.next_level(), 9, "next_level survives")
 	check_eq(again.highest_cleared(), 8, "highest_cleared survives")
 	check(again.problems.is_empty(), "the rewritten file is clean: " + str(again.problems))
+
+
+func test_next_level_is_clamped_to_one_past_the_highest_cleared() -> void:
+	var s := _new_save("clamp")
+	_write(s, "progress.json", JSON.stringify({"next_level": 500, "highest_cleared": 0}))
+	s.load_all()
+	check_eq(s.next_level(), 1, "a hand edited file does not skip the game")
+	_write(s, "progress.json", JSON.stringify({"next_level": 9, "highest_cleared": 8}))
+	s.load_all()
+	check_eq(s.next_level(), 9, "a real save is untouched")
+	_write(s, "progress.json", JSON.stringify({"next_level": 3, "highest_cleared": 20}))
+	s.load_all()
+	check_eq(s.next_level(), 3, "going back is fine: Play always goes where it was")
+	check(s.problems.is_empty(), "no .bad for it")

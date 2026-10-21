@@ -19,8 +19,8 @@ The "boxes" shot is a sheet: the real box row and tray at the top, then all nine
 colors with their symbols at large size, an open box and a preview box at twice size, and a
 free screw beside a covered one.
 
-To look at one live: `C:/Tools/Godot/Godot_v4.7.2-stable_win64.exe --path . res://src/directions/workshop/board.tscn`
-(any direction, any of board, boxes, clear, title).
+The scenes themselves (src/directions/) were removed at the end of Phase 4, once Bart had chosen
+Workshop and the real renderers in src/render/ replaced them; these screenshots are the record.
 
 ## What all three share
 

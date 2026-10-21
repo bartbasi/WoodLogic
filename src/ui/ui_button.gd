@@ -21,7 +21,7 @@ var _note: Label
 ## label: the button's words. note: an optional second, smaller line. height: 0 picks the
 ## usual one for the kind (72 primary, 52 other).
 static func make(label: String, kind_value: int = Kind.SECONDARY, note: String = "", height: float = 0.0) -> UiButton:
-	var b := UiButton.new()
+	var b := new()
 	b.kind = kind_value
 	b.label_text = label
 	b.note_text = note
@@ -44,6 +44,17 @@ func _ready() -> void:
 	button_down.connect(_on_down)
 	button_up.connect(_on_up)
 	_update_pivot()
+
+
+## Room on the left for an icon: the label is centered in what is left.
+func pad_left(px: float) -> void:
+	var fills := {"normal": 0.0, "hover": 0.0, "pressed": 0.25, "disabled": 0.35}
+	var base: Color = [UiTheme.PRIMARY, UiTheme.SECONDARY, UiTheme.SECONDARY, UiTheme.DANGER][kind]
+	var lip: Color = [UiTheme.PRIMARY_LIP, UiTheme.SECONDARY_LIP, UiTheme.SECONDARY_LIP, UiTheme.DANGER_LIP][kind]
+	for state: String in fills:
+		var box := UiTheme.button_box(base, lip, fills[state])
+		box.content_margin_left = px
+		add_theme_stylebox_override(state, box)
 
 
 func set_label(label: String) -> void:
@@ -78,6 +89,8 @@ func _build_two_lines() -> void:
 	_note = Label.new()
 	_note.text = note_text
 	_note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	# A long note wraps inside the button instead of running past its edges.
+	_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_note.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_note.add_theme_font_size_override("font_size", UiTheme.SIZE_SMALL)
 	_note.add_theme_color_override("font_color", ink)

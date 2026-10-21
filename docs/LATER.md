@@ -80,3 +80,38 @@ Level generator (level-engine-dev):
   latest, so G9b measures the level rather than the search order.
 - One solver setup shared by the novice playout and the search.
 - On slow phones, let the prefetcher look two levels ahead before hard levels.
+
+## From Phase 4 (21 October 2026)
+
+Screens (ui-dev):
+
+- Animate the picture on the first-time helper sheet (UX 3.13.1 describes a small animation).
+- Remember the map's scroll position within a session.
+- A long press on a cleared map node shows its best time.
+- The time on the level clear screen for replays.
+- Screen reader names for the dock tabs.
+
+Build (platform-dev):
+
+- A build script check that the manifest declares the Vulkan feature.
+- A one-off look at the game under the Compatibility renderer (`--rendering-method
+  gl_compatibility`), for the rare phone without Vulkan.
+
+Level scene (gameplay-dev):
+
+- The Screwdriver icon touches the screw for the full 100 ms before the flight.
+- Keep the first-time helper highlight until the helper is first used.
+- A small shaving or dust puff when a plank falls.
+- An optional bars panel on `BoardView` in the stacked layout, so the boxes row and the tray sit
+  on the bench as the rail does.
+
+Sound (audio-dev):
+
+- Music that changes slowly, such as a different key per world.
+- A quiet music duck while a chime plays, and a real fade out instead of an instant stop.
+
+QA (qa-tester):
+
+- A screenshot gate script at 360 x 800, 412 x 915 and 360 x 922 before each playtest gate.
+- A bot that retries and buys helpers, so the Hard and Expert star economy can be measured.
+- `tests/bots/acceptance.gd` as the per-tier report in tools/levels.

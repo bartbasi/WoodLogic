@@ -63,7 +63,7 @@ build_android() {
 	echo "Files in the APK under assets/ :"
 	echo "$listing" | grep " assets/" | awk '{print "  " $4}' | head -n 20
 	echo "res://data files inside the APK: $(echo "$listing" | grep -c ' assets/data/.*.json') json files (assets/data/...)"
-	echo "Excluded folders found inside (should be 0): $(echo "$listing" | grep -v golden_levels | grep -cE ' assets/(src/directions|tests|tools|docs|build)/' || true)"
+	echo "Excluded folders found inside (should be 0): $(echo "$listing" | grep -v golden_levels | grep -cE ' assets/(tests|tools|docs|build)/' || true)"
 	return 0
 }
 

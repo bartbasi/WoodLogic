@@ -393,7 +393,7 @@ func test_a_level_that_finishes_on_the_title_is_kept_for_play() -> void:
 	flow.screen.find_button("Play").pressed.emit()
 	flow.notification(Node.NOTIFICATION_WM_GO_BACK_REQUEST)
 	check_eq(flow.state, AppFlow.State.TITLE, "back on the title")
-	var arrived := await _until(func() -> bool: return flow.call("_known", 150) != null)
+	var arrived := await _until(func() -> bool: return flow.call("_known", LevelData.NUMBERED, 150, "") != null)
 	check(arrived, "the level finishes while the title is up and is kept")
 	flow.screen.find_button("Play").pressed.emit()
 	check_eq(flow.state, AppFlow.State.LEVEL, "Play starts it at once, with no new wait")

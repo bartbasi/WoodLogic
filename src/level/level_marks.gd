@@ -15,6 +15,7 @@ const RIPPLE_SECONDS := 0.25
 const RING := 0
 const RIPPLE := 1
 const OUTLINE := 2
+const ICON := 3
 
 var _kind := PackedInt32Array()
 var _center := PackedVector2Array()
@@ -23,6 +24,7 @@ var _age := PackedFloat32Array()
 var _hold := PackedFloat32Array()
 var _color := PackedColorArray()
 var _outline: Array[PackedVector2Array] = []
+var _icon := PackedStringArray()
 var _active := 0
 
 
@@ -34,6 +36,7 @@ func _init() -> void:
 	_hold.resize(MAX_MARKS)
 	_color.resize(MAX_MARKS)
 	_outline.resize(MAX_MARKS)
+	_icon.resize(MAX_MARKS)
 
 
 func _ready() -> void:
@@ -59,6 +62,12 @@ func add_ripple(center: Vector2, radius: float, color: Color) -> void:
 ## A glowing edge along a closed outline (scene units).
 func add_outline(points: PackedVector2Array, color: Color, hold: float) -> void:
 	_add(OUTLINE, Vector2.ZERO, 0.0, hold, color, points)
+
+
+## An icon (the screwdriver touching a screw) that stays for `hold` seconds.
+func add_icon(center: Vector2, icon: String, size: float, color: Color, hold: float) -> void:
+	_add(ICON, center, size, hold, color, PackedVector2Array())
+	_icon[_active - 1 if _active < MAX_MARKS else MAX_MARKS - 1] = icon
 
 
 func active_count() -> int:
@@ -96,6 +105,7 @@ func _process(delta: float) -> void:
 			_hold[i] = _hold[_active]
 			_color[i] = _color[_active]
 			_outline[i] = _outline[_active]
+			_icon[i] = _icon[_active]
 		else:
 			i += 1
 	queue_redraw()
@@ -116,7 +126,9 @@ func _draw() -> void:
 		if age > out_start:
 			alpha = clampf(1.0 - (age - out_start) / FADE, 0.0, 1.0)
 		var tint := Color(c, c.a * alpha)
-		if _kind[i] == RING:
+		if _kind[i] == ICON:
+			Icons.draw(self, _icon[i], _center[i], _radius[i], tint)
+		elif _kind[i] == RING:
 			draw_arc(_center[i], _radius[i], 0.0, TAU, 28, tint, 3.0)
 		else:
 			draw_polyline(_outline[i], tint, 4.0, true)

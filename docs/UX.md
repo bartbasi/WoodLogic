@@ -1,7 +1,10 @@
 # WoodLogic UX
 
 Owner: ux-designer. Status: updated after Hard Stop 1 (the GDD is approved and Bart chose the
-Workshop look, docs/design/directions.md).
+Workshop look, docs/design/directions.md), and again on 21 October 2026 after Bart played
+Phase 3 on a Galaxy Z Fold5 (coffee buttons, Settings from Pause, one nav dock, the progress map
+and the Info screen), and a third time on the same day after Bart's answers (coffee in the top
+bar, Info confirmed, "Back to level" goes straight into the level).
 Anything that depends on a number the game designer owns is tagged `[C:name]` (a layout count)
 or `[GDD]` (a value that comes from docs/GDD.md, now filled in). When those change, search
 this file for the tag.
@@ -12,10 +15,11 @@ word for word.
 
 ## 0. Contents
 
-1. Global rules (units, layout classes, safe areas, type, components)
+1. Global rules (units, layout classes, safe areas, type, components, the menu frame and nav
+   dock, the coffee button)
 2. Counts that drive the layout
-3. Screens (title, level, pause, level clear, out of room, levels list, stats, settings, about,
-   license, credits, relaxed setup, helper explanations and the helper buy dialog)
+3. Screens (title, level, pause, level clear, out of room, progress map, stats, settings, about,
+   license, credits, relaxed setup, helper explanations and the helper buy dialog, info)
 4. Flows and the Android back button
 5. The first-time experience and tutorial lines
 6. Feedback for every input
@@ -23,7 +27,7 @@ word for word.
 8. What this file needs from the other roles
 9. Review checklist
 10. Decided by Bart
-11. Open questions for Bart
+11. Open questions and notes for the lead
 
 ## 1. Global rules
 
@@ -51,7 +55,7 @@ word for word.
 | Class | Viewport (units) | Where it appears | What changes |
 |-|-|-|-|
 | Base | 360 x 640 | small and older phones, 16:9 | the reference layout |
-| Tall | 360 x 641 to 360 x 840 | 18:9, 19.5:9, 20:9, 21:9 phones | extra height, see section 3.2 and each screen's "Tall" note |
+| Tall | 360 x 641 to 360 x 930 | 18:9, 19.5:9, 20:9, 21:9 phones, and a folded foldable (the Galaxy Z Fold5 cover screen is 360 x 922) | extra height, see section 3.2 and each screen's "Tall" note |
 | Wide | 361 x 640 to 480 x 640 (aspect up to 3:4) | tablets in portrait | level screen: stacked, the board view scales up and the bars shrink to make room (3.2.1a). Other screens: column up to 480, buttons at most 320 wide |
 | Beyond | aspect wider than 3:4, or wider than 480 units | unfolded foldables, near square windows | level screen: stacked or split, whichever gives the larger board (3.2.1a). Other screens: column fixed at 480, centered, the sides show only the background |
 
@@ -94,14 +98,15 @@ Sizes are minimums. Look comes from docs/DESIGN.md.
 - **Button.** Height at least 48. Primary 72 tall (title Play, Next) or 64 tall (Retry,
   Resume). Width 296 when full width (a 360 wide screen with 32 side margin) or 144 when two
   share a row with an 8 gap. Four kinds: primary (filled, strong), secondary (filled, calm),
-  quiet (outline or text, used for Back and Coffee), danger (used only for "Erase everything").
+  quiet (outline or text, used for the coffee chip and other low emphasis actions), danger (used
+  only for "Erase everything").
   States: normal, pressed (down: scale 0.96, darker, within one frame), disabled (dimmed and
   its reason is visible as text or an icon), focused (a visible outline of at least 3 units for
   keyboards and gamepads). A button acts on release. A finger that slides off the button
   cancels it.
-- **Back button.** Every screen opened from the title ends with a quiet full width Back button
-  at the bottom (336 x 48, 8 above the bottom edge of the content rect). The title bar of those
-  screens has no back arrow, because the top is out of thumb reach.
+- **No on-screen Back button.** The menu screens have no Back button of their own any more. The
+  nav dock (1.6) is at the bottom of each of them, and the Android back button does the rest
+  (section 4.2). The header has no back arrow, because the top is out of thumb reach.
 - **Toggle row.** The whole row is the target (full width x 56). It shows a label, an optional
   note, a switch 56 x 32 and the words "On" or "Off" beside the switch, so state is never only
   color or position.
@@ -122,6 +127,157 @@ Sizes are minimums. Look comes from docs/DESIGN.md.
 - Screen changes are a 150 ms fade or a 250 ms slide. Never faster than that, never a flash.
 - No looping motion faster than one cycle per second. No brightness jump over a large area.
   Nothing flashes (section 7.5).
+
+### 1.6 Menu frame and nav dock (decided by Bart, 21 October 2026)
+
+Every screen other than the level itself shares one frame: a header, a body and one **nav dock**
+at the bottom. That covers the title, the progress map, Stats, Info, Settings, About, License,
+Credits and Relaxed setup. The level, Pause, level clear, out of room, the helper sheets and the
+dialogs belong to the level and have no dock.
+
+**Why the bottom.** The dock is at the bottom, not the top, because a right or left thumb rests
+at the bottom of the screen, every primary button in this game is in the bottom half, and the top
+corners are the hardest place to reach. It also puts the way back to the game exactly where the
+Resume and Play buttons already are.
+
+**Frame geometry (content 360 x 600, base):**
+
+| Part | Rect (x, y, w, h) | Notes |
+|-|-|-|
+| Header | 0, 0, 360, 56 | the screen's heading (Heading 24) at x 12, centered vertically; the coffee chip on the right (1.7) where the screen has one |
+| Body | 0, 56, 360, 416 | scrolls when its content is taller. On screens without a game row it runs to y 532 (476 tall), see below |
+| Game row | 12, 480, 336, 52 | one brass primary button, see below |
+| Tab row | 12, 540, 336, 52 | six tabs, 56 x 52 each, no gaps; ends 8 units above the bottom edge |
+
+Screens without a game row (the title, which has its own big Play button, and Relaxed setup,
+whose buttons start a game) have a body that runs to y 532.
+
+**Screens and what they show:**
+
+| Screen | Header | Game row | Tab row, active tab |
+|-|-|-|-|
+| Title | star bank at the left, coffee chip at the right | no | yes, Home |
+| Progress map | "Progress map", coffee chip | yes | yes, Map |
+| Stats | "Stats", coffee chip | yes | yes, Stats |
+| Info | "How to play", coffee chip | yes | yes, Info |
+| Settings | "Settings", coffee chip | yes | yes, Settings |
+| About | "About", no chip (its Supporting block is the coffee button there) | yes | yes, About |
+| License, Credits | "License" or "Credits", no chip | yes | yes, About |
+| Relaxed setup | "Relaxed", coffee chip | no | yes, Home |
+
+**The tab row.** Six tabs in this order: "Home", "Map", "Stats", "Info", "Settings", "About". Each
+is an icon (22 units, drawn in code) above its label (Caption 13), a 56 x 52 target. Tapping a tab
+goes to that screen at once (a 150 ms cross fade; the dock itself does not move or animate). The
+active tab is shown three ways, so it is never color alone: a raised or pressed plaque shape,
+a 3 unit bar above its label, and a bold label. Tapping the active tab scrolls that screen's body
+back to the top and does nothing else. "Home" goes to the title. Icons for the graphic designer:
+a house, a trail of dots, a small bar chart, an "i" in a circle, a gear, and a screw head for
+About.
+
+**The game row.** The way back to the player's game, one tap, always the same place.
+- If a level is **paused** (section 4.1 says when): the label is "Back to level" with the note
+  "Level {n}, paused" (or "Daily, paused", or "Relaxed, paused"). **A tap goes straight into the
+  level (decided by Bart, 21 October 2026)**, with no Pause screen in between. The menu fades
+  out over 150 ms and the board is shown; the clock starts again when the board is showing (when
+  that fade has finished), and only if it had already started, because before the first action
+  it stays at 0:00.
+- Otherwise: the label is "Play" with the note "Level {n}", where n is the player's next level.
+  A tap starts that level, exactly as the title's Play button does.
+
+**Tall and wide.** The dock stays anchored to the bottom of the content rect on every height, so
+the body grows on tall screens (a Galaxy Z Fold5 folded is 360 x 922 units). On wide screens the
+dock follows the content column (at most 480): the tab row keeps six equal tabs, 76 wide at 480,
+and the game row matches its width. On a foldable opened out (533 x 640 units) the column is 480
+wide and centered.
+
+**Never in the dock:** badges, counters, dots, or animation of any kind.
+
+### 1.7 The coffee button (decided by Bart, 21 October 2026)
+
+Bart: "add a buy me a coffee button to the home screen, the play screen, and the settings, about,
+and info screens. Let's make it easy for someone to buy me a coffee." Ground rule 1 still holds:
+nothing may interrupt play to ask for anything. So it is a button that waits to be tapped, and
+nothing more.
+
+**What it is.** The chip: a cup icon drawn in code (20 units) and the text "Buy me a coffee"
+(Caption 13), quiet style. Visible size 140 x 32 inside a 140 x 48 target, at the top right of
+the screen (target rect 208, 0, 140, 48). It is in the same place on every screen that has it,
+so a player learns where it is once. It opens the one fixed address
+(https://buymeacoffee.com/playinc) with no confirmation.
+
+**Where it appears:**
+
+| Screen | Coffee |
+|-|-|
+| Title | the chip, top right |
+| Level (play) | **the top bar**, an icon only cup at the far left (below), from level 4; and the chip inside Pause |
+| Progress map, Stats, Info, Settings, Relaxed setup | the chip, top right of the header |
+| About | the "Supporting WoodLogic" block with its full width "Buy me a coffee" button (3.9). No header chip, so there are not two on one screen. |
+| License, Credits | none |
+| Level clear, out of room, helper sheets, dialogs | **never**. A win or a loss is not a moment to ask, so the top bar's cup is hidden while the clear screen, the out of room sheet, a helper sheet or a dialog is showing. |
+
+**The play screen: the top bar (decided by Bart, 21 October 2026).** I first proposed Pause; Bart
+chose the top bar, so it is on screen while playing. To make that as safe as it can be:
+1. **Far end, far from the board and from Pause.** It sits at the far left of the top bar, 256
+   units from the pause button at the far right, so a thumb heading for Pause cannot land on it.
+2. **Clear of every screw.** The top bar ends at y 44 and the board panel starts at y 176, so the
+   cup's target (48 x 48 at the top left) is at least 126 units from the nearest possible screw
+   target (screws sit at least 22 units inside the board core, so a screw target begins at
+   y 174 or lower on the screen). No target of the cup and no target of a screw can overlap or
+   touch.
+3. **The board's touch area stops short of it.** The board only listens inside the board
+   panel rectangle. A touch that starts in the top bar, the boxes row, the tray or the helper bar
+   never goes to the board, and a touch that starts on the board never goes to the cup. The cup
+   has no larger or snapping target, only its own 48 x 48 (section 6.1, hit testing).
+4. **A deliberate touch only.** Like every button it acts on release, and only if the finger
+   went down on it and is still on it. A finger sliding in from elsewhere does nothing.
+5. **Visible but quiet.** An icon only cup (24 units, drawn in code) on a low emphasis plaque,
+   with the accessible name "Buy me a coffee". No animation, no badge, no counter, no accent
+   color, no change after a tap.
+6. **Not in the first minute.** It appears with the other top bar items, from level 4 (the GDD's
+   level for the timer and pips), so levels 1 to 3 are just the board and the pause button, and a
+   new player is never shown it before they have had a chance to enjoy the game.
+7. **Never at the moments of a win or a loss,** and never over a sheet or a dialog (it is hidden
+   while those show).
+8. **A tap pauses the level first.** The tap opens Pause in the same frame (the board covered,
+   the clock stopped) and only then hands the address to the phone. Opening the browser leaves
+   the app, so the level is already paused when focus is lost; coming back shows the Pause
+   screen on the same level (section 4.3). Nothing is lost.
+9. **Pause keeps the chip too.** The full "Buy me a coffee" chip stays top right in Pause (3.3),
+   where there is room for the words.
+
+**Behavior rules.** No pop-up, no badge, no counter, no reminder, no animation, no change in look
+after a tap, no sound other than the normal button press. It never moves into the middle of a
+screen. It never appears on a timer or after an event.
+
+**Leaving the app.** Opening the browser leaves the app, so the app loses focus. On the level
+screen the tap pauses the level first (point 8), and in Pause it is already paused, so the clock
+is stopped either way. When the player comes back they are on the same Pause screen, the same
+level (section 4.3).
+
+**One switch to hide every coffee button (store build).** Google Play has warned apps over
+donation links to recipients that are not tax-exempt charities (AnkiDroid, September 2026), so
+every coffee button can be hidden at once.
+- There is exactly one place that decides: a single function (suggested name
+  `Links.coffee_visible() -> bool` in src/ui/links.gd) that every coffee control asks. The lead
+  records it in docs/ARCHITECTURE.md. Suggested source: a custom feature tag, `no_coffee`, set in
+  the store export preset, tested with `OS.has_feature("no_coffee")`, so ordinary builds show it
+  and the store build hides it with one setting and no code change. Whatever the source, it is
+  one switch.
+- When it is off, the controls are **not built at all** (not just invisible), and
+  `Links.open_coffee()` refuses to open anything, so a bug cannot open the address.
+- **Every screen must still look right with it hidden.** Header chips sit in an otherwise empty
+  corner, so nothing moves: the title keeps its star bank at the left, Pause and the other
+  headers just show their heading. In the level's top bar the level label takes the cup's place
+  and the bar goes back to the layout without it (3.2.2). In About the whole "Supporting WoodLogic" block disappears
+  (heading, fixed text and button), and the Privacy block uses its store build wording (below).
+  A test builds every screen with the switch off.
+- **Privacy wording with the switch off.** The fixed Privacy statement names the Buy me a coffee
+  button, which would not exist in that build. Proposed store build wording, which needs Bart's
+  approval because CLAUDE.md fixes the original: "WoodLogic collects nothing: no ads, no
+  tracking, no internet. The game itself sends nothing." (See section 11.)
+- With the switch off the game hands only two fixed addresses to the phone (feedback and source
+  code); docs/store/privacy-policy.md, the store listing and the security review need to match.
 
 ## 2. Counts that drive the layout
 
@@ -149,32 +305,26 @@ Six (with Extra slot): 310. Seven would need 40 unit slots: `7*40 + 6*5 + 16 = 3
 
 Purpose: get into a level in one tap, reach everything else in two.
 
-**Base layout (content 360 x 600):**
+**Base layout (content 360 x 600).** The title uses the menu frame (1.6): its tab row is the only
+dock part, with Home active. The four small buttons the title used to have (Levels, Stats,
+Settings, About) are now tabs in that row.
 
 | Item | Rect (x, y, w, h) | Notes |
 |-|-|-|
 | Star bank chip | 12, 0, 96, 48 | star icon and the bank total, e.g. "128". Quiet. |
-| Buy me a coffee chip | 208, 0, 140, 48 | see below; top right, out of thumb reach and away from the buttons |
+| Buy me a coffee chip | 208, 0, 140, 48 | the chip of 1.7; hidden when the coffee switch is off |
 | WoodLogic name | 0, 56, 360, 120 | Display text on a plaque or carved into a plank, graphic designer's call |
-| Decorative board | 24, 176, 312, 120 | a few planks and screws, purely decoration, not tappable |
-| **Play** | 32, 312, 296, 72 | primary. Label "Play". Note line under the label: "Level {n}". |
-| Daily | 32, 392, 144, 56 | secondary. Label "Daily". Note: "Today's puzzle", "Done today", or "Opens after level 8" while locked. |
-| Relaxed | 184, 392, 144, 56 | secondary. Label "Relaxed". Note: "No clock", or "Opens after level 8" while locked. |
-| Levels | 32, 456, 144, 52 | secondary. Label "Levels". |
-| Stats | 184, 456, 144, 52 | secondary. Label "Stats". |
-| Settings | 32, 516, 144, 52 | secondary. Label "Settings". |
-| About | 184, 516, 144, 52 | secondary. Label "About". |
-
-Bottom 32 units are left empty on purpose (gesture bar room).
-
-**Buy me a coffee chip.** Visible chip is 140 x 32 inside a 140 x 48 target. A cup icon drawn
-in code (20 units) and the text "Buy me a coffee" (Caption, 13). Quiet style, low emphasis, never
-animated, never in the button column. Tapping it hands the fixed address to the phone with no
-confirmation; the browser opens. It never shows a badge, a counter or a reminder.
+| Decorative board | 24, 184, 312, 196 | a few planks and screws, purely decoration, not tappable |
+| **Play** | 32, 392, 296, 72 | primary. Label "Play" with the note "Level {n}", or "Back to level" with the note "Level {n}, paused" when a level is paused (1.6), which goes straight into that level. |
+| Daily | 32, 472, 144, 56 | secondary. Label "Daily". Note: "Today's puzzle", "Done today", or "Opens after level 8" while locked. |
+| Relaxed | 184, 472, 144, 56 | secondary. Label "Relaxed". Note: "No clock", or "Opens after level 8" while locked. |
+| Tab row | 12, 540, 336, 52 | Home (active), Map, Stats, Info, Settings, About, see 1.6 |
 
 **Notes under labels:**
 - Play note: "Level {n}" where n is the player's next level. A level left unfinished starts
-  again from the beginning (section 4.3).
+  again from the beginning (section 4.3). When a level is paused (the player went from Pause to
+  Settings, About or Info and then to the title), Play reads "Back to level" with "Level {n},
+  paused" and goes straight back into that level (play continues, 1.6).
 - Daily note: "Today's puzzle" until it is solved today, then "Done today". A solved daily can
   still be replayed (stars only above best, no streak change).
 - **Locked Daily and Relaxed.** Both open when level 8 has been cleared `[GDD]`. Before that,
@@ -185,12 +335,13 @@ confirmation; the browser opens. It never shows a badge, a counter or a reminder
   open Daily." or "Clear level 8 to open Relaxed." The moment level 8 is cleared, the level clear
   screen shows the unlock note "Unlocked: Daily and Relaxed" (same plaque as theme unlocks).
 
-**Tall (up to 360 x 840):** buttons stay anchored to the bottom of the content rect. All extra
-height goes to the name and decorative board: the name block grows by up to 40, the decoration
-by up to 120, and the rest becomes space between them. Button sizes do not change.
+**Tall (up to 360 x 930):** the buttons and the tab row stay anchored to the bottom of the
+content rect. All extra height goes to the name and decorative board: the name block grows by up
+to 40, the decoration by up to 200, and the rest becomes space between them. Button sizes do not
+change.
 
 **Wide (up to 480):** the button column stays 296 wide, centered. The decoration widens to 360.
-The chips stay at the left and right edges of the content rect.
+The chips stay at the left and right edges of the content rect, and the tab row spans the column.
 
 **First launch:** the title is skipped (section 5). It first shows after level 1 has been
 cleared and the player quits to it, or on any later launch.
@@ -330,6 +481,8 @@ on the tablets because a unit is larger there).
 | 10 inch tablet, portrait, 10:16 (1200 x 1920 px) | 400 x 640 | 620 | 2.14 | 0.70 | stacked | 1.12 | 0.91 | 384 x 402 |
 | 10 inch tablet, 3:4 | 480 x 640 | 620 | 1.6 | 0.70 | stacked | 1.26 | 0.70 | 432 x 452 in a 464 x 452 panel |
 | Unfolded foldable | 840 x 720 | 680 | 1.25 | 0.80 | split | 1.54 | 0.80 | 528 x 553 in a 528 x 634 panel |
+| Galaxy Z Fold5 folded (904 x 2316 px) | 360 x 922 | 882 | 1.0 | 1.0 | stacked | 1.00 | 1.167 | 344 x 360 in a 360 x 602 panel (121 units of back board above and below) |
+| Galaxy Z Fold5 opened (1812 x 2176 px) | 533 x 640 | 600 | 1.46 | 0.70 | stacked | 1.20 | 0.70 | 413 x 432 in a 517 x 432 panel |
 
 Detail for the 10 inch tablet (400 x 640): b = min(384 / 344 = 1.116, (620 - 168) / 360 =
 1.256) = 1.116, so f = (620 - 402) / 240 = 0.91. The bands become top bar 40, boxes 58, tray
@@ -361,10 +514,17 @@ arrangement looks like one workbench, and the same panel continues behind the to
 
 | Item | Rect (x, y, w, h) at base | Notes |
 |-|-|-|
-| Level label | 12, 0, 96, 44 | Heading size 20 bold: "Level {n}". For the daily: "Daily". For relaxed: "Relaxed". |
-| Timer and pips | 112, 0, 108, 44 | timer "m:ss" (Body 16) and two small pips, see below. Hidden in Relaxed. |
-| Star bank | 224, 0, 76, 44 | star icon and the total, e.g. "128". Hidden in Relaxed. |
+| Coffee cup (from level 4, when the coffee switch is on) | 4, 0, 48, 44 | an icon only cup, quiet; target 48 x 48 (grows 4 into the gap below); accessible name "Buy me a coffee"; see 1.7 for why it is here and how it is kept safe |
+| Level label | 56, 0, 92, 44 | Heading size 18 bold: "Level {n}" (16 from level 1000 on). For the daily: "Daily". For relaxed: "Relaxed". |
+| Timer and pips | 150, 0, 86, 44 | timer "m:ss" (Body 16) and two small pips, see below. Hidden in Relaxed. |
+| Star bank | 238, 0, 64, 44 | star icon and the total, e.g. "128". Hidden in Relaxed. |
 | Pause button | 308, 0, 48, 44 | target is 48 x 48 (grows 4 into the gap below). Pause icon (two bars). Label for screen readers: "Pause". |
+
+Without the cup (levels 1 to 3, the coffee switch off, or while the clear screen, the out of
+room sheet, a sheet or a dialog shows), the bar goes back to the version below, so it never has
+an empty gap at the left: the level label is 12, 0, 96, 44 at Heading size 20; the timer and pips
+at 112, 0, 108, 44; the star bank at 224, 0, 76, 44; the pause button unchanged. The cup and the
+pause button are 256 units apart.
 
 - **Timer** counts up from the first **action** of the attempt, not from when the level
   appears (decided by Bart, GDD S6). An action is a tap that is accepted or a helper use
@@ -373,12 +533,14 @@ arrangement looks like one workbench, and the same panel continues behind the to
   dialog is open, at the clear and at the loss. It shows "0:00" until the first action and caps
   at "59:59". Retry resets it.
 - **Pips.** Two tiny 14 unit icons beside the timer tell the player which bonus stars are still
-  possible: a stopwatch pip (speed, filled while the time is under par, outline once past par)
+  possible: a stopwatch pip (speed, filled while the time is within par, outline once past par)
   and a tray pip (clean, filled until the tray is used more than par times or a helper is used,
   then outline). They change shape (filled to outline) in silence, quietly. They are
   information, not alarms. They stay (decided by Bart) and are checked at Gate 1.
 - Using Undo, or any helper, turns the clean pip to an outline at once. That is the visible
   cost of a helper (decided by Bart, GDD R32): Undo costs the Clean star.
+- The coffee cup is in the top bar from level 4 (decided by Bart, 21 October 2026; 1.7). It also
+  has its chip in Pause. It is the only control in the top bar that leaves the app.
 - The timer, pips and star bank appear from level 4 `[GDD S9]`. Levels 1 to 3 show only the
   level label and the pause button, so those levels are just the board. Stars are still
   awarded on levels 1 to 3 and shown on the clear screen.
@@ -489,13 +651,15 @@ button, or automatically when the app loses focus.
 
 | Item | Rect (x, y, w, h) | Label |
 |-|-|-|
+| Buy me a coffee chip | 208, 0, 140, 48 | the chip of 1.7 with its words, same place as on the other screens; absent when the coffee switch is off. The level's top bar also has the cup. |
 | Heading | 0, 96, 360, 36 | "Paused" |
 | Level line | 0, 140, 360, 24 | "Level {n}" (or "Daily" or "Relaxed, {Easy, Medium or Hard}") |
 | **Resume** | 32, 300, 296, 72 | "Resume" (primary) |
 | Retry | 32, 380, 296, 52 | "Retry" |
 | Sound | 32, 440, 144, 52 | "Sound: On" or "Sound: Off", with a speaker icon (crossed out when off) |
 | Music | 184, 440, 144, 52 | "Music: On" or "Music: Off", with a note icon (crossed out when off) |
-| Quit to title | 32, 500, 296, 52 | "Quit to title" |
+| Settings | 32, 500, 144, 52 | "Settings" (decided by Bart, below) |
+| Quit to title | 184, 500, 144, 52 | "Quit to title" |
 
 - Sound and Music toggle at once on tap and the label changes in the same frame.
 - Retry restarts the same level at once with no question (Retry is always free). The timer
@@ -503,6 +667,15 @@ button, or automatically when the app loses focus.
   R34]`.
 - Quit to title shows the title. The level is not kept: Play starts it again from the beginning
   (section 4.3).
+- **Settings from Pause (decided by Bart, 21 October 2026): one tap from Pause.** I put it in
+  Pause and not in the top bar because the top bar is full and the pause button is the one
+  control up there near the thumb, and Pause already holds the sound and music switches. It
+  costs two taps from play (Pause, Settings). Settings opens with the nav dock (1.6) showing "Back to level",
+  so the player can also visit About or Info and still get back. The level stays paused in
+  memory, nothing is lost (not the clock, the tray, the helpers spent or the board), and the
+  player returns to this Pause screen with the Android back button, or straight into the level
+  with "Back to level" (1.6). Changes made in Settings (sound, music, symbols, wood, metal) are
+  in effect when the player resumes.
 - **Tall:** the heading and level line stay at the same distance from the top; the buttons stay
   anchored to the bottom.
 - **Back button:** same as Resume.
@@ -545,7 +718,7 @@ player learns what to aim for):
 | Star | Label | Detail |
 |-|-|-|
 | 1 | "Cleared" | "Every screw is out" |
-| 2 | "Fast" | "Under {par_time}" (for example "Under 1:20") and, when earned, the player's time below it: "Yours {time}" |
+| 2 | "Fast" | "Within {par_time}" (for example "Within 1:20") and, when earned, the player's time below it: "Yours {time}" |
 | 3 | "Clean" | "Tray {par} times or fewer, no helpers" for par 2 or more; "Tray once or never, no helpers" for par 1; "No tray, no helpers" for par 0 |
 
 - Earned stars are filled and warm; not earned stars are outline only with a faint inner mark,
@@ -629,40 +802,78 @@ ms of the Retry tap (the level data is kept in memory, so there is never a wait 
 - **Back button:** goes to the title (the level can be continued with Play: it restarts from the
   beginning).
 
-### 3.6 Levels list
+### 3.6 Progress map (replaces the plain levels list; decided by Bart, 21 October 2026)
 
-Purpose: replay any cleared level to earn more stars.
+Purpose: show the trail of cleared levels with their stars, replay any of them to earn more
+stars, and start the next one. It is the "Map" tab of the dock.
 
-**Layout (content 360 x 600):**
+**Layout (content 360 x 600).** The menu frame (1.6): header "Progress map" with the coffee chip,
+a body that is the trail (y 56 to 472, 416 tall at base, more on tall screens), the game row
+and the tab row.
 
-| Item | Rect | Notes |
+**The trail.** A vertical trail of nodes, level 1 at the bottom and higher levels above, so the
+player scrolls up as they progress and the next level sits in the middle.
+- **Node centers.** Level N is at y = Y(1) minus (N - 1) x 88 (88 units between centers). Its x
+  centre follows a zigzag over three lanes (x 84, 180, 276 in a 360 wide column; the lanes
+  follow the column center on wider screens, spacing 96): lane x for level N is
+  `[180, 276, 180, 84][(N - 1) mod 4]`. Nodes never come closer than 130 units to one another.
+- **Node sizes (touch targets at least their size, all at least 48):**
+
+| Node | Size | Shows |
 |-|-|-|
-| Header | 0, 0, 360, 56 | "Levels" (Heading) at the left, star bank at the right |
-| List | 0, 56, 360, 480 | a vertical scroll area of cells |
-| Back | 12, 544, 336, 48 | "Back" (quiet) |
+| Cleared | 64 x 64 badge | the level number (Button 18) and three stars (12 units each), filled or outline |
+| Hard level (every 5th level from 10 on: 10, 15, 20 ...) | 72 x 72 badge with a notched edge | the same, a little larger, so the sawtooth is visible (the GDD's hard levels) |
+| Next | 80 x 80 brass badge | the level number and a play triangle, with a thick border |
+| Locked | 64 x 64 dimmed badge | the level number and a padlock icon in place of the stars |
 
-- Cells are 56 x 56 in a grid of **5 columns** (gap 14, margin 12: 5 x 56 + 4 x 14 = 336),
-  with 12 between rows. Each cell shows the level number (Button 18, centered in the upper part)
-  and three small stars (12 units) along the bottom: filled or outline.
-- The list runs from level 1 upward and contains only cleared levels plus the next one to play.
-  The next one has a thicker border and a play triangle in place of the stars, and is the only
-  cell that is not a star record.
-- It opens scrolled so the next level is in the lower third of the list, close to the thumb.
-  Scrolling is a vertical drag with momentum.
-- Tapping a cell starts that level at once (no confirmation).
-- A cell with fewer than three stars is not marked in any other way; its outline stars are the
-  hint.
-- **Wide:** 6 columns when the content width is 432 or more.
-- **Empty state** (nothing cleared): the list shows level 1 as the next cell and the note
-  "Clear a level to see it here." in Body under it.
-- **Back button:** goes to the title.
+  The states differ in shape and icons, not only color: the stars (filled or outline), the
+  play triangle, the padlock, the larger size and the border. The number is always shown at full
+  contrast (4.5 to 1).
+- **Connectors.** A path joins each node to the next: solid between cleared nodes and up to the
+  next node, dashed beyond it (a shape difference). The look is the graphic designer's.
+- **What is on the map.** All cleared levels (1 to H), the next level (H + 1, the one the player
+  has not cleared yet) and **4 locked levels** beyond it (H + 2 to H + 5). The trail fades out
+  over the top 64 units of the body above the last locked node, and there is nothing after it.
+  There are no gaps and no skipping, because levels are cleared in order.
+- **Opens centered on the next level.** On opening, the scroll position puts the center of the
+  next node at the vertical center of the body. At the start of the trail there is half a
+  screen of empty back board below level 1, so even level 1 can be centered. Every new visit
+  starts there; the position is not remembered.
+- **Scrolling.** A vertical drag with momentum (friction so a fast flick travels about 1500
+  units), clamped softly at both ends. A touch that moves under 10 units and lasts under 300 ms
+  is a tap; more is a scroll. The pressed look shows on touch down and is dropped if the touch
+  turns into a scroll.
+- **Tapping a node:**
+  - **Cleared:** starts that level as a replay at once, with no confirmation (stars only above
+    the best are earned). A level that was paused is dropped (section 4.1).
+  - **Next:** starts it.
+  - **Locked:** nothing starts. The node nudges 4 units sideways twice (200 ms), the dull knock
+    plays, and the toast says "Clear level {n} first." where n is the next level (the one the
+    player has to clear), not the neighboring node.
+- **"Go to level" chip.** When the next node is more than half a body height out of view, a quiet
+  chip, 140 x 48, sits at the bottom center of the body with an arrow (up or down toward the
+  node) and the text "Go to level {n}". A tap scrolls to it (400 ms, ease out) and the chip goes
+  away. It is a control that waits to be tapped; it never moves or blinks.
+- **Smooth with hundreds of levels (required).** Level node positions come from the formulas
+  above, so nothing is built per level. Only the nodes in view plus 3 above and below exist (a
+  pool of about 20), or they are drawn by one custom drawing control that skips what is off
+  screen. The content height is computed (about 88 per level), not stored in a huge picture. A tap
+  is turned into a level number by arithmetic. It holds 60 fps with 1000 levels. Star counts come
+  from the save (best stars per level). Opening takes one frame, whatever the level.
+- **Empty state:** a player who has cleared nothing sees level 1 as the next node and 4 locked
+  nodes. No other text.
+- **Screen readers:** each node's label reads "Level {n}, {k} stars", "Level {n}, next" or
+  "Level {n}, locked".
+- **Tall:** the body is taller, so more nodes show. **Wide:** the trail stays centered in the
+  column of at most 480; node sizes do not change.
+- **Back button:** goes back to where the player came from (Title, or Pause), section 4.2.
 
 ### 3.7 Stats
 
 Purpose: show the player's record. Kept on the phone only.
 
-**Layout (content 360 x 600):** header "Stats" (Heading) at y 0 to 56, a vertical scroll area at
-y 56 to 536, Back at y 544.
+**Layout (content 360 x 600):** the menu frame (1.6): header "Stats" (Heading) with the coffee
+chip, a vertical scroll area at y 56 to 472, the game row and the tab row.
 
 Rows are 48 tall plaques: label on the left (Body 16), value on the right (Button 18, bold).
 
@@ -686,14 +897,16 @@ Rows are 48 tall plaques: label on the left (Body 16), value on the right (Butto
 - Numbers of 1000 or more use a comma ("1,234").
 - **Empty state:** zero values show as "0", times as "None yet", and a line at the top reads
   "Play a few levels and your numbers show up here."
-- **Back button:** goes to the title.
+- **Back button:** goes back to where the player came from (Title, or Pause), section 4.2.
 
 ### 3.8 Settings
 
 Purpose: sound, music, symbols, themes, reset. Nothing else.
 
-**Layout (content 360 x 600):** header "Settings" y 0 to 56, a scroll area y 56 to 536, Back at
-y 544. Rows (heights are minimum, 8 between):
+**Layout (content 360 x 600):** the menu frame (1.6): header "Settings" with the coffee chip, a
+scroll area y 56 to 472, the game row and the tab row. Rows (heights are minimum, 8 between).
+Settings opens from the title's tab row, from any other tab, and from Pause (3.3), where the dock
+shows "Back to level":
 
 | Row | Height | Contents |
 |-|-|-|
@@ -726,18 +939,22 @@ y 544. Rows (heights are minimum, 8 between):
   - Buttons, stacked, in the bottom half of the dialog: "Keep my progress" (primary, 304 wide
     minus margins, listed first and focused) and below it, 16 units apart, "Erase everything"
     (danger).
+  - If a level is paused (Settings was opened from Pause), the dialog adds one sentence to the
+    body: "The level you paused ends too."
   - After erasing: a toast "Progress erased." The next Play starts level 1 and skips the title
-    like a first launch.
+    like a first launch. A paused level is gone, so the game row reads "Play" and "Level 1".
   - Back button inside the dialog: same as "Keep my progress".
 - **Tall:** the scroll area grows; no row changes size.
-- **Back button:** goes to the title.
+- **Back button:** goes back to where the player came from: Pause if they opened Settings from
+  Pause, otherwise the title (section 4.2).
 
 ### 3.9 About
 
 Purpose: what this is, who made it, the links, the fixed statements, License and Credits.
 
-**Layout (content 360 x 600):** header "About" y 0 to 56, a scroll area y 56 to 536, Back at
-y 544. Contents in order, 12 between blocks:
+**Layout (content 360 x 600):** the menu frame (1.6): header "About" (no coffee chip, the
+Supporting block below is its coffee button), a scroll area y 56 to 472, the game row and the tab
+row. Contents in order, 12 between blocks:
 
 1. **What it is.** Block with the name "WoodLogic" (Heading), "Version {version}" (Small), and
    this text (Body):
@@ -751,8 +968,10 @@ y 544. Contents in order, 12 between blocks:
    "WoodLogic is free, with no ads and no tracking, and it always will be. If you'd like to
    support more games like it, you can buy me a coffee. Never expected, always appreciated."
    Below it the button "Buy me a coffee" (336 x 56, secondary, cup icon drawn in code), with the
-   note "Opens a web page in your browser."
-5. **Privacy.** Heading "Privacy", then this fixed text (Body):
+   note "Opens a web page in your browser." If the coffee switch is off (1.7), this whole block
+   is not shown.
+5. **Privacy.** Heading "Privacy", then this fixed text (Body), or its store build wording when
+   the coffee switch is off (1.7, needs Bart's approval):
    "WoodLogic collects nothing: no ads, no tracking, no internet. The Buy me a coffee button
    only opens a web page in your phone's browser, and the game itself sends nothing."
 6. **License** (row button 336 x 56), label "License", opens 3.10.
@@ -771,12 +990,13 @@ y 544. Contents in order, 12 between blocks:
   bartbasi@gmail.com." For web pages: "No browser found on this phone."
 - Links open only the three fixed addresses; nothing the player types is ever passed to them.
 - **Wide:** the column stays at most 480.
-- **Back button:** goes to the title.
+- **Back button:** goes back to where the player came from (Title, or Pause), section 4.2.
 
 ### 3.10 License page
 
-Reached from About. Header "License" (Heading) y 0 to 56, a scroll area y 56 to 536, Back
-(returns to About) at y 544. Text is Small (14) on a plaque, with line spacing 1.4, in this order:
+Reached from About. The menu frame (1.6) without a coffee chip: header "License" (Heading), a
+scroll area y 56 to 472, the game row and the tab row (About active). Text is Small (14) on a
+plaque, with line spacing 1.4, in this order:
 
 1. The attribution line (Body, the fixed line).
 2. "WoodLogic is free software. You can use it, study it, share it and change it under the GNU
@@ -789,11 +1009,12 @@ Reached from About. Header "License" (Heading) y 0 to 56, a scroll area y 56 to 
    unchanged.
 
 The text of items 3 and 4 comes from the files shipped with the game so it can never drift
-from the repository. **Back button:** returns to About.
+from the repository. **Back button:** returns to About (so does the About tab).
 
 ### 3.11 Credits page
 
-Reached from About. Header "Credits", scroll area, Back (returns to About). Order:
+Reached from About. The menu frame (1.6) without a coffee chip: header "Credits", a scroll
+area, the game row and the tab row (About active). Order:
 
 1. "WoodLogic is made with the Godot Engine, a free and open source game engine." (Body)
 2. "Every picture and sound in WoodLogic is made by the game's own code." (Body)
@@ -804,22 +1025,23 @@ Reached from About. Header "Credits", scroll area, Back (returns to About). Orde
    unchanged. It includes the notice for Godot's default font.
 5. The attribution line from 3.9 (Small).
 
-**Back button:** returns to About.
+**Back button:** returns to About (so does the About tab).
 
 ### 3.12 Relaxed setup
 
 Purpose: pick a difficulty and be playing in one tap.
 
-**Layout (content 360 x 600):**
+**Layout (content 360 x 600).** The menu frame (1.6) with the coffee chip and the tab row (Home
+active), and no game row, because the three buttons below start a game.
 
 | Item | Rect (x, y, w, h) | Text |
 |-|-|-|
-| Heading | 0, 56, 360, 36 | "Relaxed" |
-| Body | 32, 100, 296, 72 | "No clock, no stars, and you can't lose. Undo is free." |
-| **Easy** | 32, 300, 296, 72 | "Easy" and note "Fewer screws, plenty of room" |
-| **Medium** | 32, 380, 296, 72 | "Medium" and note "A good puzzle" |
-| **Hard** | 32, 460, 296, 72 | "Hard" and note "Tight spots and long plans" |
-| Back | 12, 544, 336, 48 | "Back" |
+| Heading | 0, 0, 360, 56 | "Relaxed" (the header) |
+| Body | 32, 68, 296, 72 | "No clock, no stars, and you can't lose. Undo is free." |
+| **Easy** | 32, 332, 296, 60 | "Easy" and note "Fewer screws, plenty of room" |
+| **Medium** | 32, 400, 296, 60 | "Medium" and note "A good puzzle" |
+| **Hard** | 32, 468, 296, 60 | "Hard" and note "Tight spots and long plans" |
+| Tab row | 12, 540, 336, 52 | see 1.6 |
 
 - A tap on a difficulty starts a relaxed level of that difficulty at once. The last difficulty
   played shows the word "Last" in a small tag at the top right of its button (a tag, not only a
@@ -852,9 +1074,9 @@ The three explanations:
 
 | Helper | Heading | Body | Illustration |
 |-|-|-|-|
-| Undo | "Undo" | "Takes back your last tap. Here are 2 to get you started." | a screw flies out of a box back onto its plank |
-| Extra slot | "Extra slot" | "Adds one more tray slot for the rest of this try. Here are 2 to get you started." | the tray grows one slot on the right |
-| Screwdriver | "Screwdriver" | "Removes any one screw, even a covered one. Here are 2 to get you started." | a screwdriver lifts a screw out from under a plank |
+| Undo | "Undo" | "Takes back your last move. Here are 2 to get you started." | a screw flies out of a box back onto its plank |
+| Extra slot | "Extra slot" | "Adds one more tray slot, once per try. Here are 2 to get you started." | the tray grows one slot on the right |
+| Screwdriver | "Screwdriver" | "Removes any one screw, even a covered one, to where a tap would send it. Here are 2 to get you started." | a screwdriver lifts a screw out from under a plank |
 
 - "Got it" closes the sheet; the helper's count badge counts up from 0 to 2 (one tick each,
   200 ms apart), then play starts. The sheet never appears again for that helper.
@@ -888,29 +1110,106 @@ Shown when the player taps a helper they do not own and the bank can pay.
   sheet (3.5).
 - **Back button:** same as "Not now".
 
+### 3.14 Info (How to play) (decided by Bart, 21 October 2026)
+
+Bart asked for an "Info" screen. This is the reading I took: How to play, with the rules in a few
+short lines, what each helper does, and how stars are earned, reachable from the "Info" tab. It
+is marked in section 11 for Bart to confirm.
+
+**Layout (content 360 x 600).** The menu frame (1.6): header "How to play" with the coffee chip, a
+scroll area y 56 to 472, the game row and the tab row (Info active). The body is a list of
+plaques, 12 between, each 336 wide: a group heading (Button 18) then short entries (Body 16, up
+to three lines each, with a small icon of 28 units at the left of helper and star entries). It
+has no pictures beyond those icons and nothing animates. It is reading material, and it is never
+shown by itself: the tutorial teaches by doing, and this is where a player looks it up again.
+
+**Words, word for word.**
+
+Group "The basics":
+1. "Tap a free screw to unscrew it."
+2. "It flies into an open box of its color. If no open box fits, it waits in the tray."
+3. "Three screws fill a box. The box leaves and the next one slides in."
+4. "A screw under another plank is covered. Free the plank on top first."
+5. "A plank with no screws falls. A plank with one screw swings."
+6. "Clear every screw to win. If the tray is full and nothing fits, you are out of room. Retry is
+   free."
+
+Group "Helpers" (each entry starts with its icon):
+1. "Undo. Takes back your last move. Two free on level 8."
+2. "Extra slot. Adds one more tray slot, once per try. Two free on level 15."
+3. "Screwdriver. Removes any one screw, even a covered one, to where a tap would send it. Two free on level 25."
+4. "A Screwdriver is not spent if the screw has nowhere to go."
+5. "Out of a helper? Tap it in a level to buy one with stars: Undo 4, Extra slot 6, Screwdriver 8."
+6. "Using a helper means no Clean star on that try."
+
+Group "Stars" (each entry starts with a filled star icon):
+1. "Cleared. Finish the level."
+2. "Fast. Finish within the par time."
+3. "Clean. Use the tray no more than the par number of times, with no helpers."
+4. "Replaying a level only adds stars above your best."
+
+Group "Other ways to play":
+1. "Daily. One puzzle a day, the same for everyone. Solve it on days in a row to build a streak.
+   Opens after level 8."
+2. "Relaxed. No clock, no stars, and you can't lose. Opens after level 8."
+
+The helper levels, prices and the daily and relaxed unlock level are the GDD's `[GDD]`; if any
+changes, change these lines too.
+- **Empty state:** none; it is the same for every player.
+- **Tall and wide:** the list simply gets longer or the column stays at most 480.
+- **Back button:** goes back to where the player came from (Title, or Pause), section 4.2.
+
 ## 4. Flows and the Android back button
 
 ### 4.1 Flow map
 
+**The origin and the paused level.** Two ideas make the menus work with one dock.
+- **Origin.** Every menu screen has an origin, the screen the player came from: the Title, or
+  Pause (when they opened Settings from Pause). The dock's tabs **replace** the current menu
+  screen and never add history, so Back always returns to the origin, not through every tab
+  visited.
+- **Paused level.** A level is paused from the moment the player opens Pause until they resume,
+  retry, quit to title, start another level, or reset progress. While it is paused it stays in
+  memory with everything intact (board, tray, clock, helpers, Extra slot). Opening Settings from
+  Pause, then jumping between Settings, About, Info, Map, Stats and the title, never ends it.
+  The game row and the title's Play button then read "Back to level", and a tap returns
+  straight into the level with play continuing. A paused level is
+  dropped, without a question, when the player: taps Quit to title; taps a node on the map or
+  Daily or Relaxed, which starts a different level; resets progress; or the app is closed or
+  killed (the level then restarts from the beginning, section 4.3). Helpers already spent stay
+  spent (GDD R34, R36).
+
 ```
 First launch or after reset (no level ever cleared)
-    -> Level 1 (title skipped) -> Level clear -> Next -> Level 2 ...
+    Level 1 (title skipped) -> Level clear -> Next -> Level 2 ...
 
 Launch (later)
-    -> Title
+    Title   [menu frame: header, Play, Daily, Relaxed, tab row]
         Play     -> Level {n} (starts from the beginning)
-        Daily    -> Level (daily)            (locked until level 8 is cleared: toast only)
+                    or, if a level is paused, Back to level -> straight into that level
+        Daily    -> Level (daily)       (locked until level 8 is cleared: toast only)
         Relaxed  -> Relaxed setup -> Level (relaxed)   (locked until level 8 is cleared)
-        Levels   -> Levels list -> Level {n} (replay)
-        Stats    -> Stats
-        Settings -> Settings -> (dialog: reset)
-        About    -> About -> License | Credits
-        Coffee   -> phone browser (the game keeps running underneath)
+        Coffee   -> phone browser (chip, top right; hidden in a store build)
+
+Any menu screen (Title, Map, Stats, Info, Settings, About, License, Credits)
+    Tab row: Home | Map | Stats | Info | Settings | About
+        each tab replaces the current screen; Home is the title
+    Game row (every menu screen except Title and Relaxed setup):
+        "Play, Level {n}"          -> starts the player's next level
+        "Back to level, paused"    -> straight into that level (play continues)
+    Map      -> tap a cleared node: replay it | the next node: start it |
+                a locked node: toast and knock | "Go to level" chip: scroll
+    Settings -> dialog: reset
+    About    -> License | Credits (sub pages; About tab or Back returns)
+    Coffee chip (header; About has its own block) -> phone browser
 
 Level
-    -> Pause -> Resume | Retry | Sound | Music | Quit to title
+    -> Top bar cup (from level 4) -> Pause, then the phone browser (back to Pause on return)
+    -> Pause -> Resume | Retry | Sound | Music | Settings | Quit to title | Coffee
+         Settings (from Pause) -> menu frame with "Back to level" (into the level);
+                                  Android Back returns to Pause
     -> Level clear -> Next | Replay (Done | Another for daily and relaxed)
-    -> Out of room -> Retry | Previous level | Title | Undo
+    -> Out of room -> Retry | helpers owned | Previous level or Title
     -> Helper sheet (first time) -> Got it
     -> Buy dialog -> Get and use | Not now
 ```
@@ -921,7 +1220,7 @@ The back button and the back gesture do the same thing.
 
 | Screen | Back does |
 |-|-|
-| Title | Exits the app. Everything is already saved. |
+| Title | Exits the app. Everything is already saved. A paused level is not kept (4.3). |
 | Level (playing) | Opens Pause. |
 | Level (screwdriver mode) | Leaves the mode, keeps the helper. |
 | Level (helper intro sheet) | Closes it, same as "Got it". |
@@ -930,27 +1229,32 @@ The back button and the back gesture do the same thing.
 | Level clear | Goes to the title. |
 | Out of room | Goes to the title. |
 | Relaxed stuck sheet | Goes to the title. |
-| Levels list | Goes to the title. |
-| Stats | Goes to the title. |
-| Settings | Goes to the title. |
+| Progress map, Stats, Info, Settings, About | Goes to the **origin**: Pause if the player came from Pause, otherwise the title. Tabs replace screens, so the player does not walk back through every tab. |
 | Settings reset dialog | Closes it, nothing erased. |
-| About | Goes to the title. |
-| License | Goes back to About. |
-| Credits | Goes back to About. |
+| License, Credits | Goes back to About. |
 | Relaxed setup | Goes to the title. |
 
-Back never erases or spends anything. A level left unfinished starts again from its beginning.
+Back never erases or spends anything. A level left unfinished starts again from its beginning
+unless it is the paused level, which Back from the origin returns to.
 
 ### 4.3 Lifecycle
 
 - The app losing focus or going to the background while a level is on the screen opens Pause (the
   clock stops). Returning shows Pause; the player taps Resume.
+- **Links leave the app.** Opening the coffee page, the source code page or the email draft hands
+  an address to the phone, so the app loses focus. On the level screen the only such control is
+  the coffee cup in the top bar (1.7). Tapping it opens Pause first, in the same frame, so the
+  level is paused and the clock stopped before the browser opens (and the normal focus loss rule
+  above would pause it anyway). The same holds for the chip inside Pause. Coming back, the
+  player is on the same Pause screen, the same level, still paused. From a menu screen the
+  player simply returns to that screen.
 - Progress and settings are written when the app is paused or loses focus, and at every level
   clear. The save holds only the player's current level number (and the rest of the progress),
   not the state of a board.
 - **Decided by Bart:** quitting to the title, or the app being closed or killed in the middle of
   a level, brings the player back to the same level, started again from the beginning. The exact
-  board is not kept. Retry is still free.
+  board is not kept. Retry is still free. (A level paused in memory while the player visits
+  Settings, About or Info is the one exception, and only while the app stays alive.)
 - Date change during a daily: the daily keeps the date it started on; solving it counts for
   that date.
 
@@ -998,7 +1302,7 @@ Estimated time for an attentive new player: about 10 to 15 seconds. The hand rea
   the only text a player might ever see on level 1).
 - A player can lose a tutorial level; the same loss sheet is used.
 - The timer, pips and star bank stay hidden until level 4 (3.2.2).
-- Each line belongs to one tutorial level. Replaying that level from the levels list shows the
+- Each line belongs to one tutorial level. Replaying that level from the progress map shows the
   line again, which is fine.
 
 ### 5.3 Tutorial lines
@@ -1051,6 +1355,12 @@ touch down).
 | Tap the back board where there is nothing | a soft ring spreads from the touch (250 ms, fades) | a faint tick | 16 ms |
 | Tap anywhere after the level is cleared or lost | nothing | none | |
 
+- **The board's touch area is the board panel rectangle only** (3.2.1; scaled by b in 3.2.1a).
+  The top bar, the boxes row, the tray and the helper bar are separate controls. A touch that
+  starts in one of them never reaches the board, and a touch that starts on the board never
+  reaches them. The coffee cup in the top bar (1.7) has exactly its own 48 x 48 target, no
+  snapping, no larger area, and it acts on release only when the touch began on it. The nearest
+  screw target is at least 126 units below it.
 - Hit testing: a free screw is hit by a circle of radius 24 around its center. If circles from
   two free screws could meet, the one with the nearer center wins (but the spacing rule keeps
   that from happening). If no free screw is hit, a covered screw hit by the same circle makes
@@ -1112,7 +1422,7 @@ flashes (section 7.5).
 - Every screen works with one thumb, in portrait only.
 - The bottom half (y 300 and below in content coordinates) holds every primary action:
   Play, Next, Retry, Resume, the three difficulties, Got it, Get and use, the helper bar, and
-  every Back button.
+  the nav dock of every menu screen (the way back to the game and to every other screen).
 - The pause button is in the top right and is the only frequently used control above the
   bottom half. It is deliberately a little away from the thumb to prevent accidental pauses,
   and the Android back button does the same job from anywhere.
@@ -1139,7 +1449,8 @@ flashes (section 7.5).
 ### 7.3 Touch targets
 
 - Every control has a target at least **48 x 48 units**. Where a visible control is smaller (the
-  coffee chip, the pause icon, swatches) the target is still 48 by 48.
+  coffee chip, the pause icon, swatches) the target is still 48 by 48. Dock tabs are 56 x 52,
+  the game row is 336 x 52, and map nodes are 64 to 80 across.
 - Neighboring targets are at least 8 units apart, and a danger button is at least 16 units from
   the nearest other button.
 - **A free screw's target never overlaps another free screw's.** Because every pair of screws
@@ -1160,6 +1471,8 @@ flashes (section 7.5).
 | Selected swatch | outline | check mark |
 | Locked swatch | dimmed | padlock icon and caption |
 | Pips | fill | filled shape versus outline |
+| Active dock tab | raised plaque | a 3 unit bar above the label and a bold label |
+| Map node states | badge color | stars filled or outline, play triangle, padlock, size and border |
 | Danger button | red tone | the label "Erase everything" and its position below the safe choice |
 
 - **Sound is never the only signal** either: every sound has a matching motion or change.
@@ -1216,6 +1529,29 @@ For the lead to pass on.
   (inputs Wc, Hc, dpu; outputs b, f, stacked or split) is in 3.2.1a, and needs the safe area
   and the device's dp per unit.
 - **audio-dev:** sound list is the brief's; a button press reuses the knock quietly.
+- **New from 21 October 2026:**
+  - **ui-dev:** the menu frame and nav dock (1.6) as one shared component used by every menu
+    screen; the origin and paused level model (4.1); Settings from Pause (3.3); the progress map
+    (3.6) as a recycled or custom drawn trail; the Info screen (3.14); the coffee chip in the
+    header and in Pause, and one `Links.coffee_visible()` switch (1.7), with a test that builds
+    every screen with it off; the renamed Map tab (the old Levels list is gone).
+  - **gameplay-dev:** keep a paused level alive while the menus are open (the level scene or its
+    state is held, not freed). "Back to level" returns straight into the level and the clock
+    restarts when the board is showing, not before. The coffee cup in the top bar (from level 4)
+    opens Pause first and then asks the app flow to open the address; the board listens only
+    inside its panel rectangle (6.1); the cup is hidden while the clear screen, the out of room
+    sheet, a sheet or a dialog shows.
+  - **graphic-designer:** the dock (six tab icons: house, trail of dots, bar chart, "i" in a
+    circle, gear, screw head; the active tab look; the brass game row), the new title layout (the
+    four small buttons are gone, the decoration is bigger, 3.1), the map badges in four states
+    (cleared, hard, next, locked), star pips, a padlock, solid and dashed connectors, the top fade
+    of the trail and the "Go to level" chip, all cheap to draw (a pool of about 20 nodes on screen,
+    no per node shader cost); the coffee chip in the Workshop look; and the Info icons. Everything
+    in code, nothing flashes.
+  - **platform-dev:** the `no_coffee` custom feature in the store export preset (1.7), and the
+    privacy policy, the store listing and the link list with the coffee button hidden.
+  - **level-engine-dev and the save:** the map needs the best star count per level (already in
+    the progress save) and the highest cleared level; nothing new to store.
 
 ## 9. Review checklist (used on screenshots)
 
@@ -1225,7 +1561,7 @@ For the lead to pass on.
 3. Every control is at least 48 x 48 units (at least 48 dp where f is below 1); free screws'
    targets do not overlap.
 4. Text is at least 13 units and on a plaque; contrast numbers pass.
-5. Primary buttons are in the bottom half; Back is at the bottom of every sub screen.
+5. Primary buttons are in the bottom half; the nav dock is at the bottom of every menu screen.
 6. Symbols appear on screws, boxes and the preview by default.
 7. A covered screw tap wiggles the right plank within 100 ms.
 8. The tray warning shows at one free slot (with the triangle).
@@ -1238,6 +1574,17 @@ For the lead to pass on.
 14. Tablet and foldable: the board is scaled uniformly (never stretched) as in 3.2.1a, bars and
     rail are composed, other screens use a column of at most 480.
 15. Level 1 clears in under 30 seconds with no reading.
+16. The nav dock is identical on every menu screen, the active tab is clear, and "Back to level"
+    or "Play" is one tap away from each of them.
+17. The coffee chip is top right on the title, Pause, the map, Stats, Info and Settings; on the
+    level screen only the cup at the far left of the top bar shows (from level 4), 256 units from
+    Pause and more than 126 units from any screw target; nothing coffee shows on levels 1 to
+    3, on level clear, on out of room or over a sheet; every screen looks right with the coffee
+    switch off (the top bar goes back to its no cup layout).
+18. Settings opens from Pause and returns to the same paused level with nothing lost.
+19. The progress map opens centered on the next level, shows 4 locked levels, and answers a
+    locked tap with the knock and "Clear level {n} first."; it scrolls smoothly at level 500.
+20. Checked at both Fold5 sizes: folded 360 x 922 and opened 533 x 640.
 
 ## 10. Decided by Bart
 
@@ -1265,8 +1612,55 @@ For the lead to pass on.
     level 8**, so the title shows them locked with a note before then. (Sections 3.1, 3.2.2.)
 13. **Look direction: Workshop.** Box layout settled for it in 3.2.2 (wells on top, painted front
     band with the symbol, lid leaning back above).
+14. **Four requests from Bart after playing Phase 3 on a Galaxy Z Fold5, 21 October 2026.**
+    - **A coffee button that is easy to find.** On the title, the play screen (see 15 below),
+      Settings, Info and, by the shared frame, the map and Stats; About keeps its Supporting
+      block. No pop-ups, badges, counters, reminders or animation. One switch can hide every one
+      of them in a store build. (Section 1.7.)
+    - **Settings while playing.** One tap from Pause; it returns to the same paused level with
+      nothing lost. (Section 3.3.)
+    - **One navigation bar on every menu screen.** A bottom dock with six tabs and a game row,
+      so from any menu screen one tap goes to any other and one tap gets back to the game: the
+      paused level if there is one, otherwise Play with the next level. (Sections 1.6, 4.1, 4.2.)
+    - **A progress map in place of the plain levels list.** A scrolling trail of nodes with
+      stars, opening centered on the next level, with a few locked levels beyond. Tapping a
+      cleared level replays it. (Section 3.6.)
+15. **Coffee on the level screen goes in the top bar,** not only inside Pause (21 October 2026).
+    It is an icon only cup at the far left of the top bar, as safe as possible: 256 units from
+    Pause, more than 126 units from any screw target, the board's touch area stopping short of
+    it, quiet with no animation, and a tap pauses the level before the browser opens. It also
+    stays as a chip in Pause. (Sections 1.7, 3.2.2, 3.3, 4.3, 6.1.)
+16. **Info is "How to play"** (21 October 2026). Confirmed. (Section 3.14.)
+17. **"Back to level" goes straight into the level,** not to Pause first (21 October 2026). The
+    clock starts again when the board is showing. (Sections 1.6, 4.1.)
 
-## 11. Open questions
+## 11. Open questions and notes for the lead
 
-None for Bart at this point. The GDD (rules R36 to R38) now agrees with this file on quitting mid
-level, the out of room sheet and buying helpers.
+**For Bart:**
+1. **Privacy wording for a store build with the coffee button hidden.** Left open on purpose, for
+   Phase 7. The fixed sentence names the button. I propose "WoodLogic collects nothing: no ads,
+   no tracking, no internet. The game itself sends nothing." for that build only. It is fixed
+   wording in CLAUDE.md, so it needs your approval before the store build.
+
+**Choices I made that are easy to undo:**
+- The title's four small buttons (Levels, Stats, Settings, About) are now tabs in the dock, so
+  the title shows Play, Daily and Relaxed with a bigger decoration.
+- The top bar cup is hidden on levels 1 to 3 (it appears with the timer and pips at level 4),
+  so a brand new player's first minute has nothing to read or be asked. Say if you want it from
+  level 1.
+- Stats and the progress map get the coffee chip too, because the header is shared. Say if you
+  want it only on the screens you named.
+- Starting another level from the map while a level is paused drops the paused level without a
+  question (Retry is free, and a confirmation would slow the map down).
+
+**Conflicts and gaps in other documents (not edited by me):**
+- docs/ARCHITECTURE.md says the game hands three fixed addresses to the phone and lists
+  `src/ui/links.gd` as the only `OS.shell_open` site. With the coffee switch off it is two; the
+  switch (1.7) and its test need adding to the architecture, and the security reviewer should
+  check that `open_coffee` refuses when hidden.
+- docs/ARCHITECTURE.md (Phase 3, section 10) calls the screen "Levels list"; it is now the
+  progress map ("Map" tab). The GDD's mentions of Daily and Relaxed locks are unchanged.
+- docs/GDD.md R36 (quit mid level restarts) still holds. The paused level in memory (4.1) is
+  not a mid level save, but the app flow must keep the level scene alive while menus are open,
+  which the Phase 3 `app_flow.gd` was not built to do (its Pause only has Resume, Retry and Quit).
+- CLAUDE.md fixed wording for Privacy names the coffee button (see my note 3).

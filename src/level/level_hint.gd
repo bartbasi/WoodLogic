@@ -53,6 +53,8 @@ func point_at(target: Vector2, board_scale: float, glide: bool) -> void:
 
 
 func hide_hint() -> void:
+	if not _showing:
+		return
 	_showing = false
 	_alpha = 0.0
 	set_process(false)

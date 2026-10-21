@@ -11,6 +11,14 @@ const EASE_OUT_BACK := 2
 const EASE_SINE := 3
 
 
+## Draws a view last among its siblings, so it is above them. Draw order in the level scene is
+## tree order (no z_index anywhere), so nothing in it depends on an absolute z.
+static func raise(view: Node2D) -> void:
+	var parent := view.get_parent()
+	if parent != null:
+		parent.move_child(view, parent.get_child_count() - 1)
+
+
 ## An animation that only calls `what` after `wait` seconds.
 static func after(wait: float, what: Callable) -> LevelAnim:
 	var a := LevelAnim.new()
@@ -32,8 +40,6 @@ class Flight extends LevelAnim:
 	var settle := 0.15
 	var arc := 50.0
 	var turn_dir := -1.0
-	var z_fly := 30
-	var z_rest := 10
 	var on_pop := Callable()
 	var on_land := Callable()
 	var _popped := false
@@ -55,7 +61,7 @@ class Flight extends LevelAnim:
 		return maxf(0.0, delay + unscrew + flight - _t)
 
 	func _begin() -> void:
-		view.z_index = z_fly
+		LevelAnims.raise(view)
 
 	func _apply(local: float) -> void:
 		var peak := s0 * (1.15 if unscrew > 0.0 else 1.0)
@@ -94,7 +100,6 @@ class Flight extends LevelAnim:
 		view.scale = Vector2.ONE * s1
 		LevelViews.set_lift(view, 0.0)
 		LevelViews.set_turn(view, 0.0)
-		view.z_index = z_rest
 		if not _landed:
 			_landed = true
 			if on_land.is_valid():
@@ -146,8 +151,6 @@ class Fall extends LevelAnim:
 	var spin := 60.0
 	var drift := 0.0
 	var gravity := 2400.0
-	## Above the other planks (0 to 4) but below every screw (GDD V1 and its note on screws).
-	var z_fall := 5
 	var on_leave := Callable()
 
 	func _init(plank_slot: LevelPlankSlot, pivot: Vector2, start_angle: float, hang: float) -> void:
@@ -158,7 +161,8 @@ class Fall extends LevelAnim:
 		duration = 0.8
 
 	func _begin() -> void:
-		slot.view.z_index = z_fall
+		# Last among the planks: above the others, still below every screw (GDD V1).
+		LevelAnims.raise(slot.view)
 		if on_leave.is_valid():
 			on_leave.call()
 
@@ -167,6 +171,8 @@ class Fall extends LevelAnim:
 		slot.view.rotation = r
 		slot.view.position = about - about.rotated(r) + Vector2(drift * local, 0.5 * gravity * local * local)
 		slot.view.modulate.a = 1.0 - smoothstep(0.55, 0.8, local)
+		# The shadow fades out over the first 200 ms as the plank leaves the board (DESIGN.md 8).
+		LevelViews.set_shadow(slot.view, 1.0 - smoothstep(0.0, 0.2, local))
 
 	func _end() -> void:
 		slot.view.visible = false

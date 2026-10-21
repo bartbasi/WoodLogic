@@ -51,8 +51,11 @@ and animation are for looks only and never decide a rule.
   - Send feedback: a `mailto:bartbasi@gmail.com` draft naming the game version, phone model
     and OS version, which the player can edit or delete.
   - Source code: https://github.com/bartbasi/WoodLogic
-  - Buy me a coffee: https://buymeacoffee.com/playinc (a small, quiet button on the title
-    screen, and in About under "Supporting WoodLogic"; its cup icon is drawn in code).
+  - Buy me a coffee: https://buymeacoffee.com/playinc. Bart wants it easy to find (decided
+    21 October 2026): a quiet button on the title, the level screen, Settings, About (under
+    "Supporting WoodLogic") and Info, placed per docs/UX.md. It never pops up, animates or
+    reminds, and one switch hides every coffee button for a store build. Its cup icon is drawn
+    in code.
   Tests replace the opener so no test ever opens a browser or email app.
 - **About** shows what WoodLogic is and who made it, Send feedback, Source code, Supporting
   WoodLogic, Privacy, and the License (NOTICE and the GPL) and Credits (Godot's notices and
