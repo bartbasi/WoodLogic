@@ -33,8 +33,12 @@ static var numbered_schedule: Array = []
 static var daily_pool := PackedInt32Array()
 ## Per Relaxed band: its schedule of [blueprints, tiers] (Generator.relaxed_schedule).
 static var relaxed_schedule := {}
-## Per tier (index tier - 1): stored fallback levels, each with its stored solve.
+## Per tier (index tier - 1): stored fallback levels, each with its stored solve, made with
+## the tier's tray.
 static var fallback: Array[Array] = []
+## Per tier (index tier - 1): stored fallback levels made with Relaxed's tray, for Relaxed levels
+## of a tier whose own tray is another (see Generator.stored_pool). Empty for the other tiers.
+static var relaxed_fallback: Array[Array] = []
 
 
 static func is_loaded() -> bool:
@@ -86,10 +90,15 @@ static func load_all(tuning_path: String = Tuning.PATH) -> bool:
 
 ## The level for (kind, number, band): the tutorial file for numbered levels 1 to
 ## Tuning.tutorial_levels, otherwise the generator. Safe on a worker thread after load_all().
-static func get_level(kind: int, number: int, band: String) -> GeneratedLevel:
+## stop: see Generator.make; a level asked to stop before it starts comes back stopped at once.
+static func get_level(kind: int, number: int, band: String, stop: GenerationStop = null) -> GeneratedLevel:
 	if not _loaded:
 		push_error("LevelCatalog.get_level before load_all")
 		return null
+	if stop != null and stop.is_requested():
+		var stopped := GeneratedLevel.new()
+		stopped.stopped = true
+		return stopped
 	if kind == LevelData.NUMBERED and number >= 1 and number <= tutorials.size():
 		var started := Time.get_ticks_usec()
 		var out := GeneratedLevel.new()
@@ -99,7 +108,7 @@ static func get_level(kind: int, number: int, band: String) -> GeneratedLevel:
 		@warning_ignore("integer_division")
 		out.gen_ms = (Time.get_ticks_usec() - started) / 1000
 		return out
-	return Generator.make(kind, number, band)
+	return Generator.make(kind, number, band, stop)
 
 
 ## The index of a blueprint by id, or -1.
@@ -148,7 +157,8 @@ static func reload_fallback(dir: String = FALLBACK_DIR) -> bool:
 	return ok
 
 
-## Fallback files: src/logic/fallback/tier-<t>.json, each
+## Fallback files: src/logic/fallback/tier-<t>.json (into fallback) and relaxed-<t>.json (into
+## relaxed_fallback), each
 ## {"format": 1, "tier": t, "levels": [{"level": {...}, "solve": {...}}, ...]}, where solve
 ## holds fewest, states, novice_won, novice_taps, last_tray_use, peak_tray, trap, solution and
 ## variation (see SolveResult). Each level carries its own tray. Replaces the
@@ -157,8 +167,10 @@ static func reload_fallback(dir: String = FALLBACK_DIR) -> bool:
 static func read_fallback(dir: String, errors: PackedStringArray) -> bool:
 	var ok := true
 	fallback.clear()
+	relaxed_fallback.clear()
 	for t: int in Tuning.tiers.size():
 		fallback.append([])
+		relaxed_fallback.append([])
 	for path: String in json_files(dir):
 		var file_errors := PackedStringArray()
 		var list := parse_fallback(read_text(path), file_errors)
@@ -169,8 +181,9 @@ static func read_fallback(dir: String, errors: PackedStringArray) -> bool:
 			errors.append("fallback file %s: %s" % [path, "; ".join(file_errors)])
 			ok = false
 			continue
+		var into := relaxed_fallback if path.get_file().begins_with("relaxed-") else fallback
 		for g: GeneratedLevel in list:
-			fallback[g.level.tier - 1].append(g)
+			into[g.level.tier - 1].append(g)
 	return ok
 
 

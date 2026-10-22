@@ -12,7 +12,10 @@ extends SceneTree
 ##   --no-png             skip the pictures
 ##   --repeat             make every level twice and check both are the same
 ##   --fallback=K         also build K fallback levels per tier into src/logic/fallback/
-##                        (at least 11 for the daily's tier, see _write_fallback)
+##                        (at least 11 for the daily's tier, see _write_fallback), and K
+##                        more with Relaxed's tray for each tier that needs them
+##                        (Generator.needs_relaxed_pool)
+##   --fallback-pools=P   which pools --fallback builds: all (the default), tier or relaxed
 ##   --golden             write tests/logic/golden_levels.json (only with a new
 ##                        GENERATOR_VERSION)
 ##   --probe              also measure each level with Solver.probe (report only, slow):
@@ -64,7 +67,7 @@ func _main(args: PackedStringArray) -> int:
 	DirAccess.make_dir_recursive_absolute(out_dir.path_join("png"))
 	var failed := 0
 	if opt["fallback"] > 0:
-		failed += _write_fallback(opt["fallback"], opt["fallback-dir"])
+		failed += _write_fallback(opt["fallback"], opt["fallback-dir"], opt["fallback-pools"])
 		if not LevelCatalog.reload_fallback(opt["fallback-dir"]):
 			failed += 1
 	if opt["golden"] and not _write_golden():
@@ -97,7 +100,7 @@ func _main(args: PackedStringArray) -> int:
 
 
 func _options(args: PackedStringArray) -> Dictionary:
-	var opt := {"from": 1, "to": 100, "daily": "", "days": 1, "relaxed": 0, "out": "res://build/levels", "png": true, "repeat": false, "fallback": 0, "golden": false, "probe": false, "probe-trials": PROBE_TRIALS, "probe-states": PROBE_STATES, "tuning": Tuning.PATH, "fallback-dir": FALLBACK_DIR}
+	var opt := {"from": 1, "to": 100, "daily": "", "days": 1, "relaxed": 0, "out": "res://build/levels", "png": true, "repeat": false, "fallback": 0, "golden": false, "probe": false, "probe-trials": PROBE_TRIALS, "probe-states": PROBE_STATES, "tuning": Tuning.PATH, "fallback-dir": FALLBACK_DIR, "fallback-pools": "all"}
 	for a: String in args:
 		var kv := a.trim_prefix("--").split("=", true, 1)
 		var key := kv[0]
@@ -105,7 +108,7 @@ func _options(args: PackedStringArray) -> Dictionary:
 		match key:
 			"from", "to", "days", "relaxed", "fallback", "probe-trials", "probe-states":
 				opt[key] = value.to_int()
-			"daily", "out", "tuning", "fallback-dir":
+			"daily", "out", "tuning", "fallback-dir", "fallback-pools":
 				opt[key] = value
 			"no-png":
 				opt["png"] = false
@@ -681,44 +684,57 @@ func _disc(img: Image, center: Vector2, r: float, color: Color) -> void:
 				img.set_pixel(px, py, color)
 
 
-## Builds `count` fallback levels per tier and writes src/logic/fallback/tier-NN.json. Returns
-## how many tiers got none.
-func _write_fallback(count: int, dir: String) -> int:
+## Builds `count` fallback levels per tier and writes src/logic/fallback/tier-NN.json, and as
+## many with Relaxed's tray for each tier that needs them, in relaxed-NN.json (a stale
+## relaxed-NN.json of a tier that no longer needs one is removed). pools: "all", "tier" or
+## "relaxed", which of the two to build. Returns how many pools got no level.
+func _write_fallback(count: int, dir: String, pools: String) -> int:
 	DirAccess.make_dir_recursive_absolute(dir)
 	var missing := 0
 	for t: int in range(1, Tuning.tiers.size() + 1):
-		var started := Time.get_ticks_msec()
-		# Every day draws on the daily tier's pool, so a day can have 2R lower ranked neighbors
-		# on it (Generator.stored_pick): with 2R + 1 stored levels one is always left for it.
-		var r := maxi(Tuning.recent_blueprints_excluded, 1)
-		var list := Generator.build_fallback(t, maxi(count, 2 * r + 1) if t == Tuning.daily_tier else count, FALLBACK_ATTEMPTS)
-		var levels := []
-		for g: GeneratedLevel in list:
-			levels.append({
-				"level": g.level.to_dict(),
-				"solve": {
-					"fewest": g.solve.fewest_tray_uses,
-					"states": g.solve.states,
-					"novice_won": g.solve.novice_won,
-					"novice_taps": g.solve.novice_taps,
-					"last_tray_use": g.solve.last_tray_use,
-					"peak_tray": g.solve.peak_tray,
-					"trap": g.solve.trap,
-					"solution": Array(g.solve.solution),
-					"variation": g.variation,
-				},
-			})
-		if list.is_empty():
-			missing += 1
-		# One level per line: small, and a changed level shows as one changed line.
-		var lines := PackedStringArray()
-		for entry: Variant in levels:
-			lines.append(JSON.stringify(entry))
-		var file := FileAccess.open(dir.path_join("tier-%02d.json" % t), FileAccess.WRITE)
-		file.store_string('{"format": 1, "tier": %d, "levels": [\n%s\n]}\n' % [t, ",\n".join(lines)])
-		file.close()
-		print("fallback tier %d: %d levels in %d ms" % [t, list.size(), Time.get_ticks_msec() - started])
+		if pools != "relaxed":
+			# Every day draws on the daily tier's pool, so a day can have 2R lower ranked neighbors
+			# on it (Generator.stored_pick): with 2R + 1 stored levels one is always left for it.
+			var r := maxi(Tuning.recent_blueprints_excluded, 1)
+			missing += _write_pool(t, maxi(count, 2 * r + 1) if t == Tuning.daily_tier else count, false, dir.path_join("tier-%02d.json" % t))
+		if pools != "tier":
+			var path := dir.path_join("relaxed-%02d.json" % t)
+			if Generator.needs_relaxed_pool(t):
+				missing += _write_pool(t, count, true, path)
+			elif FileAccess.file_exists(path):
+				DirAccess.remove_absolute(path)
 	return missing
+
+
+## Builds one pool (Generator.build_fallback) and writes it to path. 1 if it got no level.
+func _write_pool(t: int, count: int, relaxed: bool, path: String) -> int:
+	var started := Time.get_ticks_msec()
+	var list := Generator.build_fallback(t, count, FALLBACK_ATTEMPTS, relaxed)
+	var levels := []
+	for g: GeneratedLevel in list:
+		levels.append({
+			"level": g.level.to_dict(),
+			"solve": {
+				"fewest": g.solve.fewest_tray_uses,
+				"states": g.solve.states,
+				"novice_won": g.solve.novice_won,
+				"novice_taps": g.solve.novice_taps,
+				"last_tray_use": g.solve.last_tray_use,
+				"peak_tray": g.solve.peak_tray,
+				"trap": g.solve.trap,
+				"solution": Array(g.solve.solution),
+				"variation": g.variation,
+			},
+		})
+	# One level per line: small, and a changed level shows as one changed line.
+	var lines := PackedStringArray()
+	for entry: Variant in levels:
+		lines.append(JSON.stringify(entry))
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	file.store_string('{"format": 1, "tier": %d, "levels": [\n%s\n]}\n' % [t, ",\n".join(lines)])
+	file.close()
+	print("fallback tier %d%s: %d levels in %d ms" % [t, " (Relaxed)" if relaxed else "", list.size(), Time.get_ticks_msec() - started])
+	return 1 if list.is_empty() else 0
 
 
 ## Writes the golden fingerprints. Refuses if the file already holds this GENERATOR_VERSION:

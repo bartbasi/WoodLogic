@@ -297,20 +297,93 @@ func test_6_8_plans_take_their_tiers_tray_and_peak() -> void:
 	check(widened.tray_uses.x >= plan.peak and widened.tray_uses.y >= plan.peak + 1, "level 104: tray uses %s for a peak of %d" % [widened.tray_uses, plan.peak])
 
 
-func test_6_8_a_stored_level_grows_to_a_larger_tray_but_never_shrinks() -> void:
+func test_6_8_a_relaxed_level_falls_back_to_a_level_made_with_its_tray() -> void:
 	_ready_catalog()
-	# Relaxed has 5 slots of its own; a stored hard level was made for 3. Handed out in Relaxed it
-	# gets 5, and its stored solution still wins. Numbered levels keep their tier's tray.
-	for i: int in 6:
-		var plan := Generator.plan_for(LevelData.RELAXED, i, "hard")
-		var g := GeneratedLevel.new()
-		Generator._fall_back(plan, g)
-		check_eq(g.level.tray_size, maxi(plan.tray, Tuning.tier(g.level.tier).tray), "Relaxed hard %d: the larger tray" % i)
-		check_eq(_replay(g.level, g.solve.solution) >= 0, true, "Relaxed hard %d: the stored solution still wins" % i)
+	# QA G4: Relaxed has 5 slots of its own. A Relaxed level that falls back hands out a stored
+	# level made and measured with those 5 (the Relaxed pool), never a 3 slot one grown to 5, so
+	# its novice result is the one it is played with and G4 holds. Numbered levels keep their
+	# tier's pool and tray.
+	for band: String in Tuning.BANDS:
+		for i: int in 12:
+			var plan := Generator.plan_for(LevelData.RELAXED, i, band)
+			var g := GeneratedLevel.new()
+			Generator._fall_back(plan, g)
+			var where := "Relaxed %s %d (tier %d)" % [band, i, plan.tier]
+			check_eq(g.level.tray_size, plan.tray, "%s: Relaxed's tray" % where)
+			var pool := Generator.stored_pool(LevelData.RELAXED, plan.tier, plan.tray)
+			var stored: GeneratedLevel = pool[Generator.stored_pick(LevelData.RELAXED, i, band, {})]
+			check(g.solve == stored.solve, "%s: the stored solve as it is, nothing grown" % where)
+			check_eq(stored.level.tray_size, plan.tray, "%s: made with that tray" % where)
+			if Generator.needs_relaxed_pool(plan.tier):
+				check(LevelCatalog.relaxed_fallback[plan.tier - 1].has(stored), "%s: from the Relaxed pool" % where)
+			var novice := SolveResult.new()
+			Solver.measure(g.level, novice, false)
+			check_eq(novice.novice_won, g.solve.novice_won, "%s: the novice result as played" % where)
+			check(Generator._novice_right(Tuning.tier(plan.tier), novice), "%s: G4 as played" % where)
+			check_eq(_replay(g.level, g.solve.solution), g.solve.fewest_tray_uses, "%s: the solution replays" % where)
 	for n: int in [52, 57, 104]:
 		var g := GeneratedLevel.new()
 		Generator._fall_back(Generator.plan_for(LevelData.NUMBERED, n, ""), g)
 		check_eq(g.level.tray_size, Tuning.tier(Tuning.tier_for_level(n)).tray, "level %d: its tier's tray" % n)
+
+
+func test_6_8_a_stored_level_grown_to_a_larger_tray_is_measured_again() -> void:
+	_ready_catalog()
+	# The last resort, when no stored level was made with the tray asked for: the stored level
+	# grows (more slots never break its solution) and its novice and trap measure come from the
+	# level as played. On tier 8 some stored levels the novice loses with 3 slots are won with 5.
+	var changed := 0
+	for stored: GeneratedLevel in LevelCatalog.fallback[7]:
+		var grown := Generator.with_tray(stored.level, 5)
+		var r := Generator.remeasured(grown, stored.solve)
+		var fresh := SolveResult.new()
+		Solver.measure(grown, fresh)
+		check_eq([r.novice_won, r.novice_taps, r.trap], [fresh.novice_won, fresh.novice_taps, fresh.trap], "%s: measured with 5 slots" % stored.level.id)
+		check_eq([r.solution, r.fewest_tray_uses, r.peak_tray, r.last_tray_use], [stored.solve.solution, stored.solve.fewest_tray_uses, stored.solve.peak_tray, stored.solve.last_tray_use], "%s: the stored solution kept" % stored.level.id)
+		check_eq(_replay(grown, r.solution), r.fewest_tray_uses, "%s: and it replays" % stored.level.id)
+		changed += 1 if r.novice_won != stored.solve.novice_won else 0
+	check(changed >= 1, "the measure differs on some (%d), which is why it is taken again" % changed)
+	# Without a Relaxed pool, a Relaxed level gets the grown and measured level.
+	var plan := Generator.plan_for(LevelData.RELAXED, 0, "hard")
+	var saved := LevelCatalog.relaxed_fallback[plan.tier - 1]
+	LevelCatalog.relaxed_fallback[plan.tier - 1] = []
+	var g := GeneratedLevel.new()
+	Generator._fall_back(plan, g)
+	LevelCatalog.relaxed_fallback[plan.tier - 1] = saved
+	var stored: GeneratedLevel = LevelCatalog.fallback[plan.tier - 1][Generator.stored_pick(LevelData.RELAXED, 0, "hard", {})]
+	check_eq(g.level.tray_size, plan.tray, "grown to Relaxed's tray")
+	var fresh := SolveResult.new()
+	Solver.measure(g.level, fresh)
+	check(g.solve != stored.solve and g.solve.novice_won == fresh.novice_won and g.solve.trap == fresh.trap, "with the novice and trap measured as played")
+	check_eq(g.level.blueprint_id, stored.level.blueprint_id, "the tier's stored pick")
+
+
+func test_6_8_relaxed_pools_hold_every_rule_with_relaxed_tray() -> void:
+	_ready_catalog()
+	# Every tier a Relaxed band plays whose own tray is not Relaxed's has a Relaxed pool, and each
+	# of its levels holds the tier's rules with Relaxed's tray (made by _try like the others).
+	var r := Tuning.recent_blueprints_excluded
+	for t: int in range(1, Tuning.tiers.size() + 1):
+		var pool: Array = LevelCatalog.relaxed_fallback[t - 1]
+		if not Generator.needs_relaxed_pool(t):
+			check(pool.is_empty(), "tier %d needs no Relaxed pool" % t)
+			continue
+		check(pool.size() > r, "tier %d has a Relaxed pool of more than %d levels (%d)" % [t, r, pool.size()])
+		var spec := Tuning.tier(t)
+		for stored: GeneratedLevel in pool:
+			var level := stored.level
+			check_eq([level.tier, level.tray_size], [t, Tuning.relaxed_tray], "%s: tier and Relaxed's tray" % level.id)
+			check(BlueprintValidator.check(level).is_empty(), "%s: keeps the blueprint rules" % level.id)
+			var solved := Solver.solve(level, 400000)
+			check(solved.solved and solved.complete, "%s: solves" % level.id)
+			check_eq(solved.fewest_tray_uses, stored.solve.fewest_tray_uses, "%s: the stored fewest tray uses" % level.id)
+			var widened := spec.tray_uses if spec.peak.x <= 0 else Vector2i(maxi(spec.tray_uses.x, spec.peak.x), maxi(spec.tray_uses.y, spec.peak.x + 1))
+			check(solved.fewest_tray_uses >= widened.x and solved.fewest_tray_uses <= widened.y, "%s: G3" % level.id)
+			check_eq(_replay(level, stored.solve.solution), solved.fewest_tray_uses, "%s: the stored solution replays" % level.id)
+			check_eq([solved.novice_won, solved.novice_taps, solved.trap], [stored.solve.novice_won, stored.solve.novice_taps, stored.solve.trap], "%s: the stored novice and trap" % level.id)
+			check(Generator._novice_right(spec, solved), "%s: G4" % level.id)
+			check(Generator.g9_holds(t, level, stored.solve), "%s: G9 as tier %d requires it" % [level.id, t])
+			check_eq(Generator.peak_holds(level, stored.solve, spec.peak.x, 400000), 1, "%s: G10 for tier %d" % [level.id, t])
 
 
 func test_6_8_skipped_boards_are_never_dealt_on_their_tier() -> void:
@@ -415,14 +488,18 @@ func test_6_4_1_no_two_levels_within_5_hand_out_the_same_stored_level() -> void:
 		var picks := {}
 		var pools := {}
 		var most_taken := 0
+		# The pool each tier draws on in this stream (Relaxed's own for Relaxed, see stored_pool).
+		var tier_pools := {}
+		for t: int in range(1, Tuning.tiers.size() + 1):
+			tier_pools[t] = Generator.stored_pool(kind, t, Generator.tray_for(kind, t))
 		for number: int in stream[2]:
 			var at := Generator.stream_position(kind, number)
 			picks[at] = Generator.stored_pick(kind, number, band, memo)
-			pools[at] = Generator.fallback_tier(Generator.tier_of(kind, number, band))
+			pools[at] = tier_pools[Generator.tier_of(kind, number, band)]
 		for at: int in picks:
 			levels += 1
 			var number := Generator.stream_number(kind, at)
-			var pool: Array = LevelCatalog.fallback[int(pools[at]) - 1]
+			var pool: Array = pools[at]
 			for k: int in range(1, r + 1):
 				if picks.has(at + k) and pools[at + k] == pools[at] and picks[at + k] == picks[at]:
 					same += 1
@@ -435,7 +512,7 @@ func test_6_4_1_no_two_levels_within_5_hand_out_the_same_stored_level() -> void:
 				if k == 0 or posmod(other, r + 1) >= posmod(at, r + 1) or not in_stream:
 					continue
 				var other_number := Generator.stream_number(kind, other)
-				if Generator.fallback_tier(Generator.tier_of(kind, other_number, band)) == pools[at]:
+				if tier_pools[Generator.tier_of(kind, other_number, band)] == pool:
 					taken.append(Generator.stored_pick(kind, other_number, band, memo))
 			most_taken = maxi(most_taken, taken.size())
 			var nearest := Generator.neighbor_distances(kind, number, band)

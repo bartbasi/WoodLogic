@@ -66,3 +66,14 @@ fell back), so three routes went to Bart. He chose:
 
 GDD 6.8 has the final schedule, the capability deal and the measured fallbacks. This replaces
 the reading above where they differ.
+
+## Gate 2 approved (22 October 2026)
+
+Bart played the smaller tray build (commit 53011c0) and wrote "approved". His phone checks were
+"All fine": progress kept over the update, Back, switching apps, folding, smoothness and the
+gift.
+
+Left open for later: the late-level softness. A level is tight in its opening and forgives up to
+its tray size in needless taps at quiet moments in its second half. The wave coloring experiment
+(a second peak after halfway) is parked in docs/LATER.md, to try only if Bart still finds the
+endings too easy.

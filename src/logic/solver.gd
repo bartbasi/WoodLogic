@@ -100,6 +100,8 @@ var _plank_bits := PackedInt64Array()
 var _harmless_mask: int = 0
 var _arrived := PackedInt64Array()
 var _prune := true
+## Checked by _search every GenerationStop.CHECK_EVERY states it expands; null for none.
+var _stop: GenerationStop
 ## Set bits in a byte, highest first: the positions of byte value v are
 ## _byte_bits[_byte_off[v] .. _byte_off[v + 1] - 1].
 var _byte_off := PackedInt32Array()
@@ -127,12 +129,14 @@ static func solve(level: LevelData, max_states: int, max_tray_uses: int = -1) ->
 
 
 ## Only the search for the fewest tray uses (no novice or trap), with or without the safe move
-## rule and the cap. For the generator, and for tests and tools that check the rule.
-static func search_only(level: LevelData, max_states: int, prune: bool = true, max_tray_uses: int = -1) -> SolveResult:
+## rule and the cap. For the generator, and for tests and tools that check the rule. stop: once
+## it is requested, the search ends as if it had reached max_states (complete false).
+static func search_only(level: LevelData, max_states: int, prune: bool = true, max_tray_uses: int = -1, stop: GenerationStop = null) -> SolveResult:
 	var started := Time.get_ticks_usec()
 	var result := SolveResult.new()
 	var solver := Solver.new()
 	solver._prune = prune
+	solver._stop = stop
 	if solver._setup(level):
 		solver._search(max_states, result, max_tray_uses)
 	@warning_ignore("integer_division")
@@ -363,6 +367,8 @@ func _search(max_states: int, result: SolveResult, max_tray_uses: int = -1, from
 	var byte_bits := _byte_bits
 	var bytes := (n + 7) >> 3
 	var two := _k == 2
+	var stop := _stop
+	var pops := 0
 	var visited := {root: -1}
 	var pending := {}
 	var stack := PackedInt64Array([root, root_aux])
@@ -467,7 +473,8 @@ func _search(max_states: int, result: SolveResult, max_tray_uses: int = -1, from
 							stack.append(child)
 							stack.append(child_aux)
 				chunk -= 1
-			if win < 0 and visited.size() + pending.size() >= max_states:
+			pops += 1
+			if win < 0 and (visited.size() + pending.size() >= max_states or (stop != null and pops % GenerationStop.CHECK_EVERY == 0 and stop.is_requested())):
 				result.states = visited.size() + pending.size()
 				result.complete = false
 				return

@@ -53,7 +53,7 @@ func test_the_data_has_a_smaller_tray_step() -> void:
 func test_the_shrink_line_shows_once_on_the_first_smaller_level() -> void:
 	var first := _first_smaller()
 	start()
-	save_node().set_next_level(first)
+	save_node().set_next_level_for_tests(first)
 	await _restart()
 	tap("Play")
 	check(await in_state(AppFlow.State.LEVEL), "the level starts")
@@ -78,7 +78,7 @@ func test_the_shrink_line_shows_once_on_the_first_smaller_level() -> void:
 func test_the_shrink_line_is_not_for_replays_daily_or_relaxed() -> void:
 	var first := _first_smaller()
 	start(8)
-	save_node().set_next_level(first + 2)
+	save_node().set_next_level_for_tests(first + 2)
 	await _restart()
 	tap("Map")
 	await frames(3)
@@ -100,7 +100,7 @@ func test_the_shrink_line_is_not_for_replays_daily_or_relaxed() -> void:
 func test_the_tray_closes_when_next_arrives_at_a_smaller_tray() -> void:
 	var first := _first_smaller()
 	start()
-	save_node().set_next_level(first - 1)
+	save_node().set_next_level_for_tests(first - 1)
 	await _restart()
 	tap("Play")
 	check(await in_state(AppFlow.State.LEVEL), "the level before")

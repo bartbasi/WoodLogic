@@ -188,3 +188,46 @@ func test_a_full_gift_list_grants_nothing() -> void:
 	check(not s.grant_gift(40, {"undo": 1}), "the 33rd is refused")
 	check_eq(s.helper_count("undo"), 32, "and gives no helpers")
 	check(not s.is_gift_given(40), "and records nothing")
+
+
+func test_buy_helper_spends_and_adds_in_one_step() -> void:
+	var s := _new_save("buy")
+	s.record_win(LevelCatalog.get_level(LevelData.NUMBERED, 2, "").level, 1000, Vector3i(1, 1, 1))
+	s.record_win(LevelCatalog.get_level(LevelData.NUMBERED, 3, "").level, 1000, Vector3i(1, 1, 1))
+	var bank: int = s.star_bank()
+	check(s.buy_helper("undo", 4), "bought")
+	check_eq(s.star_bank(), bank - 4, "the stars left")
+	check_eq(s.helper_count("undo"), 1, "the helper came")
+	var again := _new_save("buy")
+	check_eq(again.star_bank(), bank - 4, "saved together: stars")
+	check_eq(again.helper_count("undo"), 1, "saved together: helper")
+	check(not again.buy_helper("undo", 1000), "a short bank buys nothing")
+	check(not again.buy_helper("hammer", 1), "an unknown helper buys nothing")
+	check(not again.buy_helper("undo", -1), "a negative price buys nothing")
+	check_eq(again.star_bank(), bank - 4, "nothing changed")
+	check_eq(again.helper_count("undo"), 1, "nothing changed")
+
+
+func test_helper_used_is_one_step() -> void:
+	var s := _new_save("used_one")
+	s.add_helper("undo", 2)
+	s.helper_used("undo", true)
+	check_eq(s.helper_count("undo"), 1, "one taken")
+	s.helper_used("undo", false)
+	check_eq(s.helper_count("undo"), 1, "a free use (Relaxed) takes none")
+	s.helper_used("screwdriver", true)
+	check_eq(s.helper_count("screwdriver"), 0, "never below zero")
+	check_eq(s.progress_copy()["stats"]["helpers_used"], 3, "all three counted")
+	var again := _new_save("used_one")
+	check_eq(again.helper_count("undo"), 1, "saved")
+	check_eq(again.progress_copy()["stats"]["helpers_used"], 3, "saved with the stat")
+
+
+func test_buy_helper_refuses_at_the_most_a_player_can_hold() -> void:
+	var s := _new_save("buy_max")
+	s.record_win(LevelCatalog.get_level(LevelData.NUMBERED, 2, "").level, 1000, Vector3i(1, 1, 1))
+	s.add_helper("undo", SaveScript.MAX_HELPERS)
+	var bank: int = s.star_bank()
+	check(not s.buy_helper("undo", 1), "refused at the most")
+	check_eq(s.star_bank(), bank, "no stars spent")
+	check_eq(s.helper_count("undo"), SaveScript.MAX_HELPERS, "nothing added")

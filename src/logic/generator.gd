@@ -26,7 +26,7 @@ extends RefCounted
 ##
 ## Every number here counts toward GENERATOR_VERSION: changing one changes levels.
 
-const GENERATOR_VERSION := 6
+const GENERATOR_VERSION := 7
 ## Seed purposes for Seeds.derive.
 const VARY := 12
 const COLOR := 13
@@ -124,18 +124,29 @@ class Variation extends RefCounted:
 		return " ".join(parts) if not parts.is_empty() else "as drawn"
 
 
-## Makes the level. Never null once LevelCatalog is loaded.
-static func make(kind: int, number: int, band: String) -> GeneratedLevel:
+## Makes the level. Never null once LevelCatalog is loaded. stop (LevelPrefetcher passes one):
+## once it is requested, make gives up between tries or within a search and returns with
+## stopped set and no level, never a fallback in its place. Without a stop, or with one never
+## requested, the level is the same.
+static func make(kind: int, number: int, band: String, stop: GenerationStop = null) -> GeneratedLevel:
 	var started := Time.get_ticks_usec()
 	var out := GeneratedLevel.new()
 	var plan := plan_for(kind, number, band)
-	if plan.blueprint >= 0:
-		_try(plan, out)
-	if out.level == null:
+	if plan.blueprint >= 0 and not _stopped(stop):
+		_try(plan, out, -1, stop)
+	if _stopped(stop):
+		out.level = null
+		out.solve = null
+		out.stopped = true
+	elif out.level == null:
 		_fall_back(plan, out)
 	@warning_ignore("integer_division")
 	out.gen_ms = (Time.get_ticks_usec() - started) / 1000
 	return out
+
+
+static func _stopped(stop: GenerationStop) -> bool:
+	return stop != null and stop.is_requested()
 
 
 ## The plan for (kind, number, band). number is the level number, the date as yyyymmdd, or
@@ -163,15 +174,19 @@ static func plan_for(kind: int, number: int, band: String) -> Plan:
 			plan.group = Tuning.tier(plan.tier).group
 			plan.slack = Tuning.slack_for_level(number)
 			plan.seed_value = Seeds.numbered(number)
-	var spec := Tuning.tier(plan.tier)
-	plan.tray = spec.tray
-	plan.peak = spec.peak.x
-	if plan.kind == LevelData.RELAXED and Tuning.relaxed_tray > 0:
-		# Relaxed can't be lost, so a larger tray of its own only makes it kinder; it keeps its
-		# tier's peak.
-		plan.tray = Tuning.relaxed_tray
+	plan.tray = tray_for(plan.kind, plan.tier)
+	plan.peak = Tuning.tier(plan.tier).peak.x
 	plan.blueprint = blueprint_for(plan.kind, number, plan.band)
 	return plan
+
+
+## The tray a level of this kind and tier is played with (GDD 6.8): its tier's, or Relaxed's
+## own. Relaxed can't be lost, so a larger tray of its own only makes it kinder; it keeps its
+## tier's peak.
+static func tray_for(kind: int, tier: int) -> int:
+	if kind == LevelData.RELAXED and Tuning.relaxed_tray > 0:
+		return Tuning.relaxed_tray
+	return Tuning.tier(tier).tray
 
 
 ## The tier of a Relaxed level (GDD 6.6), from the band's schedule (see relaxed_schedule).
@@ -402,14 +417,14 @@ static func peak_holds(level: LevelData, r: SolveResult, peak: int, max_states: 
 
 ## peak_holds, and the states G10b searched: Vector2i(answer, states), so _try can count them
 ## toward the level's state budget.
-static func _peak_check(level: LevelData, r: SolveResult, peak: int, max_states: int) -> Vector2i:
+static func _peak_check(level: LevelData, r: SolveResult, peak: int, max_states: int, stop: GenerationStop = null) -> Vector2i:
 	if peak <= 0:
 		return Vector2i(1, 0)
 	if r.peak_tray < peak:
 		return Vector2i(0, 0)
 	if peak == 1:
 		return Vector2i(1, 0)
-	var small := Solver.search_only(with_tray(level, peak - 1), max_states)
+	var small := Solver.search_only(with_tray(level, peak - 1), max_states, true, -1, stop)
 	return Vector2i(0 if small.solved else (1 if small.complete else -1), small.states)
 
 
@@ -454,8 +469,9 @@ static func _closeness(plan: Plan, spec: Tuning.TierSpec, level: LevelData, r: S
 
 ## Steps 2 and 3. Tries at most max_attempts (by default the tier's MAX_ATTEMPTS times
 ## budget_scale); on success out.level is set. Whatever happens, out.closest keeps the solved
-## try that came nearest the tier (see _closeness), as a last resort.
-static func _try(plan: Plan, out: GeneratedLevel, max_attempts: int = -1) -> void:
+## try that came nearest the tier (see _closeness), as a last resort. Returns early once stop
+## is requested (make then throws everything away).
+static func _try(plan: Plan, out: GeneratedLevel, max_attempts: int = -1, stop: GenerationStop = null) -> void:
 	var bp := LevelCatalog.blueprints[plan.blueprint]
 	var spec := spec_for(plan)
 	var budget: int = MAX_STATES[plan.tier - 1]
@@ -472,7 +488,7 @@ static func _try(plan: Plan, out: GeneratedLevel, max_attempts: int = -1) -> voi
 	var pressure := start
 	var closest_score := -1
 	for v: int in variations:
-		if out.attempts >= max_attempts:
+		if out.attempts >= max_attempts or _stopped(stop):
 			return
 		var rng := RandomNumberGenerator.new()
 		rng.seed = Seeds.derive(plan.seed_value, VARY, v)
@@ -483,7 +499,7 @@ static func _try(plan: Plan, out: GeneratedLevel, max_attempts: int = -1) -> voi
 			out.rejected_boards += 1
 			continue
 		for c: int in COLORINGS:
-			if out.attempts >= max_attempts or out.total_states >= level_states:
+			if out.attempts >= max_attempts or out.total_states >= level_states or _stopped(stop):
 				return
 			out.attempts += 1
 			var crng := RandomNumberGenerator.new()
@@ -509,7 +525,7 @@ static func _try(plan: Plan, out: GeneratedLevel, max_attempts: int = -1) -> voi
 			if SURVIVAL_TIERS.has(plan.tier) and not survives(level, novice):
 				out.short_survival += 1
 				continue
-			var r := Solver.search_only(level, budget, true, spec.tray_uses.y)
+			var r := Solver.search_only(level, budget, true, spec.tray_uses.y, stop)
 			r.novice_won = novice.novice_won
 			r.novice_taps = novice.novice_taps
 			r.ms += novice.ms
@@ -534,7 +550,7 @@ static func _try(plan: Plan, out: GeneratedLevel, max_attempts: int = -1) -> voi
 				continue
 			# G10, right after the search: the replay (G10a), then the search at peak - 1 slots
 			# (G10b). A peak too low raises the pressure, like a too easy coloring.
-			var check := _peak_check(level, r, plan.peak, budget)
+			var check := _peak_check(level, r, plan.peak, budget, stop)
 			out.total_states += check.y
 			var peak := check.x
 			if peak == 0:
@@ -906,12 +922,16 @@ static func level_id(kind: int, number: int, band: String) -> String:
 ## src/logic/fallback/). It goes through the tier's blueprints in turn on its own seed stream,
 ## with more tries per level, and keeps up to `count` levels, each on a different blueprint
 ## while there are enough. Each is accepted by _try, so it holds every rule a generated level
-## of its tier holds, G9 included where the tier requires it.
-static func build_fallback(tier: int, count: int, max_attempts: int) -> Array[GeneratedLevel]:
+## of its tier holds, G9 included where the tier requires it. relaxed: made with Relaxed's tray
+## (tray_for) instead of the tier's, for the Relaxed pool (see stored_pool), on a seed stream of
+## its own.
+static func build_fallback(tier: int, count: int, max_attempts: int, relaxed: bool = false) -> Array[GeneratedLevel]:
 	var out: Array[GeneratedLevel] = []
 	var list := LevelCatalog.suits[tier - 1]
 	var used := PackedStringArray()
 	var stream := Seeds.mix(FALLBACK_STREAM, GENERATOR_VERSION)
+	if relaxed:
+		stream = Seeds.mix(stream, LevelData.RELAXED)
 	for k: int in maxi(list.size() * 12, count * 8):
 		if out.size() >= count:
 			break
@@ -928,14 +948,14 @@ static func build_fallback(tier: int, count: int, max_attempts: int) -> Array[Ge
 		plan.slack = 0
 		plan.seed_value = Seeds.derive(stream, tier, k)
 		plan.blueprint = b
-		plan.tray = Tuning.tier(tier).tray
+		plan.tray = tray_for(LevelData.RELAXED if relaxed else LevelData.NUMBERED, tier)
 		plan.peak = Tuning.tier(tier).peak.x
 		var g := GeneratedLevel.new()
 		_try(plan, g, max_attempts)
 		if g.level == null:
 			continue
 		var errors := PackedStringArray()
-		g.level = g.level.with_colors(g.level.screw_colors, g.level.queue, errors, {"id": "fallback-%d-%d" % [tier, out.size() + 1]})
+		g.level = g.level.with_colors(g.level.screw_colors, g.level.queue, errors, {"id": "%sfallback-%d-%d" % ["relaxed-" if relaxed else "", tier, out.size() + 1]})
 		used.append(id)
 		out.append(g)
 	return out
@@ -946,9 +966,10 @@ static func build_fallback(tier: int, count: int, max_attempts: int) -> Array[Ge
 ## stored fallback level of the nearest tier that has one. Only with no fallback files at all
 ## and no solved try does the level stay null (and an error is logged).
 ##
-## Which stored level is handed out: see stored_pick. Its colors are then relabeled by a seeded
-## permutation, the same on screws and queue, so two levels that use the same stored level look
-## different while every rule outcome (and so the stored solve) stays exactly the same.
+## Which stored level is handed out: see stored_pool and stored_pick. Its colors are then
+## relabeled by a seeded permutation, the same on screws and queue, so two levels that use the
+## same stored level look different while every rule outcome (and so the stored solve) stays
+## exactly the same.
 static func _fall_back(plan: Plan, out: GeneratedLevel) -> void:
 	var own: Array = LevelCatalog.fallback[plan.tier - 1] if plan.tier >= 1 and plan.tier <= LevelCatalog.fallback.size() else []
 	if own.is_empty() and out.closest != null:
@@ -959,17 +980,18 @@ static func _fall_back(plan: Plan, out: GeneratedLevel) -> void:
 		out.fell_back = true
 		out.variation = "closest try " + out.closest_variation
 		return
-	var pool_tier := fallback_tier(plan.tier)
-	if pool_tier < 0:
+	var pool := stored_pool(plan.kind, plan.tier, plan.tray)
+	if pool.is_empty():
 		push_error("no fallback level for tier %d" % plan.tier)
 		return
-	var stored: GeneratedLevel = LevelCatalog.fallback[pool_tier - 1][stored_pick(plan.kind, plan.number, plan.band, {})]
+	var stored: GeneratedLevel = pool[stored_pick(plan.kind, plan.number, plan.band, {})]
 	var level := relabeled(stored.level, Seeds.derive(plan.seed_value, RELABEL, 0))
+	var solve := stored.solve
 	# A stored level keeps the tray it was made for, but grows to the plan's when that is larger
-	# (Relaxed has 5 slots of its own): more slots never make a solved level unsolvable, and its
-	# stored solution replays as before (its fewest tray uses is then only an upper bound).
+	# (only when no stored level was made with the plan's tray, see stored_pool).
 	if plan.tray > level.tray_size:
 		level = with_tray(level, plan.tray)
+		solve = remeasured(level, stored.solve)
 	var fallback_plan := Plan.new()
 	fallback_plan.kind = plan.kind
 	fallback_plan.number = plan.number
@@ -977,10 +999,61 @@ static func _fall_back(plan: Plan, out: GeneratedLevel) -> void:
 	fallback_plan.tier = level.tier
 	fallback_plan.group = plan.group if plan.kind == LevelData.DAILY else Tuning.tier(level.tier).group
 	fallback_plan.slack = plan.slack
-	out.level = _finish(level, fallback_plan, stored.solve.fewest_tray_uses)
-	out.solve = stored.solve
+	out.level = _finish(level, fallback_plan, solve.fewest_tray_uses)
+	out.solve = solve
 	out.fell_back = true
 	out.variation = "fallback " + stored.variation
+
+
+## The stored levels a level of this kind, tier and tray draws on when it falls back: those of
+## fallback_tier(tier) made with this tray. A Relaxed level first looks in the Relaxed pool
+## (LevelCatalog.relaxed_fallback, made and measured with Relaxed's tray, so every rule holds
+## as it is played, G4 and G9a included), then in the tier's own. A pool of another tray is the
+## last resort: its levels grow to this tray (see _fall_back). Empty if no tier has any.
+static func stored_pool(kind: int, tier: int, tray: int) -> Array:
+	var pool_tier := fallback_tier(tier)
+	if pool_tier < 0:
+		return []
+	var lists: Array[Array] = [LevelCatalog.fallback[pool_tier - 1]]
+	if kind == LevelData.RELAXED and pool_tier <= LevelCatalog.relaxed_fallback.size():
+		lists.push_front(LevelCatalog.relaxed_fallback[pool_tier - 1])
+	for list: Array in lists:
+		var same: Array = []
+		for g: GeneratedLevel in list:
+			if g.level.tray_size == tray:
+				same.append(g)
+		if not same.is_empty():
+			return same
+	return LevelCatalog.fallback[pool_tier - 1]
+
+
+## Whether Relaxed levels of this tier get a Relaxed pool of stored levels (tools/levels
+## --fallback builds it): a Relaxed band plays the tier, and Relaxed's tray is not the tier's.
+static func needs_relaxed_pool(tier: int) -> bool:
+	if tray_for(LevelData.RELAXED, tier) == Tuning.tier(tier).tray:
+		return false
+	for band: String in Tuning.BANDS:
+		var span: Vector2i = Tuning.relaxed.get(band, Vector2i(1, 3))
+		if tier >= span.x and tier <= span.y:
+			return true
+	return false
+
+
+## A stored solve for a stored level grown to a larger tray (level is the grown one): the
+## stored solution still wins (more slots never break a solution) and its fewest tray uses is
+## an upper bound, but the novice and the trap measure are measured again on the level as it is
+## played.
+static func remeasured(level: LevelData, stored: SolveResult) -> SolveResult:
+	var r := SolveResult.new()
+	r.solved = stored.solved
+	r.complete = stored.complete
+	r.fewest_tray_uses = stored.fewest_tray_uses
+	r.solution = stored.solution
+	r.states = stored.states
+	r.last_tray_use = stored.last_tray_use
+	r.peak_tray = stored.peak_tray
+	Solver.measure(level, r)
+	return r
 
 
 ## The tier whose stored levels serve a level of this tier: its own if it has any, otherwise
@@ -993,7 +1066,7 @@ static func fallback_tier(tier: int) -> int:
 	return -1
 
 
-## The stored level (an index into fallback_tier's pool) this level hands out if it falls back.
+## The stored level (an index into stored_pool's list) this level hands out if it falls back.
 ## Pure: it plans tiers and blueprints only and makes no level, so its answer does not depend on
 ## whether this level or its neighbors really fall back.
 ##
@@ -1007,7 +1080,7 @@ static func fallback_tier(tier: int) -> int:
 ## 6.4.1). Ranks only go down, so it looks at most R steps away. That needs more stored levels
 ## than lower ranked neighbors on the same pool: every day shares the daily tier's pool, so a
 ## day can have 2R of them and that tier stores 2R + 1 levels (the tools/levels fallback option);
-## numbered and Relaxed levels have far fewer on their tier's 8. If all were taken it would use
+## numbered and Relaxed levels have far fewer on their pool's 8. If all were taken it would use
 ## the first in the order (tests check this never happens with the shipped pools). memo keeps
 ## the picks made within one call, by stream position.
 static func stored_pick(kind: int, number: int, band: String, memo: Dictionary) -> int:
@@ -1015,10 +1088,9 @@ static func stored_pick(kind: int, number: int, band: String, memo: Dictionary) 
 	if memo.has(at):
 		return memo[at]
 	var plan := plan_for(kind, number, band)
-	var pool_tier := fallback_tier(plan.tier)
-	if pool_tier < 0:
+	var pool := stored_pool(kind, plan.tier, plan.tray)
+	if pool.is_empty():
 		return -1
-	var pool: Array = LevelCatalog.fallback[pool_tier - 1]
 	var r := maxi(Tuning.recent_blueprints_excluded, 1)
 	var nearest := neighbor_distances(kind, number, band)
 	var far: Array[int] = []
@@ -1038,7 +1110,8 @@ static func stored_pick(kind: int, number: int, band: String, memo: Dictionary) 
 		if k == 0 or posmod(other, r + 1) >= posmod(at, r + 1) or not _in_stream(kind, other):
 			continue
 		var other_number := stream_number(kind, other)
-		if fallback_tier(tier_of(kind, other_number, band)) == pool_tier:
+		var other_tier := tier_of(kind, other_number, band)
+		if stored_pool(kind, other_tier, tray_for(kind, other_tier)) == pool:
 			taken.append(stored_pick(kind, other_number, band, memo))
 	var pick := order[0]
 	for i: int in order:

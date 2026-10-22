@@ -237,6 +237,7 @@ transitions.
 | Covered tap | the topmost plank in front wiggles about its center, and the ghost rises to 70 percent | plus and minus 2.5 degrees, 3 half swings decaying over 240 ms, starting within 100 ms; ghost back over 300 ms |
 | Tray warning (one free slot) | the steel frame warms toward `warn` and a warning triangle appears in the free slot | 200 ms fade in, then steady; no blinking, no pulse |
 | Level clear | per docs/UX.md 3.4: veil fades in, heading drops in, stars pop one by one (scale 0 to 1.12 to 1), shavings drift and settle, sawdust motes drift slowly | all at rest by 1.6 s, always under 2 s; Next is tappable from 500 ms |
+| Title windmill (TitleBoard) | once the board has faded in, the sails make one quarter turn, then rest; nothing on the board moves or redraws after that, so a title left open costs no frames | 8 s, sine in and out (at most about 17 degrees a second); `set_turning(true)` turns them once more |
 
 **Nothing flashes** (docs/UX.md 7.5). No area changes brightness more than once a second, there
 is no full screen or large area flash, every particle fades in and out over at least 120 ms, and
@@ -299,6 +300,7 @@ only from `Looks.current`; a change of wood, metal or symbols is a rebuild (setu
 | `BoardView` | the pegboard and the theme's back board panels (one, or the board panel and the rail) |
 | `ClearEffects` | the level clear: veil, popping stars, shavings and motes; `play()`, `skip()`, `finished` |
 | `MapNodeView`, `MapTrail` | the progress map's nodes (cleared, hard, next, locked) and the path between them |
+| `TitleBoard` | the title's decorative board: a windmill of planks on the back board, baked into one texture, sails turning once then resting |
 | `CachedDrawing` | the base that turns a still view into one textured rect (section 10) |
 | `Paint`, `WoodNoise`, `RenderFonts` | small shared helpers |
 

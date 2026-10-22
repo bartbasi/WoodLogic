@@ -9,9 +9,9 @@ extends Control
 ## and the view is the bug: reconcile() puts the view right and counts the times it had to.
 ##
 ## The helpers (Undo, Extra slot, Screwdriver), the timer and pips, the star bank and the coffee
-## cup are here (docs/ARCHITECTURE.md 6 and 11.3). The looks are the placeholder views made in
-## LevelViews until the real renderers are swapped in there. Pause, Out of room, Level clear and
-## the helper sheets are the app flow's screens.
+## cup are here (docs/ARCHITECTURE.md 6 and 11.3). The views are src/render's, made and talked to
+## through LevelViews. Pause, Out of room, Level clear and the helper sheets are the app flow's
+## screens.
 
 signal won(result: LevelResult)
 signal lost(level: LevelData)
@@ -53,6 +53,13 @@ const NOTE_NONE := 0
 const NOTE_PENDING := 1
 const NOTE_SHOWING := 2
 const NOTE_LEAVING := 3
+## Box views are recycled, not made and freed (each is a CachedDrawing with a render target of its
+## own): at most this many wait in the pool, each after a hold so no motion still running on it
+## can touch it again.
+const BOX_POOL_MAX := 10
+const BOX_POOL_HOLD := 0.3
+## The helper badges count up to a gift one step every 200 ms (UX 3.13.4).
+const GIFT_STEP := 0.2
 
 const RING_COLOR := Color("fff1c9")
 
@@ -86,6 +93,11 @@ var _plank_clip: Control
 var _board_root: Node2D
 var _planks_root: Node2D
 var _box_root: Node2D
+## Where recycled box views wait (hidden), and when each may be used again.
+var _pool_root: Node2D
+var _box_pool: Array[Node2D] = []
+var _box_pool_ready := PackedFloat64Array()
+var _boxes_made := 0
 var _screw_layer: Node2D
 var _marks: LevelMarks
 var _hint: LevelHint
@@ -154,6 +166,8 @@ var _driver := false
 var _press_id := ""
 var _highlight := ""
 var _badge_override := {}
+## The count up to a gift in progress (show_helper_gift).
+var _gift_anims: Array[LevelAnim] = []
 ## The slide each box view is in, so a new slide takes over from where the old one got to.
 var _moves := {}
 ## A resize came while paused; the views are placed at resume().
@@ -255,6 +269,7 @@ func pause() -> void:
 	if _paused:
 		return
 	_finish_swap()
+	_finish_gift()
 	_paused = true
 	_clock.set_paused(true, Time.get_ticks_msec())
 	_press_id = ""
@@ -353,11 +368,57 @@ func _tick_badge(helper: String, value: int, last: bool) -> void:
 	_refresh_helpers()
 
 
+## The gift count (UX 3.13.4), for the level after a gift. Call it right after play() and after
+## set_helpers() with the counts the player now owns: the badges show the `before` counts
+## (helper id to count; a helper left out counts from 0), then each counts up to its current
+## count, one step every 200 ms with a soft tick, once. It ends at once (badges at the current
+## counts, silently) at a pause, a helper tap, and when the helpers change by use_helper; a new
+## play() drops it. Only the helpers that are shown, and whose count went up, count.
+func show_helper_gift(before: Dictionary) -> void:
+	_finish_gift()
+	if _hud == null or _level == null or _instant:
+		return
+	for helper: String in LevelHud.HELPERS:
+		var from := int(before.get(helper, 0))
+		var to := _helper_count(helper)
+		if to <= from or not _shown.has(helper):
+			continue
+		_badge_override[helper] = from
+		for step: int in range(1, to - from + 1):
+			var tick := LevelAnims.after(GIFT_STEP * step, _tick_badge.bind(helper, from + step, from + step == to))
+			_gift_anims.append(tick)
+			_anims.append(tick)
+	_refresh_helpers()
+
+
+func _gift_active() -> bool:
+	for a: LevelAnim in _gift_anims:
+		if not a.done:
+			return true
+	return false
+
+
+## Ends the gift count at once, with no sound: every badge shows its real count.
+func _finish_gift() -> void:
+	if not _gift_active():
+		_gift_anims.clear()
+		return
+	var list := _gift_anims.duplicate()
+	_gift_anims.clear()
+	_muted = true
+	for a: LevelAnim in list:
+		a.finish()
+	_muted = false
+	_badge_override.clear()
+	_refresh_helpers()
+
+
 ## Uses a helper: after "Get and use" (R38), or from the Out of room sheet (R37). The app flow
 ## has already taken care of the count; helper_used says it took effect.
 func use_helper(helper: String) -> void:
 	if _state == null or _paused:
 		return
+	_finish_gift()
 	_run_helper(helper)
 
 
@@ -475,10 +536,51 @@ func tap_screw(screw: int) -> TapResult:
 	return r
 
 
-## Frees a box, a preview or the tray (a view that may be gone already).
-func _free_view(node: Variant) -> void:
-	if is_instance_valid(node):
-		(node as Node).queue_free()
+## A box or preview view for `color`: one from the pool made up again (`reset_box`, an empty
+## count), or a new one when the pool has none ready. It is a child of the box root, and its
+## place and scale are the caller's.
+func _new_box(color: int, preview: bool) -> Node2D:
+	var box: Node2D = null
+	for i: int in _box_pool.size():
+		if _box_pool_ready[i] <= _anim_time:
+			box = _box_pool[i]
+			_box_pool.remove_at(i)
+			_box_pool_ready.remove_at(i)
+			break
+	if box == null:
+		box = LevelViews.make_box(color, preview)
+		_boxes_made += 1
+	else:
+		_pool_root.remove_child(box)
+		LevelViews.reset_box(box, color, preview)
+		LevelViews.set_box_count(box, 0)
+		box.visible = true
+		box.modulate.a = 1.0
+		box.rotation = 0.0
+	_box_root.add_child(box)
+	return box
+
+
+## Gives a box or preview view back to the pool (or frees it if the pool is full). Anything still
+## moving it is stopped, and it is not used again until `hold` seconds have passed.
+func _recycle_box(node: Variant, hold: float = BOX_POOL_HOLD) -> void:
+	if not is_instance_valid(node):
+		return
+	var box := node as Node2D
+	var key := box.get_instance_id()
+	if _moves.has(key):
+		(_moves[key] as LevelAnim).cancel()
+		_moves.erase(key)
+	var parent := box.get_parent()
+	if parent != null:
+		parent.remove_child(box)
+	if _box_pool.size() >= BOX_POOL_MAX or _pool_root == null:
+		box.queue_free()
+		return
+	box.visible = false
+	_pool_root.add_child(box)
+	_box_pool.append(box)
+	_box_pool_ready.append(_anim_time + hold)
 
 
 # == Helpers, the Screwdriver mode and the coffee cup ==
@@ -556,6 +658,7 @@ func _activate(id: String) -> void:
 func _helper_button(helper: String) -> void:
 	if _state == null:
 		return
+	_finish_gift()
 	_set_highlight("")
 	if _level.kind == LevelData.RELAXED and helper == "undo":
 		_run_helper(helper)
@@ -670,6 +773,9 @@ func _ensure_nodes() -> void:
 	_board_root.add_child(_planks_root)
 	_box_root = Node2D.new()
 	_content.add_child(_box_root)
+	_pool_root = Node2D.new()
+	_pool_root.visible = false
+	_content.add_child(_pool_root)
 	_screw_layer = Node2D.new()
 	_content.add_child(_screw_layer)
 	_marks = LevelMarks.new()
@@ -706,6 +812,7 @@ func _start_attempt() -> void:
 	_highlight = ""
 	_hint_possible = _level.kind == LevelData.TUTORIAL and not _level.hint.is_empty()
 	_badge_override.clear()
+	_gift_anims.clear()
 	_hud.configure(_layout, _label(), _timer_visible(), _level.line)
 	_refresh_helpers()
 	_sync_hud()
@@ -738,6 +845,13 @@ func _pause_pressed_reset() -> void:
 func _clear_views() -> void:
 	for child: Node in _planks_root.get_children():
 		child.free()
+	# The boxes and previews wait in the pool for the next level; the rest (the tray, a box
+	# that was leaving) is freed.
+	for box: Node2D in _box_views:
+		if box != null:
+			_recycle_box(box, 0.0)
+	for box: Node2D in _preview_views:
+		_recycle_box(box, 0.0)
 	for child: Node in _box_root.get_children():
 		child.free()
 	for child: Node in _screw_layer.get_children():
@@ -809,16 +923,12 @@ func _build_views() -> void:
 		var color := ps.open_box(pos).x
 		_box_color[pos] = color
 		if color >= 0:
-			var box := LevelViews.make_box(color, false)
-			_box_root.add_child(box)
-			_box_views[pos] = box
+			_box_views[pos] = _new_box(color, false)
 		var inside := ps.box_screws(pos)
 		for w: int in wells:
 			_box_wells[pos * wells + w] = inside[w]
 	for color: int in ps.preview():
-		var box := LevelViews.make_box(color, true)
-		_box_root.add_child(box)
-		_preview_views.append(box)
+		_preview_views.append(_new_box(color, true))
 		_preview_colors.append(color)
 	_tray_screws = ps.tray()
 	_tray_view = LevelViews.make_tray(_tray_screws.size())
@@ -1214,7 +1324,7 @@ func _ev_box_closed(e: LogicEvent) -> void:
 		for n: Node2D in group:
 			n.visible = false
 		if box != null:
-			_free_view(box)
+			_recycle_box(box)
 		return
 	var wait := start - _anim_time
 	if box != null:
@@ -1223,7 +1333,7 @@ func _ev_box_closed(e: LogicEvent) -> void:
 	mover.alpha_end = 0.0
 	mover.hide_at_end = true
 	if box != null:
-		mover.on_done = box.queue_free
+		mover.on_done = _recycle_box.bind(box)
 	_anims.append(mover)
 	_pos_free_at[pos] = start + LID_CLOSE + BOX_LEAVE * 0.5
 
@@ -1244,8 +1354,7 @@ func _ev_box_arrived(e: LogicEvent) -> void:
 		box = _preview_views.pop_front()
 		_preview_colors.remove_at(0)
 	else:
-		box = LevelViews.make_box(e.color, true)
-		_box_root.add_child(box)
+		box = _new_box(e.color, true)
 		box.position = _layout.preview_pos[_layout.preview_pos.size() - 1] + Vector2(60.0, 0.0)
 		box.scale = Vector2.ONE * _layout.box_scale
 	_box_views[pos] = box
@@ -1317,7 +1426,7 @@ func _ev_tray_extended(_e: LogicEvent) -> void:
 	_refresh_tray()
 
 
-## Undo (Phase 4 wires the button): the undone screw flies back, everything else changes at once.
+## Undo: the undone screw flies back, everything else changes at once.
 func _ev_undone(e: LogicEvent) -> void:
 	# Whatever was moving finishes at once (a box leaving, previews sliding), except the undone
 	# screw's own flight: it lands first, then flies back.
@@ -1718,7 +1827,7 @@ func _sync_previews() -> void:
 	var wait := maxf(0.0, _action_arrive - _anim_time)
 	while _preview_views.size() > want.size():
 		var gone: Node2D = _preview_views.pop_back()
-		_free_view(gone)
+		_recycle_box(gone)
 		_preview_colors.resize(_preview_views.size())
 	for k: int in want.size():
 		var target := _layout.preview_pos[mini(k, _layout.preview_pos.size() - 1)]
@@ -1727,9 +1836,8 @@ func _sync_previews() -> void:
 			view = _preview_views[k]
 		else:
 			if k < _preview_views.size():
-				_free_view(_preview_views[k])
-			view = LevelViews.make_box(want[k], true)
-			_box_root.add_child(view)
+				_recycle_box(_preview_views[k])
+			view = _new_box(want[k], true)
 			view.scale = Vector2.ONE * _layout.box_scale
 			view.position = target + Vector2(50.0 * _layout.box_scale, 0.0)
 			if not _instant:
@@ -1786,24 +1894,22 @@ func _rebuild_boxes_and_planks() -> void:
 			_box_wells[pos * wells + w] = inside[w]
 		if _box_color[pos] != want or (_box_views[pos] == null) != (want < 0):
 			if _box_views[pos] != null:
-				_free_view(_box_views[pos])
+				_recycle_box(_box_views[pos])
 				_box_views[pos] = null
 			_box_color[pos] = want
 			if want >= 0:
-				var box := LevelViews.make_box(want, false)
-				_box_root.add_child(box)
+				var box := _new_box(want, false)
 				box.position = _layout.open_pos[pos]
 				box.scale = Vector2.ONE * _layout.box_scale
 				_box_views[pos] = box
 				if not _instant:
 					_reopen_box(box, inside)
 	for k: int in _preview_views.size():
-		_free_view(_preview_views[k])
+		_recycle_box(_preview_views[k])
 	_preview_views.clear()
 	_preview_colors.clear()
 	for color: int in _state.preview():
-		var box := LevelViews.make_box(color, true)
-		_box_root.add_child(box)
+		var box := _new_box(color, true)
 		box.scale = Vector2.ONE * _layout.box_scale
 		box.position = _layout.preview_pos[mini(_preview_views.size(), _layout.preview_pos.size() - 1)]
 		_preview_views.append(box)
@@ -2143,8 +2249,8 @@ func _tray_view_frame() -> Rect2:
 	return Rect2(_tray_view.position - size * 0.5, size)
 
 
-## Takes back the last action, as Phase 4's Undo button will. Tests only for now: the helper
-## row and its counts belong to the app flow and the save.
+## Takes back the last action with no helper count or signal, for tests. The real Undo goes
+## through the helper button and `_run_helper`, which also tell the app flow.
 func debug_undo() -> TapResult:
 	if _state == null:
 		return TapResult.failed(TapResult.NOT_PLAYING)
@@ -2228,6 +2334,9 @@ func debug_snapshot() -> Dictionary:
 		"hint_at": _layout.scene_to_gu(_hint.get_target()) if _hint.is_showing() else Vector2(-1000.0, -1000.0),
 		"toast": _hud.get_toast(),
 		"line": _hud.get_line(),
+		"gift": _gift_active(),
+		"boxes_made": _boxes_made,
+		"box_pool": _box_pool.size(),
 		"tray_slots": _tray_screws.size(),
 		"tray_warning": _tray_warned,
 		"tray_ticks": _tray_ticks,

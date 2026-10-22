@@ -5,7 +5,7 @@ extends QaFlowCase
 ## documents say the game should do. While a finding is open it only prints "OPEN FINDING" and
 ## passes, so the suite stays green; set STRICT to true to make an open finding fail.
 
-const STRICT := false
+const STRICT := true
 
 
 func _expect(id: String, ok: bool, what: String) -> void:
@@ -17,9 +17,9 @@ func _expect(id: String, ok: bool, what: String) -> void:
 		print("        OPEN FINDING %s: %s" % [id, what])
 
 
-func test_g1_a_gift_that_is_due_is_not_given_by_a_replay() -> void:
-	# GDD 5: "Each is given once ... and never on a replay." UX 3.13.4: a player already past 50
-	# gets it "on their next numbered level clear".
+func test_g1_a_gift_that_is_due_is_paid_by_the_next_clear_a_replay_included_and_only_once() -> void:
+	# GDD 5 and 22c (fixed in the Phase 6 round): the gift is paid on the next numbered level
+	# clear, a replay clear included, so a save already past 50 gets it, and once only.
 	start(60)
 	for h: String in ["undo", "extra_slot", "screwdriver"]:
 		save_node().mark_helper_met(h, 0)
@@ -31,8 +31,20 @@ func test_g1_a_gift_that_is_due_is_not_given_by_a_replay() -> void:
 	check_eq(fake().replays[-1], true, "it is a replay")
 	fake().win()
 	await past_clear_delay()
-	var given := Array(save_node().gifts_given())
-	_expect("G1", given.is_empty(), "winning a REPLAY of level 30 paid the gift for level 50 (gifts given: %s); GDD 5 says never on a replay, UX 3.13.4 says the next numbered clear" % str(given))
+	check_eq(Array(save_node().gifts_given()), [50], "winning a replay paid the gift for level 50")
+	var undos: int = int(save_node().helper_count("undo"))
+	check_eq(undos, 2, "2 Undos")
+	flow.quit_to_title()
+	await frames(2)
+	tap("Map")
+	await frames(3)
+	view = (flow.screen as MapScreen).view
+	view.tap(view.center_of(31))
+	check(await in_state(AppFlow.State.LEVEL), "a second replay")
+	fake().win()
+	await past_clear_delay()
+	check_eq(save_node().helper_count("undo"), undos, "and the second replay pays nothing more")
+	check_eq(Array(save_node().gifts_given()), [50], "the gift is on record once")
 
 
 func test_g2_the_clear_screen_with_three_notes_keeps_replay_on_the_screen() -> void:

@@ -128,3 +128,5 @@ QA (qa-tester):
 - **Real width animation for the tray frame,** once TrayView can draw a fractional width, so
   Extra slot and the closing slide the frame instead of crossfading two frames.
 - **One move from 11 to 12:** start the tray closing as the last box of level 11 clears.
+- **Stop latency on the phone:** time how fast quitting returns while a tier 10 level is being
+  made, in the timing build.

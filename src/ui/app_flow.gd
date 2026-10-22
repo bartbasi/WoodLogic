@@ -18,6 +18,10 @@ const LEVEL_SCENE := "res://src/level/level_scene.tscn"
 const NUMBERED := LevelData.NUMBERED
 ## The canvas layer of everything drawn over the level (the level scene is on layer 0).
 const UI_LAYER := 10
+## At most this many low priority level jobs run at once, so the worker threads stay free for
+## the level the player is waiting on.
+const MAX_LOW_JOBS := 3
+const MAX_SPARE := 8
 const HELPER_ORDER: Array[String] = ["undo", "extra_slot", "screwdriver"]
 
 ## Tests point this at a small fake level scene.
@@ -41,9 +45,17 @@ var _ui_layer: CanvasLayer
 var _prefetch := LevelPrefetcher.new()
 var _current: LevelData
 var _previous: LevelData
-## Level N + 1 once it has arrived, so Next is one tap.
-var _next_ready: LevelData
-var _ahead_key := ""
+## Levels made ahead (N + 1, N - 1, the Daily, the next Relaxed level), so Next and Previous
+## level are one tap. At most MAX_SPARE are kept.
+var _spare: Array[LevelData] = []
+## Levels asked for ahead of time, low priority: waiting to be requested, and requested.
+var _low_queue: Array[Array] = []
+var _low_keys: Array[String] = []
+var _modes_queued := false
+## The helper counts from before a gift, until the next level shows them counting up.
+var _gift_before: Dictionary = {}
+## The saved next level being solved again on a worker thread; null once decided.
+var _check: SavedLevelCheck
 var _wanted_key := ""
 var _abandoned: Array[String] = []
 var _wanted_kind := NUMBERED
@@ -78,6 +90,8 @@ func _ready() -> void:
 
 
 func _exit_tree() -> void:
+	if _check != null:
+		_check.cancel()
 	_prefetch.shutdown()
 
 
@@ -90,24 +104,76 @@ func _boot() -> void:
 	Save.load_all()
 	_apply_settings()
 	var n := Save.next_level()
-	# A level saved by the last run is played without generating it (ARCHITECTURE 10.3).
+	# A level saved by the last run is played without generating it, once it has been solved
+	# again (on a worker thread, so the title shows at once) and checked against the rules
+	# (ARCHITECTURE 10.3). Until that is decided nothing else is asked for.
 	var saved := Save.read_next_level(LevelPrefetcher.key_for(NUMBERED, n, ""), Generator.GENERATOR_VERSION)
 	if saved != null:
-		_current = saved
-		_file_key = "numbered:%d" % n
+		var tier := _saved_level_tier(saved, n)
+		if tier > 0 and Save.highest_cleared() > 0:
+			_check = SavedLevelCheck.new()
+			_check.level = saved
+			_check.tier = tier
+			_check.number = n
+			_check.start()
+		else:
+			Save.clear_next_level()
 	if Save.highest_cleared() == 0:
 		# First launch (or after a reset): straight into the level, no title (UX 5.1).
 		play_number(n)
 		return
-	# Ask for the Play level while the title is up, and for today's daily and the next
-	# Relaxed level of each band, which cannot be made during an earlier level.
-	if _known(NUMBERED, n, "") == null:
-		_request(NUMBERED, n, "", true)
-	if _modes_open():
-		_request(LevelData.DAILY, _today_number(), "", false)
-		for band: String in Tuning.BANDS:
-			_request(LevelData.RELAXED, Save.relaxed_next(band), band, false)
+	if _check == null:
+		_after_check(n)
 	show_menu("title")
+
+
+## The check has decided (or there was nothing to check): ask for the Play level if it is
+## not in hand, urgent, then N + 1 behind it. Today's daily and the next Relaxed levels wait
+## until both are in hand (see _queue_modes).
+func _after_check(n: int) -> void:
+	if _known(NUMBERED, n, "") == null:
+		var key := _request(NUMBERED, n, "", true)
+		if state == State.LOADING and _wanted_kind == NUMBERED and _wanted_number == n:
+			_wanted_key = key
+	_queue_low(NUMBERED, n + 1, "")
+
+
+## Takes the worker's verdict once it has finished (never waits for it).
+func _poll_check() -> void:
+	if _check == null or not _check.is_done():
+		return
+	var check := _check
+	_check = null
+	check.finish()
+	if check.passed:
+		_current = check.level
+		_file_key = "numbered:%d" % check.number
+	else:
+		Save.clear_next_level()
+	_after_check(check.number)
+
+
+## The tier of a level read from the file if it fits the rules for that number (the number,
+## the kind, the tier and the tray), else 0. The solving part runs on a worker thread.
+func _saved_level_tier(level: LevelData, n: int) -> int:
+	if level.number != n or level.kind != NUMBERED:
+		return 0
+	var tier := Tuning.tier_for_level(n)
+	if level.tier != tier or level.tray_size != Tuning.tier(tier).tray:
+		return 0
+	return tier
+
+
+## The generator's own acceptance search (the tier's state budget and the top of its tray use
+## range as the cap), not the full solve with the novice and trap playouts. The tray par must
+## not be below the fewest tray uses found. `stop` ends the search early (quitting); a stopped
+## search is not complete, so it fails. Safe on a worker thread: it only reads.
+static func saved_level_solves(level: LevelData, tier: int, stop: GenerationStop = null) -> bool:
+	var spec := Tuning.tier(tier)
+	var result := Solver.search_only(level, Generator.MAX_STATES[tier - 1], true, spec.tray_uses.y, stop)
+	if not result.solved or not result.complete:
+		return false
+	return level.tray_par >= result.fewest_tray_uses
 
 
 func _show_error() -> void:
@@ -132,7 +198,7 @@ func _apply_settings() -> void:
 func _apply_looks() -> void:
 	Looks.current = {"wood": Save.wood(), "metal": Save.metal(), "symbols": Save.symbols}
 	# A level that is alive (paused behind the menus) draws itself again in the new looks.
-	if level_scene != null and is_instance_valid(level_scene) and level_scene.has_method("refresh_looks"):
+	if level_scene != null and is_instance_valid(level_scene):
 		level_scene.call("refresh_looks")
 
 
@@ -142,17 +208,13 @@ func _process(_delta: float) -> void:
 	_prefetch.poll()
 	# Requests nobody wants any more are collected once they finish, so they do not pile up.
 	for key: String in _abandoned.duplicate():
-		if key == _wanted_key or key == _ahead_key:
+		if key == _wanted_key:
 			_abandoned.erase(key)
 		elif _prefetch.is_ready(key):
 			_prefetch.take(key)
 			_abandoned.erase(key)
-	if _ahead_key != "" and _prefetch.is_ready(_ahead_key):
-		var got := _prefetch.take(_ahead_key)
-		_ahead_key = ""
-		if got != null and got.level != null:
-			_next_ready = got.level
-			_sync_next_file()
+	_poll_check()
+	_pump_low()
 	if state == State.LOADING:
 		# The level may have arrived as the one ahead, or be the one asked for urgently.
 		var in_hand := _known(_wanted_kind, _wanted_number, _wanted_band)
@@ -172,6 +234,60 @@ func _process(_delta: float) -> void:
 		var made := _prefetch.take(LevelPrefetcher.key_for(NUMBERED, Save.next_level(), ""))
 		if made != null and made.level != null:
 			_remember(made.level)
+	if not _modes_queued and (state == State.TITLE or state == State.LEVEL):
+		_queue_modes()
+
+
+## Asks for a level ahead of time at low priority, behind the ones already asked for.
+func _queue_low(kind: int, number: int, band: String) -> void:
+	if number < 0 or (kind == NUMBERED and (number < 1 or number > Save.MAX_LEVEL)):
+		return
+	if _known(kind, number, band) != null:
+		return
+	var key := LevelPrefetcher.key_for(kind, number, band)
+	if _low_keys.has(key) or _prefetch.is_ready(key) or _prefetch.is_running(key):
+		return
+	for entry: Array in _low_queue:
+		if entry[0] == kind and entry[1] == number and entry[2] == band:
+			return
+	_low_queue.append([kind, number, band])
+
+
+## Starts queued low jobs while fewer than MAX_LOW_JOBS run, and puts finished ones in hand.
+func _pump_low() -> void:
+	for key: String in _low_keys.duplicate():
+		if _prefetch.is_ready(key) and key != _wanted_key:
+			var got := _prefetch.take(key)
+			_low_keys.erase(key)
+			if got != null and got.level != null:
+				_add_spare(got.level)
+		elif not _prefetch.is_running(key) and not _prefetch.is_ready(key):
+			_low_keys.erase(key)
+	while _low_keys.size() < MAX_LOW_JOBS and not _low_queue.is_empty():
+		var entry: Array = _low_queue.pop_front()
+		if _known(entry[0], entry[1], entry[2]) == null:
+			_low_keys.append(_request(entry[0], entry[1], entry[2], false))
+
+
+func _add_spare(level: LevelData) -> void:
+	_spare.append(level)
+	while _spare.size() > MAX_SPARE:
+		_spare.pop_front()
+	_sync_next_file()
+
+
+## Today's Daily and each Relaxed band's next level are made once the Play level and N + 1 are
+## in hand, never ahead of them.
+func _queue_modes() -> void:
+	var n := Save.next_level()
+	if _known(NUMBERED, n, "") == null or _known(NUMBERED, n + 1, "") == null:
+		return
+	_modes_queued = true
+	if not _modes_open():
+		return
+	_queue_low(LevelData.DAILY, _today_number(), "")
+	for band: String in Tuning.BANDS:
+		_queue_low(LevelData.RELAXED, Save.relaxed_next(band), band)
 
 
 func _title_key_ready() -> bool:
@@ -447,7 +563,7 @@ func _show_lost() -> void:
 ## [[helper, count], ...] the player owns and can use after this loss, in the fixed order.
 func _lost_helpers() -> Array:
 	var usable: PackedStringArray = PackedStringArray()
-	if level_scene != null and level_scene.has_method("usable_after_loss"):
+	if level_scene != null:
 		usable = level_scene.call("usable_after_loss")
 	var out := []
 	for h: String in HELPER_ORDER:
@@ -495,7 +611,10 @@ static func _matches(level: LevelData, kind: int, number: int, band: String) -> 
 
 ## The LevelData for a level if it is in hand (current, previous or the one just ahead).
 func _known(kind: int, number: int, band: String) -> LevelData:
-	for level: LevelData in [_current, _previous, _next_ready]:
+	for level: LevelData in [_current, _previous]:
+		if _matches(level, kind, number, band):
+			return level
+	for level: LevelData in _spare:
 		if _matches(level, kind, number, band):
 			return level
 	return null
@@ -506,9 +625,9 @@ func _known(kind: int, number: int, band: String) -> LevelData:
 func _remember(level: LevelData) -> void:
 	if _current == null:
 		_current = level
+		_sync_next_file()
 	else:
-		_next_ready = level
-	_sync_next_file()
+		_add_spare(level)
 
 
 ## Asks the prefetcher for a level. A key asked for is wanted again, so it leaves the
@@ -544,6 +663,16 @@ func play_relaxed(band: String) -> void:
 
 
 func _play(kind: int, number: int, band: String, replay: bool) -> void:
+	if _check != null and kind == NUMBERED and number == _check.number and _known(kind, number, band) == null:
+		# The saved level is still being checked: wait for the verdict (it either plays the
+		# saved level or asks for it to be made).
+		_wanted_key = ""
+		_wanted_kind = kind
+		_wanted_number = number
+		_wanted_band = band
+		_wanted_replay = replay
+		_show_loading()
+		return
 	var level := _known(kind, number, band)
 	if level != null:
 		_begin(level, replay)
@@ -567,8 +696,7 @@ func _begin(level: LevelData, replay: bool) -> void:
 	if level != _current:
 		_previous = _current
 		_current = level
-	if level == _next_ready:
-		_next_ready = null
+	_spare.erase(level)
 	_replay = replay
 	_lost_while_paused = false
 	var was_paused := _paused_level
@@ -584,15 +712,11 @@ func _begin(level: LevelData, replay: bool) -> void:
 		level_scene.call("resume")
 	level_scene.call("play", level, replay)
 	_configure_level_scene(level)
-	# Level N + 1 is made while the player plays N.
-	if level.kind == NUMBERED or level.kind == LevelData.TUTORIAL:
-		var ahead := level.number + 1
-		if _known(NUMBERED, ahead, "") == null and ahead <= Save.MAX_LEVEL:
-			var key := _request(NUMBERED, ahead, "", false)
-			if _ahead_key != "" and _ahead_key != key:
-				_abandon(_ahead_key)
-			_ahead_key = key
+	_queue_ahead(level)
 	_sync_next_file()
+	if not _gift_before.is_empty():
+		level_scene.call("show_helper_gift", _gift_before)
+		_gift_before = {}
 	_tray_moments(level, replay)
 	_maybe_helper_sheet(level)
 
@@ -608,12 +732,25 @@ func _tray_moments(level: LevelData, replay: bool) -> void:
 		return
 	# The tray the board really has (a stored level can differ from the schedule).
 	var tray := level.tray_size
-	if came_from > 0 and tray < came_from and not replay and level_scene.has_method("play_tray_closing"):
+	if came_from > 0 and tray < came_from and not replay:
 		level_scene.call("play_tray_closing")
 	if not replay and level.kind == NUMBERED and tray < Tuning.tray_size and not Save.tray_note_shown():
 		Save.mark_tray_note_shown()
-		if level_scene.has_method("show_tray_note"):
-			level_scene.call("show_tray_note", "The tray is smaller now. Every slot counts.")
+		level_scene.call("show_tray_note", "The tray is smaller now. Every slot counts.")
+
+
+## What is worth having ready while this level is played, all at low priority and in this
+## order: N + 1 (Next), N - 1 (Previous level) and today's Daily; for a Relaxed level, the
+## band's next level (Another).
+func _queue_ahead(level: LevelData) -> void:
+	if level.kind == LevelData.RELAXED:
+		_queue_low(LevelData.RELAXED, level.number + 1, level.band)
+		return
+	if level.kind == NUMBERED or level.kind == LevelData.TUTORIAL:
+		_queue_low(NUMBERED, level.number + 1, "")
+		_queue_low(NUMBERED, level.number - 1, "")
+	if _modes_open():
+		_queue_low(LevelData.DAILY, _today_number(), "")
 
 
 func _ensure_level_scene() -> bool:
@@ -630,15 +767,11 @@ func _ensure_level_scene() -> bool:
 	level_scene.connect("won", _on_won)
 	level_scene.connect("lost", _on_lost)
 	level_scene.connect("pause_requested", _on_pause_requested)
-	for signal_name: String in ["helper_used", "helper_buy_requested", "coffee_requested"]:
-		if level_scene.has_signal(signal_name):
-			match signal_name:
-				"helper_used":
-					level_scene.connect(signal_name, _on_helper_used)
-				"helper_buy_requested":
-					level_scene.connect(signal_name, _on_buy_requested)
-				_:
-					level_scene.connect(signal_name, _on_coffee_requested)
+	# The level scene contract (ARCHITECTURE 6 and 11.3): every signal is connected, none is
+	# optional, so a rename on the level side fails loudly.
+	level_scene.connect("helper_used", _on_helper_used)
+	level_scene.connect("helper_buy_requested", _on_buy_requested)
+	level_scene.connect("coffee_requested", _on_coffee_requested)
 	add_child(level_scene)
 	move_child(level_scene, 0)
 	return true
@@ -658,8 +791,7 @@ func _set_level_visible(on: bool) -> void:
 ## What the level scene needs to know when a level starts: the coffee cup, the star bank and
 ## the helper bar.
 func _configure_level_scene(_level: LevelData) -> void:
-	if level_scene.has_method("set_coffee"):
-		level_scene.call("set_coffee", Links.coffee_visible())
+	level_scene.call("set_coffee", Links.coffee_visible())
 	level_scene.call("set_star_bank", Save.star_bank())
 	_push_helpers()
 
@@ -716,10 +848,9 @@ func _helper_sheet_done() -> void:
 
 
 func _on_helper_used(helper: String) -> void:
-	# Relaxed: Undo is free and unlimited, but it still counts in the stats (GDD 6.6).
-	if _current != null and _current.kind != LevelData.RELAXED:
-		Save.take_helper(helper)
-	Save.note_helper_used()
+	# Relaxed: Undo is free and unlimited, but it still counts in the stats (GDD 6.6). One
+	# write either way.
+	Save.helper_used(helper, _current != null and _current.kind != LevelData.RELAXED)
 	_push_helpers()
 
 
@@ -738,8 +869,8 @@ func _on_buy_requested(helper: String) -> void:
 	dialog.chosen.connect(func(i: int) -> void:
 		_clear_overlay()
 		level_scene.call("hold_clock", false)
-		if i == 0 and Save.spend_stars(price):
-			Save.add_helper(helper, 1)
+		# The stars and the helper go in one write: a kill in between loses nothing.
+		if i == 0 and Save.buy_helper(helper, price):
 			_push_helpers()
 			level_scene.call("use_helper", helper))
 	_set_overlay(dialog)
@@ -766,6 +897,7 @@ func _on_won(result: Object) -> void:
 	_paused_level = false
 	var info := {"kind": level.kind, "number": level.number, "level": level, "stars": stars, "elapsed_ms": elapsed, "gain": 0, "streak": 0, "unlocks": []}
 	var highest_before := Save.highest_cleared()
+	var counts_before := Save.helper_counts()
 	match level.kind:
 		LevelData.DAILY:
 			var r := Save.record_daily(_date_text(level.number), elapsed, stars, level.group)
@@ -776,6 +908,9 @@ func _on_won(result: Object) -> void:
 		_:
 			info["gain"] = Save.record_win(level, elapsed, stars)
 			info["gifts"] = _grant_gifts()
+			if not (info["gifts"] as Array).is_empty():
+				# The next level shows the helper badges counting up from these (UX 3.13.4).
+				_gift_before = counts_before
 	info["unlocks"] = _apply_unlocks(highest_before)
 	_sync_next_file()
 	_show_clear(info)
@@ -900,11 +1035,6 @@ func quit_to_title() -> void:
 	show_menu("title")
 
 
-## Kept for the Phase 3 callers: the title with the level dropped.
-func show_title() -> void:
-	quit_to_title()
-
-
 # resetting progress
 
 func _ask_reset() -> void:
@@ -925,7 +1055,8 @@ func _erase_progress() -> void:
 	_free_level_scene()
 	_current = null
 	_previous = null
-	_next_ready = null
+	_spare.clear()
+	_low_queue.clear()
 	_file_key = ""
 	show_menu("settings")
 	show_toast("Progress erased.")
@@ -1027,6 +1158,9 @@ func quit() -> void:
 		return
 	_shut_down = true
 	Save.save_all()
+	if _check != null:
+		_check.cancel()
+		_check = null
 	_prefetch.shutdown()
 	if quit_handler.is_valid():
 		quit_handler.call()

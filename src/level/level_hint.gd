@@ -4,7 +4,7 @@ class_name LevelHint
 extends Node2D
 ## The tutorial hand and its steady ring (UX 5.1 and 5.2): a pointing hand that glides to the
 ## screw to tap and presses toward it in a slow cycle of 1.2 seconds, inside a steady ring.
-## Nothing flashes or blinks. Placeholder look, drawn in code.
+## Nothing flashes or blinks. Drawn in code.
 
 const CYCLE := 1.2
 const FADE_IN := 0.3

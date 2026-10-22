@@ -172,6 +172,119 @@ func test_3_bad_data_is_rejected_with_a_reason() -> void:
 		check(LevelData.parse(JSON.stringify(d), errors) == null and not errors.is_empty(), "rejected: " + label)
 
 
+func test_3_size_limits_keep_a_bad_file_cheap() -> void:
+	# A saved or edited file can't be made costly to read or show (security review 6, Low 1):
+	# at most 32 planks, at least one hole a plank, at most 64 points an outline, a line of at
+	# most 200 characters, a hint of at most 200 entries. Each limit is checked at its edge.
+	var planks := func(count: int) -> Array:
+		# count one-hole discs, the first with a second hole: count + 1 screws, all color 0.
+		var list := []
+		for i: int in count:
+			var c := [6 + (i % 8) * 10, 6 + int(i / 8.0) * 10]
+			list.append({"layer": 0, "shape": "disc", "center": c, "radius": 4, "holes": [c, [c[0] + 1, c[1]]] if i == 0 else [c], "colors": [0, 0] if i == 0 else [0]})
+		return list
+	var queue := func(screws: int) -> Array:
+		var q := []
+		for i: int in int(screws / 3.0):
+			q.append(0)
+		return q
+	var base := func(list: Array) -> Dictionary:
+		var screws := 0
+		for item: Dictionary in list:
+			screws += (item["holes"] as Array).size()
+		return {"format": 1, "id": "tutorial-1", "name": "Limits", "kind": "tutorial", "board": [86, 90], "planks": list, "queue": queue.call(screws), "tray_par": 0, "par_time": 60, "line": "", "hint": []}
+	# 32 planks read (32 + 1 = 33 screws); 33 do not.
+	var errors := PackedStringArray()
+	var ok := LevelData.from_dict(base.call(planks.call(LevelData.MAX_PLANKS)), errors)
+	check(ok != null and ok.planks.size() == 32, "32 planks read: %s" % "; ".join(errors))
+	var many: Dictionary = base.call(planks.call(LevelData.MAX_PLANKS))
+	(many["planks"] as Array).append_array([{"layer": 0, "shape": "disc", "center": [80, 80], "radius": 4, "holes": [[80, 80]], "colors": [0]}, {"layer": 0, "shape": "disc", "center": [70, 80], "radius": 4, "holes": [[70, 80]], "colors": [0]}, {"layer": 0, "shape": "disc", "center": [60, 80], "radius": 4, "holes": [[60, 80]], "colors": [0]}])
+	(many["queue"] as Array).append(0)
+	errors.clear()
+	check(LevelData.from_dict(many, errors) == null and "; ".join(errors).contains("at most 32 planks"), "35 planks do not: %s" % "; ".join(errors))
+	# A plank with no hole.
+	var tutorial: Dictionary = JSON.parse_string(TUTORIAL_EXAMPLE)
+	var no_hole: Dictionary = tutorial.duplicate(true)
+	no_hole["planks"].append({"layer": 0, "shape": "disc", "center": [10, 80], "radius": 4, "holes": [], "colors": []})
+	errors.clear()
+	check(LevelData.from_dict(no_hole, errors) == null and "; ".join(errors).contains("B3: a plank needs at least one hole"), "a plank with no hole: %s" % "; ".join(errors))
+	# 64 points in an outline read, 65 do not (a poly around the middle of the board).
+	for count: int in [PlankData.MAX_POINTS, PlankData.MAX_POINTS + 1]:
+		var points := []
+		for i: int in count:
+			var a := TAU * i / count
+			points.append([43 + roundi(30 * cos(a)), 45 + roundi(30 * sin(a))])
+		var d: Dictionary = tutorial.duplicate(true)
+		d["planks"][1] = {"layer": 1, "shape": "poly", "points": points, "holes": [[19, 45], [43, 45], [67, 45]], "colors": [0, 0, 1]}
+		errors.clear()
+		var level := LevelData.from_dict(d, errors)
+		if count <= PlankData.MAX_POINTS:
+			check(level != null, "%d points read: %s" % [count, "; ".join(errors)])
+		else:
+			check(level == null and "; ".join(errors).contains("at most 64 points"), "%d points do not: %s" % [count, "; ".join(errors)])
+	var long_path: Dictionary = tutorial.duplicate(true)
+	var path := []
+	for i: int in PlankData.MAX_POINTS + 1:
+		path.append([10 + i, 45 + i % 2])
+	long_path["planks"][1]["path"] = path
+	errors.clear()
+	check(LevelData.from_dict(long_path, errors) == null and "; ".join(errors).contains("at most 64 points"), "a bar path of 65 points does not read: %s" % "; ".join(errors))
+	# The line: 200 characters read, 201 do not.
+	for length: int in [LevelData.MAX_LINE, LevelData.MAX_LINE + 1]:
+		var d: Dictionary = tutorial.duplicate(true)
+		d["line"] = "a".repeat(length)
+		errors.clear()
+		var level := LevelData.from_dict(d, errors)
+		if length <= LevelData.MAX_LINE:
+			check(level != null and level.line.length() == length, "a line of %d characters reads: %s" % [length, "; ".join(errors)])
+		else:
+			check(level == null and "; ".join(errors).contains("at most 200 characters"), "a line of %d does not: %s" % [length, "; ".join(errors)])
+	# The hint: 200 entries read, 201 do not.
+	for length: int in [LevelData.MAX_HINT, LevelData.MAX_HINT + 1]:
+		var d: Dictionary = tutorial.duplicate(true)
+		var hint := []
+		for i: int in length:
+			hint.append([1, i % 3])
+		d["hint"] = hint
+		errors.clear()
+		var level := LevelData.from_dict(d, errors)
+		if length <= LevelData.MAX_HINT:
+			check(level != null and level.hint.size() == length, "a hint of %d entries reads: %s" % [length, "; ".join(errors)])
+		else:
+			check(level == null and "; ".join(errors).contains("at most 200 entries"), "a hint of %d does not: %s" % [length, "; ".join(errors)])
+	# A queue longer than any level's.
+	var long_queue: Dictionary = tutorial.duplicate(true)
+	var q := []
+	for i: int in BoardGeometry.MAX_SCREWS + 1:
+		q.append(0)
+	long_queue["queue"] = q
+	errors.clear()
+	check(LevelData.from_dict(long_queue, errors) == null and "; ".join(errors).contains("at most 60 colors"), "a queue of 61 does not read: %s" % "; ".join(errors))
+
+
+func test_3_the_limits_hold_every_shipped_and_stored_level() -> void:
+	# The limits sit well above the real data: the biggest blueprint has 16 planks and 14 points
+	# in an outline, the longest tutorial line is 48 characters.
+	LevelCatalog.load_all()
+	var most_planks := 0
+	var most_points := 0
+	var levels: Array[LevelData] = []
+	levels.append_array(LevelCatalog.blueprints)
+	levels.append_array(LevelCatalog.tutorials)
+	for pools: Array[Array] in [LevelCatalog.fallback, LevelCatalog.relaxed_fallback]:
+		for pool: Array in pools:
+			for g: GeneratedLevel in pool:
+				levels.append(g.level)
+	for level: LevelData in levels:
+		most_planks = maxi(most_planks, level.planks.size())
+		for p: PlankData in level.planks:
+			most_points = maxi(most_points, maxi(p.points.size(), p.path.size()))
+			check(p.hole_count() >= 1, "%s: every plank has a hole" % level.id)
+		check(level.line.length() <= LevelData.MAX_LINE and level.hint.size() <= LevelData.MAX_HINT, "%s: line and hint" % level.id)
+	check(most_planks <= BlueprintValidator.MAX_PLANKS and most_planks * 2 <= LevelData.MAX_PLANKS, "planks: at most %d, half the limit or less" % most_planks)
+	check(most_points * 4 <= PlankData.MAX_POINTS, "points: at most %d, a quarter of the limit or less" % most_points)
+
+
 func test_6_8_a_level_carries_its_own_tray() -> void:
 	var colored := Kit.random_colors(Kit.blueprint("house"), 4, RandomNumberGenerator.new())
 	var errors := PackedStringArray()

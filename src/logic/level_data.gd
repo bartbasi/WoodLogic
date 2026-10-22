@@ -23,6 +23,11 @@ const BLUEPRINT_KINDS: Array[String] = ["silhouette", "pattern"]
 const MAX_COLORS := 8
 ## The most tray slots a level may have.
 const MAX_TRAY := 7
+## Limits on a level file, so a broken or edited file can't cost much to read or show: planks
+## (the blueprint rule B2 allows 16), characters in the line, entries in the hint.
+const MAX_PLANKS := 32
+const MAX_LINE := 200
+const MAX_HINT := 200
 const BOARD_W := 86
 const BOARD_H := 90
 
@@ -241,6 +246,9 @@ static func from_dict(d: Dictionary, errors: PackedStringArray) -> LevelData:
 	if not list is Array or (list as Array).is_empty():
 		errors.append("planks must be a list with at least one plank")
 		return null
+	if (list as Array).size() > MAX_PLANKS:
+		errors.append("a level has at most %d planks" % MAX_PLANKS)
+		return null
 	var colors := PackedInt32Array()
 	var with_colors := level.kind != BLUEPRINT
 	for i: int in (list as Array).size():
@@ -285,10 +293,10 @@ static func from_dict(d: Dictionary, errors: PackedStringArray) -> LevelData:
 	level.tray_par = PlankData.read_int(d, "tray_par", 0, 100, "level", errors)
 	level.par_time_s = PlankData.read_int(d, "par_time", 1, 3600, "level", errors)
 	var line_value: Variant = d.get("line", "")
-	if line_value is String:
+	if line_value is String and (line_value as String).length() <= MAX_LINE:
 		level.line = line_value
 	else:
-		errors.append("line must be text")
+		errors.append("line must be text of at most %d characters" % MAX_LINE)
 	level.hint = _read_hint(d.get("hint", []), level, errors)
 	if level.kind == TUTORIAL:
 		var n_text := level.id.trim_prefix("tutorial-")
@@ -413,6 +421,9 @@ static func _read_colors(v: Variant, what: String, errors: PackedStringArray) ->
 	if not v is Array:
 		errors.append("%s must be a list of colors" % what)
 		return out
+	if (v as Array).size() > BoardGeometry.MAX_SCREWS:
+		errors.append("%s has at most %d colors" % [what, BoardGeometry.MAX_SCREWS])
+		return out
 	for c: Variant in v:
 		var n := _whole(c, 0, MAX_COLORS - 1, -1)
 		if n < 0:
@@ -426,6 +437,9 @@ static func _read_hint(v: Variant, level: LevelData, errors: PackedStringArray) 
 	var out := PackedInt32Array()
 	if not v is Array:
 		errors.append("hint must be a list of [plank, hole]")
+		return out
+	if (v as Array).size() > MAX_HINT:
+		errors.append("a hint has at most %d entries" % MAX_HINT)
 		return out
 	for item: Variant in v:
 		if not item is Array or (item as Array).size() != 2:

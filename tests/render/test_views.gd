@@ -227,3 +227,44 @@ func test_title_board_fills_each_title_size_and_bakes() -> void:
 	gone.free()
 	await frames(4)
 	check(true, "no errors")
+
+
+func test_title_board_turns_once_then_rests_without_redrawing() -> void:
+	var board := TitleBoard.new()
+	board.turn_seconds = 0.5
+	board.setup(Vector2(336, 161))
+	add_node(board)
+	board.bake()
+	await frames(8)
+	check(board.is_baked(), "baked")
+	check(board.is_turning(), "the sails turn once the board shows")
+	await frames(45)
+	check(not board.is_turning(), "the turn has ended")
+	check(not board.is_processing(), "the board stops processing at rest")
+	var busy := 0
+	var redraws := [0]
+	board.draw.connect(func() -> void: redraws[0] += 1)
+	var angles: Array[float] = []
+	for n: Node in board.find_children("*", "", true, false):
+		if n.is_processing():
+			busy += 1
+		if n is CanvasItem:
+			(n as CanvasItem).draw.connect(func() -> void: redraws[0] += 1)
+		if n is Node2D:
+			angles.append((n as Node2D).rotation)
+	check_eq(busy, 0, "no node under the board still processing")
+	await frames(30)
+	check_eq(redraws[0], 0, "nothing redraws at rest")
+	var i := 0
+	for n: Node in board.find_children("*", "", true, false):
+		if n is Node2D:
+			check_eq((n as Node2D).rotation, angles[i], "%s still" % n.name)
+			i += 1
+	board.set_turning(true)
+	check(board.is_turning() and board.is_processing(), "set_turning(true) turns the sails again")
+	await frames(45)
+	check(not board.is_processing(), "and rests again")
+	board.set_turning(true)
+	board.set_turning(false)
+	await frames(2)
+	check(not board.is_turning() and not board.is_processing(), "set_turning(false) stops at once")

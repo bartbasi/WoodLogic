@@ -19,10 +19,19 @@ const NETWORK_CLASSES: Array[String] = [
 	"HTTPRequest", "HTTPClient", "StreamPeerTCP", "StreamPeerTLS", "TCPServer", "UDPServer",
 	"PacketPeerUDP", "PacketPeerDTLS", "DTLSServer", "WebSocketPeer", "WebSocketMultiplayerPeer",
 	"WebRTCPeerConnection", "WebRTCMultiplayerPeer", "ENetConnection", "ENetMultiplayerPeer",
-	"UPNP", "JavaScriptBridge", "SceneMultiplayer",
+	"UPNP", "JavaScriptBridge", "SceneMultiplayer", "WebRTCDataChannel", "PacketPeerExtension",
+	"StreamPeerExtension", "MultiplayerPeerExtension",
 ]
 ## The IP singleton (DNS lookups), and making classes from a name, which would hide them.
 const NETWORK_PATTERNS: Array[String] = ["\\bIP\\.", "ClassDB\\.instantiate"]
+## Other ways out of the game's own sandbox: running programs, asking for permissions, reaching
+## Java, turning text into objects or code, and calling OS methods by a built name.
+const ESCAPE_PATTERNS: Array[String] = [
+	"OS\\.execute", "create_process", "create_instance", "request_permission",
+	"JavaClassWrapper", "JNISingleton", "Engine\\.get_singleton", "\\bstr_to_var\\b",
+	"\\bbytes_to_var", "\\bExpression\\b", "JSON\\.to_native", "\\bOS\\.callv?\\(",
+	"Callable\\(\\s*OS\\b",
+]
 
 
 func test_every_source_file_carries_the_license_header() -> void:
@@ -56,6 +65,16 @@ func test_no_network_code_anywhere() -> void:
 			if regex.search(text) != null:
 				found.append("%s in %s" % [regex.get_pattern(), path])
 	check(found.is_empty(), "network code: %s" % ", ".join(found))
+
+
+func test_nothing_runs_programs_or_decodes_objects() -> void:
+	var found := PackedStringArray()
+	for pattern: String in ESCAPE_PATTERNS:
+		var regex := RegEx.create_from_string(pattern)
+		for path: String in _code_files():
+			if regex.search(FileAccess.get_file_as_string(path)) != null:
+				found.append("%s in %s" % [pattern, path])
+	check(found.is_empty(), "code that leaves the sandbox: %s" % ", ".join(found))
 
 
 func test_links_are_opened_only_from_links_gd() -> void:

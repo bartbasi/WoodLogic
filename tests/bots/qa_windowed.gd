@@ -201,18 +201,26 @@ func _walk(name: String, size: Vector2i, coffee_hidden: int) -> void:
 			scene2.call("set_instant", true)
 			var rng2 := RandomNumberGenerator.new()
 			rng2.seed = 9
-			for i: int in 200:
-				if int(_flow.get("state")) != LEVEL:
+			for attempt: int in 12:
+				for i: int in 200:
+					if int(_flow.get("state")) != LEVEL:
+						break
+					var state2: Object = scene2.call("get_state")
+					var free2: Array[int] = []
+					for s: int in 40:
+						if state2.call("is_free", s):
+							free2.append(s)
+					if free2.is_empty():
+						break
+					scene2.call("tap_screw", free2[rng2.randi_range(0, free2.size() - 1)])
+					await _frames(1)
+				if int(_flow.get("state")) == LOST:
 					break
-				var state2: Object = scene2.call("get_state")
-				var free2: Array[int] = []
-				for s: int in 40:
-					if state2.call("is_free", s):
-						free2.append(s)
-				if free2.is_empty():
-					break
-				scene2.call("tap_screw", free2[rng2.randi_range(0, free2.size() - 1)])
-				await _frames(1)
+				# Won by luck: play the level again.
+				_flow.call("play_number", 40)
+				await _until(func() -> bool: return int(_flow.get("state")) == LEVEL)
+				scene2 = _flow.get("level_scene")
+				scene2.call("set_instant", true)
 			await _until(func() -> bool: return int(_flow.get("state")) == LOST, 3000)
 			await _frames(60)
 			await _shot("%s-12-out-of-room%s" % [name, "" if _instant else "-animated"])

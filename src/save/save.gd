@@ -148,7 +148,7 @@ func next_level() -> int:
 ## TESTS ONLY. Sets the next level by hand and raises highest_cleared to match, which opens
 ## Daily, Relaxed and the unlocks without any level records. No screen may call this: levels
 ## move on only through record_win.
-func set_next_level(n: int) -> void:
+func set_next_level_for_tests(n: int) -> void:
 	_progress["next_level"] = clampi(n, 1, MAX_LEVEL)
 	# Keep the rule that next_level is at most highest_cleared + 1.
 	_progress["highest_cleared"] = maxi(int(_progress["highest_cleared"]), int(_progress["next_level"]) - 1)
@@ -286,6 +286,33 @@ func take_helper(helper: String) -> bool:
 		return false
 	var helpers: Dictionary = _progress["helpers"]
 	helpers[helper] = int(helpers[helper]) - 1
+	_progress_changed()
+	return true
+
+
+## One helper use, in one write: takes one from the stock when `from_stock` (not in Relaxed,
+## where Undo is free) and counts it in the stats.
+func helper_used(helper: String, from_stock: bool) -> void:
+	if from_stock and helper_count(helper) > 0:
+		var helpers: Dictionary = _progress["helpers"]
+		helpers[helper] = int(helpers[helper]) - 1
+	var stats: Dictionary = _progress["stats"]
+	stats["helpers_used"] = mini(MAX_COUNT, int(stats["helpers_used"]) + 1)
+	_progress_changed()
+
+
+## Buys a helper: the stars leave the bank and one helper is added, in one write, so an app
+## killed at that moment loses nothing. False (nothing changes) if the bank is short or the
+## helper is unknown.
+func buy_helper(helper: String, price: int) -> bool:
+	if not HELPERS.has(helper) or price < 0 or price > int(_progress["star_bank"]):
+		return false
+	# At the most a player can hold, nothing could be added: spend nothing.
+	if helper_count(helper) >= MAX_HELPERS:
+		return false
+	_progress["star_bank"] = int(_progress["star_bank"]) - price
+	var helpers: Dictionary = _progress["helpers"]
+	helpers[helper] = mini(MAX_HELPERS, int(helpers[helper]) + 1)
 	_progress_changed()
 	return true
 

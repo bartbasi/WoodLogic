@@ -884,3 +884,70 @@ Both are called by the app flow right after `play()`; neither decides when to sh
   clear screen is built. One quiet plaque shows the sum, and Next stays one tap.
 - **Info** builds the tray and gift lines and the prices from Tuning.
   `UiText.tray_for(n)` gives a numbered level's tray.
+
+## 13. Phase 6: review fixes
+
+What the Phase 6 fix round (docs/reviews/code-6.md, security-6.md, qa-6.md) changed in the
+contract. Bart chose to fix every finding.
+
+### 13.1 Logic (level-engine-dev)
+
+- **Generator version 7.** Relaxed levels are made and measured with the tray they are played
+  with. Stored levels for Relaxed come from their own pools, `src/logic/fallback/relaxed-<t>.json`
+  for tiers 3 to 8, read by `LevelCatalog.relaxed_fallback`. A stored level that still has to
+  grow is measured again (`Generator.remeasured`). New: `Generator.tray_for(kind, tier)`,
+  `stored_pool(kind, tier, tray)`, `needs_relaxed_pool(tier)`; `build_fallback` gains
+  `relaxed := false`; tools/levels gains `--fallback-pools=all|tier|relaxed`.
+- **Stopping a generation.** `GenerationStop` (`request()`, `is_requested()`, `CHECK_EVERY`
+  1024) is passed as an optional last `stop` argument to `LevelCatalog.get_level`,
+  `Generator.make` and `Solver.search_only`. A stopped make returns `GeneratedLevel.stopped`
+  true with no level and no solve, never a fallback in its place.
+- **LevelPrefetcher.**
+  - `request(kind, number, band, urgent)`: a new key gets one task, high priority if urgent.
+    An urgent request for a key queued at low priority and not yet started promotes it; the
+    level is still made once. Keys are never demoted, and a running job keeps its priority.
+  - `shutdown()` stops every job not yet collected and drops its result instead of waiting it
+    out. Ready levels stay takeable.
+- **Limits when reading a level.** `LevelData.MAX_PLANKS` 32, `PlankData.MAX_POINTS` 64 per
+  path or outline (`read_points` takes `max_count`), 1 to 60 holes per plank, `MAX_LINE` 200
+  characters, `MAX_HINT` 200 entries, a queue of at most 60.
+
+### 13.2 The level scene (gameplay-dev)
+
+- `show_helper_gift(before: Dictionary) -> void`: called after `play()` and `set_helpers()`,
+  it shows the helper badges at the `before` counts (a missing helper counts from 0), then
+  counts each one up to its current count, one `tick` every 200 ms. A pause, a helper tap,
+  `use_helper` or a new `play()` ends it with the real counts showing.
+- Box and preview views are pooled (`BOX_POOL_MAX` 10) and set up again instead of freed.
+
+### 13.3 Screens, app flow and saves (ui-dev)
+
+- **Asking for levels.**
+  1. At boot, the Play level is asked for first (urgent), then N + 1.
+  2. Only once both are in hand: today's Daily and each Relaxed band's next level.
+  3. While a level plays: N + 1, N - 1 and today's Daily, or for Relaxed that band's next
+     level. At most `MAX_LOW_JOBS` (3) low jobs run at once, and finished levels wait in a
+     spare list of at most `MAX_SPARE` (8).
+- **The saved next level** is checked before it is played.
+  - It must match its number, kind, tier and tray on the main thread at boot.
+  - Then `AppFlow.saved_level_solves(level, tier, stop)` runs the generator's own acceptance
+    search (`Solver.search_only` with the tier's state cap and tray uses) on a worker thread
+    (src/ui/saved_level_check.gd), while the title shows. The level must come back solved and
+    complete, with a tray par of at least its fewest tray uses.
+  - A failed check deletes the file, and the level is made as usual. Play waits behind "One
+    moment" if the check hasn't decided yet.
+  - N + 1 and the boot queue start only after the verdict. Quit requests the stop and waits.
+- **Save** (section 8) gains `buy_helper(helper, price) -> bool` (stars and helper in one write)
+  and `helper_used(helper, from_stock)` (stock and stats in one write). `set_next_level` is now
+  `set_next_level_for_tests`.
+- **The app flow calls the level scene contract directly,** with no `has_method` guards.
+- **The clear screen's notes** share one plaque that scrolls when it has to, so Next and Replay
+  always fit.
+
+### 13.4 Renderers and tests
+
+- `TitleBoard`: the sails make one eased quarter turn over `turn_seconds` (8), then the board
+  stops processing. `set_turning(true)` turns it once more; `is_turning()`.
+- The test runner erases the Save autoload (in its temp folder) and resets `Looks.current`
+  before every test. tests/app/test_repo.gd also bans running programs, permission requests,
+  Java access, decoding text into objects or code, and calling OS methods by a built name.

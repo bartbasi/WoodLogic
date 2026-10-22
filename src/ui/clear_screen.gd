@@ -73,11 +73,23 @@ func _build() -> void:
 		column.add_child(plaque(_summary(), "HeadingLabel", true))
 		if daily:
 			column.add_child(plaque("Streak: %s" % UiText.days(streak), "BodyLabel", true))
-	for note: String in unlock_notes:
-		column.add_child(plaque(note, "BodyLabel"))
-	for note: String in gift_notes:
-		column.add_child(plaque(note, "BodyLabel"))
-	column.add_child(spacer())
+	var notes: Array[String] = []
+	notes.append_array(unlock_notes)
+	notes.append_array(gift_notes)
+	if notes.is_empty():
+		column.add_child(spacer())
+	else:
+		# The notes share one plaque in an area that scrolls if they are too many for the
+		# screen, so Next and Replay never leave it (a 360 x 640 phone with three notes).
+		var area := ScrollContainer.new()
+		area.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		area.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		area.custom_minimum_size.y = 48.0
+		var holder := VBoxContainer.new()
+		holder.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		holder.add_child(plaque("\n".join(notes), "BodyLabel"))
+		area.add_child(holder)
+		column.add_child(area)
 	var big := "Next"
 	var big_note := "Level %d" % (level_number + 1)
 	var second := "Replay"

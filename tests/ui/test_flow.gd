@@ -155,8 +155,8 @@ func test_the_saved_next_level_is_played_without_generating() -> void:
 	add_node(flow)
 	check_eq(flow.state, AppFlow.State.TITLE, "title")
 	flow.screen.find_button("Play").pressed.emit()
-	# No waiting: the level came from the file.
-	check_eq(flow.state, AppFlow.State.LEVEL, "playing at once")
+	# The level came from the file (after its check), not from the generator.
+	check(await _in_state(AppFlow.State.LEVEL), "playing")
 	check_eq(JSON.stringify(_fake().played[0].to_dict()), JSON.stringify(level.to_dict()), "the saved level")
 
 
@@ -333,7 +333,7 @@ func test_a_missing_level_scene_shows_a_plain_message() -> void:
 
 func test_play_back_play_while_the_level_is_still_being_made() -> void:
 	_start(11)
-	_save().set_next_level(150)
+	_save().set_next_level_for_tests(150)
 	flow.queue_free()
 	await frames(2)
 	flow = FLOW.instantiate() as AppFlow
@@ -383,7 +383,7 @@ func test_retry_from_pause_forgets_a_loss_that_arrived_while_paused() -> void:
 
 func test_a_level_that_finishes_on_the_title_is_kept_for_play() -> void:
 	_start(11)
-	_save().set_next_level(150)
+	_save().set_next_level_for_tests(150)
 	flow.queue_free()
 	await frames(2)
 	flow = FLOW.instantiate() as AppFlow

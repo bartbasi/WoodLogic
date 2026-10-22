@@ -97,7 +97,9 @@ func all_text(root: Node) -> String:
 
 
 func _texts(node: Node, parts: PackedStringArray) -> void:
-	if node is Label:
+	if node is RichTextLabel:
+		parts.append((node as RichTextLabel).text)
+	elif node is Label:
 		parts.append((node as Label).text)
 	elif node is Button:
 		parts.append((node as Button).text)
@@ -116,3 +118,38 @@ func until(condition: Callable, timeout_ms: int = 20000) -> bool:
 		OS.delay_msec(10)
 		await tree.process_frame
 	return true
+
+
+## Puts back what a test may have changed in the engine-wide state the other suites read: the
+## looks the renderers use, and the audio switches (a Save with symbols or sound off, booted by
+## the app flow, sets them).
+func cleanup() -> void:
+	Looks.current = {"wood": "oak", "metal": "steel", "symbols": true}
+	var audio := tree.root.get_node_or_null("Audio")
+	if audio != null:
+		audio.call("set_sound", true)
+		audio.call("set_music", true)
+	await super.cleanup()
+
+
+## Starts the app over the real level scene with a save that says `highest` levels are cleared,
+## written as one file (start_real records every win, which is slow for hundreds of levels).
+func start_real_at(highest: int, today: String = "2026-10-21") -> void:
+	Links.opener = func(address: String) -> Variant:
+		opened.append(address)
+		return OK
+	var save := save_node()
+	save.erase_all()
+	var p: Dictionary = save.default_progress()
+	p["highest_cleared"] = highest
+	p["next_level"] = highest + 1
+	p["helpers_met"] = ["undo", "extra_slot", "screwdriver"]
+	p["gifts_given"] = [50, 100]
+	DirAccess.make_dir_recursive_absolute(str(save.dir))
+	var f := FileAccess.open(str(save.dir) + "progress.json", FileAccess.WRITE)
+	f.store_string(JSON.stringify(p))
+	f.close()
+	flow = FLOW.instantiate() as AppFlow
+	flow.today_override = today
+	flow.quit_handler = func() -> void: quit_calls += 1
+	add_node(flow)

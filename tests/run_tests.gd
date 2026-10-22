@@ -107,6 +107,9 @@ func _run() -> void:
 			# No test ever opens a link: a test that doesn't set its own opener gets this one.
 			Links.opener = _no_open
 			Links.coffee_hidden_for_tests = -1
+			# Each test starts with no progress and the default looks, whatever the last one left.
+			save.call("erase_all")
+			Looks.current = {"wood": Looks.DEFAULT_WOOD, "metal": Looks.DEFAULT_METAL, "symbols": true}
 			var suite := script.new() as TestCase
 			if suite == null:
 				failed += 1

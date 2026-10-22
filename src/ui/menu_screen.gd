@@ -109,7 +109,9 @@ func _on_tab(tab_id: String) -> void:
 
 
 func scroll_to_top() -> void:
-	scroll.scroll_vertical = 0
+	# The title and the map have no scroll area (it was freed).
+	if use_scroll:
+		scroll.scroll_vertical = 0
 
 
 ## Flexible width for a header row.

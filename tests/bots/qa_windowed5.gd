@@ -160,4 +160,6 @@ func _run() -> void:
 		await _shot("%s-7-out-of-room-tray3" % tag)
 	save.call("erase_all")
 	print("QA windowed 5 done: pictures in build/qa5/shots/")
+	# A lambda left in a static variable crashes the engine on quit.
+	Links.opener = Callable()
 	quit(0)

@@ -5,6 +5,10 @@ an image, audio, font or model file made anywhere else. The only exceptions are 
 inside the Godot engine, such as its default font, and the app icon PNGs, which our own script
 draws (below). Each entry below names the thing, the code that makes it, and how.
 
+The screenshots in docs/design/ are pictures of our own Phase 1 design scenes, taken with the
+game's own windowed runs. They document the design choice and are not part of the game: the
+exports leave docs/ out.
+
 ## Visuals
 
 | What | Made by | How |
@@ -23,8 +27,9 @@ draws (below). Each entry below names the thing, the code that makes it, and how
 | The level clear celebration | src/render/clear_effects.gd | a veil, three stars stamped in brass (or outlined when missed), curling wood shavings and dust motes, all drawn with _draw over 1.6 s |
 | The progress map's nodes and trail | src/render/map_node_view.gd, src/render/map_trail.gd | oak discs with the number and stars (a notched edge on every fifth level, a padlock when locked); a brass inlay along a gentle curve, dotted past the next level |
 | The title's decorative board | src/render/title_board.gd | a small windmill of planks and screws on the back board, using the views above in the chosen wood and metal |
+| Wood and metal themes | src/render/looks.gd | the player's chosen wood and metal turned into the colors and grain settings every renderer reads; numbers only, no images |
 | Screen panels, buttons and the dock | src/ui/ui_theme.gd, src/render/tokens.gd | a Godot Theme of StyleBoxFlat panels built in code from the color tokens |
-| The app icon (icons/icon-192.png, icon-512.png, adaptive-background.png, adaptive-foreground.png, adaptive-monochrome.png) | tools/art/app_icon.gd | a walnut board, an oak plank and a red screw with the triangle drive, drawn in code and saved as PNGs. These five files are the only image files in the repo: they are outputs of that script, kept as files because the Android export needs icon files. Remake them with `C:/Tools/Godot/Godot_v4.7.2-stable_win64.exe --path . -s res://tools/art/app_icon.gd`. |
+| The app icon (icons/icon-192.png, icon-512.png, adaptive-background.png, adaptive-foreground.png, adaptive-monochrome.png) | tools/art/app_icon.gd | a walnut board, an oak plank and a red screw with the triangle drive, drawn in code and saved as PNGs. These five are the only image files the game ships (the screenshots in docs/design/ are documentation): they are outputs of that script, kept as files because the Android export needs icon files. Remake them with `C:/Tools/Godot/Godot_v4.7.2-stable_win64.exe --path . -s res://tools/art/app_icon.gd`. |
 
 ## Sounds
 

@@ -145,6 +145,12 @@ above it's only 0 wrong moves."
    Extra slot as a gift on reaching level 50 and again at level 100 (section 5).
 3. "One short line" the first time the tray shrinks, shown once; UX writes it (section 6.8).
 
+**Gate 2 approved** (Bart, 22 October 2026, after playing the smaller tray build, commit
+53011c0): "approved". His phone checks were "All fine": progress kept over the update, Back,
+switching apps, folding, smoothness and the gift. Left open for later: the late-level softness
+(a level is tight in its opening and forgives more in its second half, section 6.8); the wave
+coloring experiment for it is parked in docs/LATER.md.
+
 ## 1. Board, units and geometry
 
 ### 1.1 Units and the grid
@@ -428,9 +434,16 @@ These use the shipped blueprints in data/blueprints/.
   get and use one (UX 3.13.3). Stars are never spent anywhere else.
 - Using a helper also costs that attempt's Clean star, so the real price is one star more when
   the Clean star was in reach.
-- **Gifts** (Bart, Phase 5): 2 Undos and 1 Extra slot on reaching level 50, and again on reaching
-  level 100, the two steps where the tray forgives one fewer wrong move. Each is given once,
-  shown with the first time helper sheet (UX 3.13.1), and never on a replay.
+- **Gifts** (Bart, Phase 5; UX 3.13.4): 2 Undos and 1 Extra slot on reaching level 50, and again
+  on reaching level 100, the two steps where the tray forgives one fewer wrong move. A gift is
+  due once the player's next level is 50 (or 100) or higher and that gift has not been given;
+  it is paid on the next numbered level clear, a replay clear included, so a save already past
+  50 when the update arrived gets it too. If both are due, one note shows the sum. Each gift is
+  given once (the save keeps one flag per gift; a progress reset clears them), never in
+  Relaxed. It shows as a quiet plaque on the level clear screen, in the same scrolling notes
+  plaque as the unlock notes, with no button and no sheet, so Next stays one tap. On the next
+  level the Undo and Extra slot badges count up from the old counts to the new ones, one soft
+  tick per step.
 - The worked economy below is the Phase 1 estimate at the old prices. Section 6.8 has the
   Phase 5 estimate with the tray schedule and the new prices.
 
@@ -848,9 +861,11 @@ so it is measured before anything ships.
 
 - Prices: Undo 3 stars (was 4), Extra slot 5 (was 6), Screwdriver 8. First appearance and the
   two free of each unchanged (levels 8, 15, 25).
-- Gifts: 2 Undos and 1 Extra slot on reaching level 50, and again at level 100, shown with the
-  first time helper sheet (UX 3.13.1). In data/tuning.json: `"gifts": [{"level": 50, "undo": 2,
-  "extra_slot": 1}, {"level": 100, "undo": 2, "extra_slot": 1}]`.
+- Gifts: 2 Undos and 1 Extra slot on reaching level 50, and again at level 100, paid on the
+  next numbered level clear (a replay clear included) and shown as a quiet plaque on the clear
+  screen; the badges count up on the next level (section 5, UX 3.13.4). In data/tuning.json:
+  `"gifts": [{"level": 50, "undo": 2, "extra_slot": 1}, {"level": 100, "undo": 2,
+  "extra_slot": 1}]`.
 - Extra slot on a 3 slot tray is exactly one more wrong move for that try (R30), so from level
   100 it turns "no wrong move" into "one", which is what a helper is for.
 - Estimates, with the helper mix of section 5 (average price now (3 + 3 + 5 + 8) / 4 = 4.75):
@@ -866,9 +881,9 @@ so it is measured before anything ships.
   Plus the gifts. A retrying bot (qa-tester) should check these; if a careless player buys less
   than one helper per 5 levels, Undo goes to 2.
 
-**Data changes.** In data/tuning.json now: each tier's `tray` and `peak`, the `sawtooth` above,
-`relaxed_tray` 5, and the prices. Waiting for version 6's reader: `gifts` and the tiers' `skip`
-lists (the whole file is build/proposed/tuning.json). No blueprint changes.
+**Data changes** (in data/tuning.json with generator version 6, commit 53011c0): each tier's
+`tray`, `peak` and `skip`, the `sawtooth` above, `relaxed_tray` 5, the prices and the `gifts`.
+No blueprint changes.
 
 ## 7. Unlocks
 
@@ -1381,8 +1396,11 @@ Walk these on Windows (tests and bots) and on the phone. Each item names how to 
     tiers 1 to 10), Relaxed levels 5 and tutorial levels 5; on tiers with a least peak of 2 or
     more no level can be solved with one slot fewer than that peak. Each tier's `skip` list keeps
     those boards out of its deal.
-22c. Gifts: reaching level 50, and again level 100, gives 2 Undos and 1 Extra slot once, with the
-    helper sheet; a replay gives nothing. Prices are 3, 5 and 8.
+22c. Gifts: a due gift (next level 50 or 100 or higher, not yet given) is paid once on the next
+    numbered level clear, a replay clear included, as a plaque in the clear screen's notes (both
+    due: one note with the sum); never in Relaxed, never twice, again after a progress reset.
+    On the next level the Undo and Extra slot badges count up from the old counts. Prices are 3,
+    5 and 8.
 23. The novice policy wins every tier 1 to 3 level and loses every tier 7 to 10 level (G4).
     The greedy novice bot's win rates per tier are reported next to it.
 24. No level shows more than 36 screws, 8 colors, 5 layers or 24 free screws at the start.

@@ -4,8 +4,9 @@ class_name TitleBoard
 extends Node2D
 ## The title screen's decorative board (docs/UX.md 3.1): a small windmill of planks and screws
 ## on the theme's back board, in the chosen wood and metal (Looks.current). Purely decoration:
-## nothing on it looks pressable. Its one touch of life is the sails turning very slowly (one
-## turn a minute, no flashing). `bake()` draws everything still (board, tower, door, ground, sun
+## nothing on it looks pressable. Its one touch of life is the sails making one slow quarter
+## turn when the board appears, easing in and out over about eight seconds, then resting (no
+## flashing, and nothing redraws once they rest). `bake()` draws everything still (board, tower, door, ground, sun
 ## and their screws) into one texture, so only the sails and their screws draw live: about eight
 ## draw calls in all. It fades in over 150 ms once baked. The origin is the top left of the rect.
 
@@ -16,8 +17,9 @@ const PANEL_INSET := 2.0
 ## Room around the rect in the still texture, so the board's edge and shadow aren't cut off.
 const PAD := 32.0
 const PANEL_CORNER := 14.0
-## One turn a minute, in degrees a second.
-const SAIL_SPEED := 6.0
+## One turn of the sails: this far, over this long, eased in and out (DESIGN.md 9).
+const TURN_DEGREES := 90.0
+const TURN_SECONDS := 8.0
 const FADE_SECONDS := 0.15
 ## Frames from asking the still group to draw until its texture is ready.
 const CAPTURE_FRAMES := 2
@@ -38,6 +40,11 @@ var _bake_frames := -1
 var _fade := 0.0
 var _angle := 0.0
 var _turning := true
+## How long a turn takes; tests shorten it.
+var turn_seconds := TURN_SECONDS
+## Where the turn in progress started, and how far into it we are (-1 when resting).
+var _turn_from := 0.0
+var _turn_t := -1.0
 
 
 ## Lays the board out to fill `size` (design units).
@@ -60,6 +67,8 @@ func setup(size: Vector2) -> void:
 	_build_rotor()
 	_texture_ready = false
 	_fade = 0.0
+	_turn_from = _angle
+	_turn_t = 0.0 if _turning else -1.0
 	_apply_fade()
 	# The still texture holds premultiplied color: lay it down that way (and with the fade).
 	var mat := ShaderMaterial.new()
@@ -89,10 +98,21 @@ func is_baked() -> bool:
 	return _texture_ready
 
 
-## The slow turn of the sails, on by default.
+## On (the default) gives the sails one slow turn, starting when the board has faded in, or at
+## once if it already has; calling it again turns them once more. Off stops them where they are.
 func set_turning(on: bool) -> void:
 	_turning = on
-	set_process(true)
+	if on:
+		_turn_from = _angle
+		_turn_t = 0.0
+		set_process(true)
+	else:
+		_turn_t = -1.0
+
+
+## True while the sails are turning.
+func is_turning() -> bool:
+	return _turn_t >= 0.0
 
 
 func _ready() -> void:
@@ -114,10 +134,16 @@ func _process(delta: float) -> void:
 	if _texture_ready and _fade < 1.0:
 		_fade = minf(1.0, _fade + delta / FADE_SECONDS)
 		_apply_fade()
-	if _turning and _rotor != null:
-		_angle = fmod(_angle + SAIL_SPEED * delta, 360.0)
+	# The turn starts once the board is showing, eases in and out, then rests.
+	if _turn_t >= 0.0 and _fade >= 1.0 and _rotor != null:
+		_turn_t = minf(1.0, _turn_t + delta / maxf(turn_seconds, 0.001))
+		var eased := 0.5 - 0.5 * cos(PI * _turn_t)
+		_angle = fmod(_turn_from + TURN_DEGREES * eased, 360.0)
 		_turn_rotor()
-	if _bake_frames < 0 and _fade >= 1.0 and not _turning:
+		if _turn_t >= 1.0:
+			_turn_t = -1.0
+	# At rest (baked, faded in, sails still) nothing runs or redraws.
+	if _bake_frames < 0 and _fade >= 1.0 and _turn_t < 0.0:
 		set_process(false)
 
 

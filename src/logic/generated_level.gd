@@ -12,6 +12,9 @@ var solve: SolveResult
 var attempts: int = 0
 ## True if no try was accepted and a stored fallback level was used (G7 does not apply then).
 var fell_back: bool = false
+## True if the make was stopped (GenerationStop): level and solve are then null, and nothing
+## may be shown.
+var stopped: bool = false
 ## Wall-clock milliseconds, for reports only.
 var gen_ms: int = 0
 ## For reports: how the board was varied ("mirror shift 2,-1 swap 1-2 drop 4" and so on).

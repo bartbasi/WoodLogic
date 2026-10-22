@@ -1,0 +1,317 @@
+{
+	"daily": {
+		"best_streak": 5,
+		"days": {
+			"2026-10-17": {
+				"best_ms": 61000,
+				"stars": 2
+			},
+			"2026-10-18": {
+				"best_ms": 61000,
+				"stars": 2
+			},
+			"2026-10-19": {
+				"best_ms": 61000,
+				"stars": 2
+			},
+			"2026-10-20": {
+				"best_ms": 61000,
+				"stars": 2
+			},
+			"2026-10-21": {
+				"best_ms": 61000,
+				"stars": 2
+			}
+		},
+		"last_date": "2026-10-21",
+		"solved": 5,
+		"streak": 5
+	},
+	"format": 1,
+	"helpers": {
+		"extra_slot": 5,
+		"screwdriver": 2,
+		"undo": 1
+	},
+	"helpers_met": [
+		"undo",
+		"extra_slot",
+		"screwdriver"
+	],
+	"highest_cleared": 45,
+	"levels": {
+		"1": {
+			"best_ms": 20700,
+			"gen": 0,
+			"stars": 2
+		},
+		"10": {
+			"best_ms": 27000,
+			"gen": 5,
+			"stars": 1
+		},
+		"11": {
+			"best_ms": 27700,
+			"gen": 5,
+			"stars": 2
+		},
+		"12": {
+			"best_ms": 28400,
+			"gen": 5,
+			"stars": 2
+		},
+		"13": {
+			"best_ms": 29100,
+			"gen": 5,
+			"stars": 2
+		},
+		"14": {
+			"best_ms": 29800,
+			"gen": 5,
+			"stars": 1
+		},
+		"15": {
+			"best_ms": 30500,
+			"gen": 5,
+			"stars": 3
+		},
+		"16": {
+			"best_ms": 31200,
+			"gen": 5,
+			"stars": 1
+		},
+		"17": {
+			"best_ms": 31900,
+			"gen": 5,
+			"stars": 2
+		},
+		"18": {
+			"best_ms": 32600,
+			"gen": 5,
+			"stars": 2
+		},
+		"19": {
+			"best_ms": 33300,
+			"gen": 5,
+			"stars": 2
+		},
+		"2": {
+			"best_ms": 21400,
+			"gen": 0,
+			"stars": 1
+		},
+		"20": {
+			"best_ms": 34000,
+			"gen": 5,
+			"stars": 1
+		},
+		"21": {
+			"best_ms": 34700,
+			"gen": 5,
+			"stars": 3
+		},
+		"22": {
+			"best_ms": 35400,
+			"gen": 5,
+			"stars": 1
+		},
+		"23": {
+			"best_ms": 36100,
+			"gen": 5,
+			"stars": 2
+		},
+		"24": {
+			"best_ms": 36800,
+			"gen": 5,
+			"stars": 2
+		},
+		"25": {
+			"best_ms": 37500,
+			"gen": 5,
+			"stars": 2
+		},
+		"26": {
+			"best_ms": 38200,
+			"gen": 5,
+			"stars": 1
+		},
+		"27": {
+			"best_ms": 38900,
+			"gen": 5,
+			"stars": 3
+		},
+		"28": {
+			"best_ms": 39600,
+			"gen": 5,
+			"stars": 1
+		},
+		"29": {
+			"best_ms": 40300,
+			"gen": 5,
+			"stars": 2
+		},
+		"3": {
+			"best_ms": 22100,
+			"gen": 0,
+			"stars": 3
+		},
+		"30": {
+			"best_ms": 41000,
+			"gen": 5,
+			"stars": 2
+		},
+		"31": {
+			"best_ms": 41700,
+			"gen": 5,
+			"stars": 2
+		},
+		"32": {
+			"best_ms": 42400,
+			"gen": 5,
+			"stars": 1
+		},
+		"33": {
+			"best_ms": 43100,
+			"gen": 5,
+			"stars": 3
+		},
+		"34": {
+			"best_ms": 43800,
+			"gen": 5,
+			"stars": 1
+		},
+		"35": {
+			"best_ms": 44500,
+			"gen": 5,
+			"stars": 2
+		},
+		"36": {
+			"best_ms": 45200,
+			"gen": 5,
+			"stars": 2
+		},
+		"37": {
+			"best_ms": 45900,
+			"gen": 5,
+			"stars": 2
+		},
+		"38": {
+			"best_ms": 46600,
+			"gen": 5,
+			"stars": 1
+		},
+		"39": {
+			"best_ms": 47300,
+			"gen": 5,
+			"stars": 3
+		},
+		"4": {
+			"best_ms": 22800,
+			"gen": 0,
+			"stars": 1
+		},
+		"40": {
+			"best_ms": 48000,
+			"gen": 5,
+			"stars": 1
+		},
+		"41": {
+			"best_ms": 48700,
+			"gen": 5,
+			"stars": 2
+		},
+		"42": {
+			"best_ms": 49400,
+			"gen": 5,
+			"stars": 2
+		},
+		"43": {
+			"best_ms": 50100,
+			"gen": 5,
+			"stars": 2
+		},
+		"44": {
+			"best_ms": 50800,
+			"gen": 5,
+			"stars": 1
+		},
+		"45": {
+			"best_ms": 51500,
+			"gen": 5,
+			"stars": 3
+		},
+		"5": {
+			"best_ms": 23500,
+			"gen": 0,
+			"stars": 2
+		},
+		"6": {
+			"best_ms": 24200,
+			"gen": 0,
+			"stars": 2
+		},
+		"7": {
+			"best_ms": 24900,
+			"gen": 0,
+			"stars": 2
+		},
+		"8": {
+			"best_ms": 25600,
+			"gen": 0,
+			"stars": 1
+		},
+		"9": {
+			"best_ms": 26300,
+			"gen": 5,
+			"stars": 3
+		}
+	},
+	"next_level": 46,
+	"relaxed": {
+		"last_band": "medium",
+		"next": {
+			"easy": 3,
+			"hard": 0,
+			"medium": 2
+		}
+	},
+	"star_bank": 86,
+	"stars_earned": 93,
+	"stats": {
+		"cleared": 45,
+		"helpers_used": 1,
+		"three_star": 8,
+		"time": {
+			"easy": {
+				"best_ms": 26300,
+				"n": 22,
+				"total_ms": 809600
+			},
+			"expert": {
+				"best_ms": 0,
+				"n": 0,
+				"total_ms": 0
+			},
+			"hard": {
+				"best_ms": 0,
+				"n": 0,
+				"total_ms": 0
+			},
+			"medium": {
+				"best_ms": 27000,
+				"n": 20,
+				"total_ms": 934700
+			}
+		}
+	},
+	"unlocked": {
+		"metal": [
+			"steel",
+			"brass"
+		],
+		"wood": [
+			"oak",
+			"walnut"
+		]
+	}
+}

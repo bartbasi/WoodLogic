@@ -127,3 +127,10 @@ func show_tray_note(text: String) -> void:
 
 func play_tray_closing() -> void:
 	tray_closings += 1
+
+
+var gift_counts_before: Array[Dictionary] = []
+
+
+func show_helper_gift(before: Dictionary) -> void:
+	gift_counts_before.append(before)

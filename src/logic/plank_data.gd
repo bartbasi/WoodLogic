@@ -14,6 +14,9 @@ const SHAPE_NAMES: Array[String] = ["bar", "poly", "disc", "ring"]
 ## Every coordinate and size in a data file must lie within this range (the validator then
 ## applies the real limits).
 const COORD_LIMIT := 1000
+## The most points a path or outline may have in a data file (the shipped blueprints use up to
+## 14). A plank's holes are capped at BoardGeometry.MAX_SCREWS, a level's most screws.
+const MAX_POINTS := 64
 
 var layer: int
 var shape: int
@@ -197,7 +200,11 @@ static func from_dict(d: Dictionary, index: int, errors: PackedStringArray) -> P
 				if p.inner >= p.radius:
 					errors.append("%s: a ring's inner radius must be smaller than its radius" % where)
 					ok = false
-	p.holes = read_points(d, "holes", 0, where, errors)
+	# B3: every plank has a hole (a plank with none would hold nothing, and costs work to read).
+	if d.get("holes") is Array and (d.get("holes") as Array).is_empty():
+		errors.append("%s: B3: a plank needs at least one hole" % where)
+		return null
+	p.holes = read_points(d, "holes", 1, where, errors, BoardGeometry.MAX_SCREWS)
 	if not ok or errors.size() > errors_before:
 		return null
 	p.build()
@@ -216,12 +223,15 @@ static func read_int(d: Dictionary, key: String, low: int, high: int, where: Str
 	return low
 
 
-## A list of at least min_count [x, y] whole number pairs from d[key].
-static func read_points(d: Dictionary, key: String, min_count: int, where: String, errors: PackedStringArray) -> PackedVector2Array:
+## A list of min_count to max_count [x, y] whole number pairs from d[key].
+static func read_points(d: Dictionary, key: String, min_count: int, where: String, errors: PackedStringArray, max_count: int = MAX_POINTS) -> PackedVector2Array:
 	var out := PackedVector2Array()
 	var v: Variant = d.get(key)
 	if not v is Array or (v as Array).size() < min_count:
 		errors.append("%s: %s must be a list of at least %d points" % [where, key, min_count])
+		return out
+	if (v as Array).size() > max_count:
+		errors.append("%s: %s must be a list of at most %d points" % [where, key, max_count])
 		return out
 	for item: Variant in v:
 		if not item is Array or (item as Array).size() != 2:

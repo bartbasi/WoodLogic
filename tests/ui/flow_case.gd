@@ -50,6 +50,7 @@ func until(condition: Callable, timeout_ms: int = 20000) -> bool:
 	while not condition.call():
 		if Time.get_ticks_msec() - started > timeout_ms:
 			return false
+		OS.delay_msec(1)
 		await tree.process_frame
 	return true
 
