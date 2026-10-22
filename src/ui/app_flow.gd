@@ -164,13 +164,12 @@ func _saved_level_tier(level: LevelData, n: int) -> int:
 	return tier
 
 
-## The generator's own acceptance search (the tier's state budget and the top of its tray use
-## range as the cap), not the full solve with the novice and trap playouts. The tray par must
+## The generator's own acceptance search (the tier's state budget and the generator's own cap on
+## tray uses), not the full solve with the novice and trap playouts. The tray par must
 ## not be below the fewest tray uses found. `stop` ends the search early (quitting); a stopped
 ## search is not complete, so it fails. Safe on a worker thread: it only reads.
 static func saved_level_solves(level: LevelData, tier: int, stop: GenerationStop = null) -> bool:
-	var spec := Tuning.tier(tier)
-	var result := Solver.search_only(level, Generator.MAX_STATES[tier - 1], true, spec.tray_uses.y, stop)
+	var result := Solver.search_only(level, Generator.MAX_STATES[tier - 1], true, Generator.acceptance_cap(tier), stop)
 	if not result.solved or not result.complete:
 		return false
 	return level.tray_par >= result.fewest_tray_uses

@@ -386,6 +386,41 @@ func test_6_8_relaxed_pools_hold_every_rule_with_relaxed_tray() -> void:
 			check_eq(Generator.peak_holds(level, stored.solve, spec.peak.x, 400000), 1, "%s: G10 for tier %d" % [level.id, t])
 
 
+func test_acceptance_cap_is_the_generators_own_cap_on_every_tier() -> void:
+	_ready_catalog()
+	# AppFlow checks a saved level with acceptance_cap; the generator's acceptance search uses
+	# spec_for(plan).tray_uses.y. They must agree for every tier and every kind of plan.
+	var plans: Array[Generator.Plan] = []
+	for n: int in range(FIRST, 400):
+		plans.append(Generator.plan_for(LevelData.NUMBERED, n, ""))
+	plans.append(Generator.plan_for(LevelData.DAILY, 20261022, ""))
+	for band: String in Tuning.BANDS:
+		for i: int in 60:
+			plans.append(Generator.plan_for(LevelData.RELAXED, i, band))
+	var seen := {}
+	for plan: Generator.Plan in plans:
+		check_eq(Generator.spec_for(plan).tray_uses.y, Generator.acceptance_cap(plan.tier), "%s %d (tier %d)" % [LevelData.KIND_NAMES[plan.kind], plan.number, plan.tier])
+		seen[plan.tier] = true
+	check_eq(seen.size(), Tuning.tiers.size(), "every tier was planned")
+	for t: int in range(1, Tuning.tiers.size() + 1):
+		var spec := Tuning.tier(t)
+		var cap := Generator.acceptance_cap(t)
+		check(cap >= spec.tray_uses.y and (spec.peak.x <= 0 or cap >= spec.peak.x + 1), "tier %d: the cap %d holds the tier's range and its peak" % [t, cap])
+	# A tuning whose peak passes the tier's range widens the cap for both alike.
+	var tier7 := Tuning.tier(7)
+	var saved := tier7.peak
+	tier7.peak = Vector2i(tier7.tray_uses.y + 1, saved.y)
+	var seven := FIRST
+	while Tuning.tier_for_level(seven) != 7:
+		seven += 1
+	var plan := Generator.plan_for(LevelData.NUMBERED, seven, "")
+	var widened := Generator.acceptance_cap(7)
+	var spec_cap := Generator.spec_for(plan).tray_uses.y
+	tier7.peak = saved
+	check_eq(widened, tier7.tray_uses.y + 2, "a peak above the range widens the cap")
+	check_eq(spec_cap, widened, "and the generator's search for level %d uses the same" % seven)
+
+
 func test_6_8_skipped_boards_are_never_dealt_on_their_tier() -> void:
 	_ready_catalog()
 	for t: int in range(1, 11):

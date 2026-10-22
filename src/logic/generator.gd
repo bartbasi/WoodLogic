@@ -385,9 +385,27 @@ static func budget_scale(tier: int) -> int:
 	return G9_BUDGET if SURVIVAL_TIERS.has(tier) or LATE_TRAY_TIERS.has(tier) or peak else 1
 
 
-## The tier row a plan works with: its tier's, with the fewest tray use range widened to
-## [max(low, P), max(high, P + 1)] for its least peak P (a peak of P needs at least P tray uses,
-## and one more leaves room above the least).
+## The fewest tray uses the generator accepts on a tier (G3): the tier's range, widened to
+## [max(low, P), max(high, P + 1)] for its least peak P of 1 or more (a peak of P needs at
+## least P tray uses, and one more leaves room above the least). The same for every kind of
+## level: a daily or Relaxed plan has its tier's peak too.
+static func acceptance_range(tier: int) -> Vector2i:
+	var base := Tuning.tier(tier)
+	var peak := base.peak.x
+	if peak <= 0:
+		return base.tray_uses
+	return Vector2i(maxi(base.tray_uses.x, peak), maxi(base.tray_uses.y, peak + 1))
+
+
+## The tray use cap of the generator's acceptance search on a tier (the top of
+## acceptance_range): a level whose every solution needs more is turned down. For checking a
+## saved level the same way it was accepted.
+static func acceptance_cap(tier: int) -> int:
+	return acceptance_range(tier).y
+
+
+## The tier row a plan works with: its tier's, with the fewest tray use range of
+## acceptance_range.
 static func spec_for(plan: Plan) -> Tuning.TierSpec:
 	var base := Tuning.tier(plan.tier)
 	var spec := Tuning.TierSpec.new()
@@ -400,7 +418,7 @@ static func spec_for(plan: Plan) -> Tuning.TierSpec:
 	spec.covered_pct = base.covered_pct
 	spec.tray = plan.tray
 	spec.peak = base.peak
-	spec.tray_uses = base.tray_uses if plan.peak <= 0 else Vector2i(maxi(base.tray_uses.x, plan.peak), maxi(base.tray_uses.y, plan.peak + 1))
+	spec.tray_uses = acceptance_range(plan.tier)
 	return spec
 
 

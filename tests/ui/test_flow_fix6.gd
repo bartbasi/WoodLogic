@@ -136,7 +136,7 @@ func test_a_saved_level_that_fails_the_check_is_made_instead() -> void:
 	for n: int in range(30, 60):
 		level = LevelCatalog.get_level(LevelData.NUMBERED, n, "").level
 		var tier := Tuning.tier_for_level(n)
-		var found := Solver.search_only(level, Generator.MAX_STATES[tier - 1], true, Tuning.tier(tier).tray_uses.y)
+		var found := Solver.search_only(level, Generator.MAX_STATES[tier - 1], true, Generator.acceptance_cap(tier))
 		if found.fewest_tray_uses >= 1:
 			break
 	var number := level.number

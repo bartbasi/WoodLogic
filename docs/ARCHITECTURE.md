@@ -896,7 +896,9 @@ contract. Bart chose to fix every finding.
   with. Stored levels for Relaxed come from their own pools, `src/logic/fallback/relaxed-<t>.json`
   for tiers 3 to 8, read by `LevelCatalog.relaxed_fallback`. A stored level that still has to
   grow is measured again (`Generator.remeasured`). New: `Generator.tray_for(kind, tier)`,
-  `stored_pool(kind, tier, tray)`, `needs_relaxed_pool(tier)`; `build_fallback` gains
+  `stored_pool(kind, tier, tray)`, `needs_relaxed_pool(tier)`, `acceptance_range(tier)` (G3's accepted
+  fewest tray uses, widened for the tier's peak) and `acceptance_cap(tier)` (its top, which the
+  saved-level check uses too); `build_fallback` gains
   `relaxed := false`; tools/levels gains `--fallback-pools=all|tier|relaxed`.
 - **Stopping a generation.** `GenerationStop` (`request()`, `is_requested()`, `CHECK_EVERY`
   1024) is passed as an optional last `stop` argument to `LevelCatalog.get_level`,
@@ -931,7 +933,7 @@ contract. Bart chose to fix every finding.
 - **The saved next level** is checked before it is played.
   - It must match its number, kind, tier and tray on the main thread at boot.
   - Then `AppFlow.saved_level_solves(level, tier, stop)` runs the generator's own acceptance
-    search (`Solver.search_only` with the tier's state cap and tray uses) on a worker thread
+    search (`Solver.search_only` with the tier's state cap and `Generator.acceptance_cap(tier)`) on a worker thread
     (src/ui/saved_level_check.gd), while the title shows. The level must come back solved and
     complete, with a tray par of at least its fewest tray uses.
   - A failed check deletes the file, and the level is made as usual. Play waits behind "One
