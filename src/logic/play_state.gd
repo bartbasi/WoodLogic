@@ -467,7 +467,7 @@ func _restore(step: Dictionary) -> void:
 	_wells = step["wells"]
 	_next_box = step["next_box"]
 	var tray: PackedInt32Array = step["tray"]
-	# The Extra slot stays open (R27): an older tray gets an empty sixth slot.
+	# The Extra slot stays open (R27): an older tray gets its empty extra slot back.
 	while tray.size() < _tray.size():
 		tray.append(-1)
 	_tray = tray

@@ -361,10 +361,11 @@ func test_buying_a_helper_spends_stars_and_uses_it() -> void:
 	check(flow.overlay is UiDialog, "the buy dialog")
 	var dialog := flow.overlay as UiDialog
 	check_eq(dialog.heading_text, "Get Undo?", "heading")
-	check_eq(dialog.body_text, "Undo costs 4 stars. You have 5. Spend 4 and use it now?", "body")
+	var price: int = Tuning.helpers["undo"]["price"]
+	check_eq(dialog.body_text, "Undo costs %d stars. You have 5. Spend %d and use it now?" % [price, price], "body")
 	tap("Get and use", true)
 	check(flow.overlay == null, "closed")
-	check_eq(save_node().star_bank(), 1, "four stars spent")
+	check_eq(save_node().star_bank(), 5 - price, "the price was spent")
 	check_eq(fake().used, ["undo"], "used at once")
 	check_eq(save_node().helper_count("undo"), 0, "the bought one was used up")
 

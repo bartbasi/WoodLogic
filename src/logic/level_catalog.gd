@@ -24,9 +24,9 @@ static var blueprints: Array[LevelData] = []
 static var tutorials: Array[LevelData] = []
 ## Per tier (index tier - 1): the blueprints (indices) that suit it as authored, by id.
 static var suits: Array[PackedInt32Array] = []
-## The blueprints split in two halves for the G7 deal (Generator): each half has some of every
-## tier's blueprints.
-static var halves: Array[PackedInt32Array] = []
+## The numbered levels' schedule of blueprints (Generator.numbered_schedule): [first level,
+## first level of the repeating part, blueprints].
+static var numbered_schedule: Array = []
 ## The daily's blueprints: those that suit the daily tier, topped up (if there are fewer than
 ## Tuning.recent_blueprints_excluded + 1, which G7 needs for a one a day cycle) with the
 ## most covered blueprints whose screws and layers suit the tier.
@@ -43,11 +43,12 @@ static func is_loaded() -> bool:
 
 ## Reads tuning, blueprints, tutorial levels and fallback levels. Main thread only, once at
 ## startup; later calls do nothing and return the first call's answer. Logs and returns false
-## if anything is broken; what did load stays usable.
-static func load_all() -> bool:
+## if anything is broken; what did load stays usable. tuning_path is for tools/levels (a
+## tuning file to try out); the game and the tests load data/tuning.json.
+static func load_all(tuning_path: String = Tuning.PATH) -> bool:
 	if _loaded:
 		return _load_ok
-	var ok := Tuning.load_file()
+	var ok := Tuning.load_file(tuning_path)
 	blueprints.clear()
 	for path: String in json_files(BLUEPRINT_DIR):
 		var level := LevelData.from_json(read_text(path))
@@ -68,6 +69,10 @@ static func load_all() -> bool:
 	if not reload_fallback():
 		ok = false
 	_sort_blueprints()
+	numbered_schedule = Generator.numbered_schedule()
+	if (numbered_schedule[2] as PackedInt32Array).is_empty():
+		push_error("no schedule for the numbered levels (too few blueprints for G7)")
+		ok = false
 	relaxed_schedule.clear()
 	for band: String in Tuning.BANDS:
 		relaxed_schedule[band] = Generator.relaxed_schedule(band)
@@ -145,8 +150,8 @@ static func reload_fallback(dir: String = FALLBACK_DIR) -> bool:
 
 ## Fallback files: src/logic/fallback/tier-<t>.json, each
 ## {"format": 1, "tier": t, "levels": [{"level": {...}, "solve": {...}}, ...]}, where solve
-## holds fewest, states, novice_won, novice_taps, last_tray_use, trap, solution and
-## variation (see SolveResult). Replaces the
+## holds fewest, states, novice_won, novice_taps, last_tray_use, peak_tray, trap, solution and
+## variation (see SolveResult). Each level carries its own tray. Replaces the
 ## loaded fallback levels with the folder's. False if any file is broken (its problems go in
 ## errors, quietly); the good files still load.
 static func read_fallback(dir: String, errors: PackedStringArray) -> bool:
@@ -198,6 +203,7 @@ static func parse_fallback(text: String, errors: PackedStringArray) -> Array[Gen
 		r.novice_won = s.get("novice_won") == true
 		r.novice_taps = PlankData.read_int(s, "novice_taps", 0, BoardGeometry.MAX_SCREWS, "solve", errors)
 		r.last_tray_use = PlankData.read_int(s, "last_tray_use", 0, BoardGeometry.MAX_SCREWS, "solve", errors)
+		r.peak_tray = PlankData.read_int(s, "peak_tray", 0, LevelData.MAX_TRAY, "solve", errors)
 		r.trap = float(s.get("trap", 0.0)) if (s.get("trap") is float or s.get("trap") is int) else 0.0
 		var solution: Variant = s.get("solution")
 		if solution is Array:
@@ -218,8 +224,8 @@ static func parse_fallback(text: String, errors: PackedStringArray) -> Array[Gen
 	return out
 
 
-## Which blueprints suit which tier, and the two halves for the G7 deal. Deterministic: it
-## depends only on the blueprints (sorted by id) and the tuning.
+## Which blueprints suit which tier, and the daily's pool. Deterministic: it depends only on
+## the blueprints (sorted by id) and the tuning.
 static func _sort_blueprints() -> void:
 	blueprints.sort_custom(func(a: LevelData, b: LevelData) -> bool: return a.id < b.id)
 	suits.clear()
@@ -235,7 +241,7 @@ static func _sort_blueprints() -> void:
 	for i: int in blueprints.size():
 		var bp := blueprints[i]
 		var n := bp.screw_count()
-		if not daily_pool.has(i) and n >= spec.screws.x and n <= spec.screws.y and bp.layer_count() >= spec.layers.x and bp.layer_count() <= spec.layers.y:
+		if not daily_pool.has(i) and n >= spec.screws.x and n <= spec.screws.y and bp.layer_count() >= spec.layers.x and bp.layer_count() <= spec.layers.y and not spec.skip.has(bp.id):
 			extra.append(i)
 	extra.sort_custom(func(a: int, b: int) -> bool:
 		var ca := covered_at_start(blueprints[a])
@@ -245,67 +251,17 @@ static func _sort_blueprints() -> void:
 		if daily_pool.size() <= Tuning.recent_blueprints_excluded:
 			daily_pool.append(i)
 	daily_pool.sort()
-	# Halves: blueprints that suit the fewest tiers first; each goes to the half that has fewer
-	# blueprints for the tiers it suits, so every tier ends up in both halves.
-	var order: Array[int] = []
-	for i: int in blueprints.size():
-		order.append(i)
-	var tier_count := func(i: int) -> int:
-		var c := 0
-		for list: PackedInt32Array in suits:
-			if list.has(i):
-				c += 1
-		return c
-	order.sort_custom(func(a: int, b: int) -> bool:
-		var ca: int = tier_count.call(a)
-		var cb: int = tier_count.call(b)
-		return ca < cb if ca != cb else a < b)
-	# (Packed arrays inside an Array are copies when read, so the halves and their counts are
-	# kept in plain variables until the end.)
-	var half0 := PackedInt32Array()
-	var half1 := PackedInt32Array()
-	var count0 := PackedInt32Array()
-	var count1 := PackedInt32Array()
-	count0.resize(suits.size())
-	count1.resize(suits.size())
-	for i: int in order:
-		var score0 := 0
-		var score1 := 0
-		var any := false
-		for t: int in suits.size():
-			if suits[t].has(i):
-				any = true
-				score0 += count0[t] * 100 + 1
-				score1 += count1[t] * 100 + 1
-		var to_second := score1 < score0 or (score1 == score0 and half1.size() < half0.size())
-		if not any:
-			to_second = half1.size() < half0.size()
-		if to_second:
-			half1.append(i)
-		else:
-			half0.append(i)
-		for t: int in suits.size():
-			if suits[t].has(i):
-				if to_second:
-					count1[t] += 1
-				else:
-					count0[t] += 1
-	half0.sort()
-	half1.sort()
-	halves.clear()
-	halves.append(half0)
-	halves.append(half1)
 
 
-## A blueprint suits a tier when its screws and layers as authored are in the tier's ranges,
-## and, for a tier that needs tray uses, when enough of its screws are covered at the start to
-## make them: at least COVER_PER_TRAY_USE times the tier's fewest tray uses, plus one. (A board
-## with nothing covered never needs the tray, whatever its colors: every screw can be taken in
-## queue order.)
+## A blueprint suits a tier when the tier does not skip it (its "skip" list in the tuning),
+## its screws and layers as authored are in the tier's ranges, and, for a tier that needs tray
+## uses, enough of its screws are covered at the start to make them: at least
+## COVER_PER_TRAY_USE times the tier's fewest tray uses, plus one. (A board with nothing covered
+## never needs the tray, whatever its colors: every screw can be taken in queue order.)
 static func suits_tier(bp: LevelData, t: Tuning.TierSpec) -> bool:
 	var n := bp.screw_count()
 	var layers := bp.layer_count()
-	if n < t.screws.x or n > t.screws.y or layers < t.layers.x or layers > t.layers.y:
+	if n < t.screws.x or n > t.screws.y or layers < t.layers.x or layers > t.layers.y or t.skip.has(bp.id):
 		return false
 	return t.tray_uses.x == 0 or covered_at_start(bp) >= COVER_PER_TRAY_USE * t.tray_uses.x + 1
 

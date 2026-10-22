@@ -21,6 +21,8 @@ const KIND_NAMES: Array[String] = ["tutorial", "numbered", "daily", "relaxed"]
 const BLUEPRINT_KINDS: Array[String] = ["silhouette", "pattern"]
 ## Palette indices a level may use (GDD 9.3: 0 to 7).
 const MAX_COLORS := 8
+## The most tray slots a level may have.
+const MAX_TRAY := 7
 const BOARD_W := 86
 const BOARD_H := 90
 
@@ -33,6 +35,7 @@ var planks: Array[PlankData] = []
 var screw_colors := PackedInt32Array()
 ## One color per box, in order.
 var queue := PackedInt32Array()
+## The tray's slots (R1): the level's own (GDD 6.8, from its tier), 5 for the tutorial.
 var tray_size: int = 5
 ## Tray par with the slack already added (GDD S7).
 var tray_par: int = 0
@@ -90,7 +93,8 @@ func color_count() -> int:
 ## A playable copy of this board with these colors and this queue. It shares the planks and
 ## geometry (both read-only), so nothing is rebuilt. `play` may set the play fields in one go:
 ## "kind" (an int such as NUMBERED), "number", "band", "tier", "group", "tray_par",
-## "par_time" (seconds), "line", "hint" (screw ids), "generator", "blueprint", "id", "name".
+## "par_time" (seconds), "line", "hint" (screw ids), "generator", "blueprint", "id", "name",
+## "tray" (slots).
 ## Fields it leaves out keep this level's values (play fields are 0 or empty on a blueprint).
 ## Returns null and adds to errors if the colors break R3 or a play field is wrong.
 func with_colors(colors: PackedInt32Array, box_queue: PackedInt32Array, errors: PackedStringArray, play: Dictionary = {}) -> LevelData:
@@ -115,7 +119,7 @@ func with_colors(colors: PackedInt32Array, box_queue: PackedInt32Array, errors: 
 	level.hint = hint
 	level.generator_version = generator_version
 	var before := errors.size()
-	var keys: Array[String] = ["kind", "number", "band", "tier", "group", "tray_par", "par_time", "line", "hint", "generator", "blueprint", "id", "name"]
+	var keys: Array[String] = ["kind", "number", "band", "tier", "group", "tray_par", "par_time", "line", "hint", "generator", "blueprint", "id", "name", "tray"]
 	for k: Variant in play.keys():
 		if not (k is String and keys.has(k)):
 			errors.append("with_colors: unknown play field %s" % str(k))
@@ -128,8 +132,9 @@ func with_colors(colors: PackedInt32Array, box_queue: PackedInt32Array, errors: 
 	level.tray_par = _whole(play.get("tray_par", level.tray_par), 0, 100, -1)
 	level.par_time_s = _whole(play.get("par_time", level.par_time_s), 0, 3600, -1)
 	level.generator_version = _whole(play.get("generator", level.generator_version), 0, 1000000, -1)
-	if level.number < 0 or level.tier < 0 or level.tray_par < 0 or level.par_time_s < 0 or level.generator_version < 0:
-		errors.append("with_colors: number, tier, tray_par, par_time and generator must be whole numbers in range")
+	level.tray_size = _whole(play.get("tray", level.tray_size), 1, MAX_TRAY, -1)
+	if level.number < 0 or level.tier < 0 or level.tray_par < 0 or level.par_time_s < 0 or level.generator_version < 0 or level.tray_size < 0:
+		errors.append("with_colors: number, tier, tray_par, par_time, generator and tray must be whole numbers in range")
 	for k: String in ["band", "group", "line", "blueprint", "id", "name"]:
 		if play.has(k) and not play[k] is String:
 			errors.append("with_colors: %s must be text" % k)
@@ -151,15 +156,16 @@ func with_colors(colors: PackedInt32Array, box_queue: PackedInt32Array, errors: 
 
 
 ## A bare board from planks (built ones, in screw id order): gives the screws their ids and
-## works out the geometry. For the generator's variations.
-static func from_planks(board_id: String, board_name: String, kind_text: String, list: Array[PlankData]) -> LevelData:
+## works out the geometry. For the generator's variations; tray is the board's tray (0: the
+## tuning's tray_size).
+static func from_planks(board_id: String, board_name: String, kind_text: String, list: Array[PlankData], tray: int = 0) -> LevelData:
 	var level := LevelData.new()
 	level.id = board_id
 	level.name = board_name
 	level.blueprint_kind = kind_text
 	level.blueprint_id = board_id
 	level.kind = BLUEPRINT
-	level.tray_size = Tuning.tray_size
+	level.tray_size = tray if tray > 0 else Tuning.tray_size
 	var next := 0
 	for p: PlankData in list:
 		var ids := PackedInt32Array()
@@ -207,7 +213,7 @@ static func from_dict(d: Dictionary, errors: PackedStringArray) -> LevelData:
 		return null
 	var allowed: Array[String] = ["format", "id", "name", "kind", "board", "planks"]
 	if level.kind != BLUEPRINT:
-		allowed.append_array(["queue", "tray_par", "par_time", "line", "hint"])
+		allowed.append_array(["queue", "tray_par", "par_time", "line", "hint", "tray"])
 	if level.kind == NUMBERED or level.kind == DAILY or level.kind == RELAXED:
 		allowed.append_array(["number", "tier", "group", "blueprint", "generator", "band"])
 	for key: Variant in d.keys():
@@ -273,6 +279,9 @@ static func from_dict(d: Dictionary, errors: PackedStringArray) -> LevelData:
 		return level
 	level.screw_colors = colors
 	level.queue = _read_colors(d.get("queue"), "queue", errors)
+	# A level written before the tray was its own (generator 5 and older) has the tuning's.
+	if d.has("tray"):
+		level.tray_size = PlankData.read_int(d, "tray", 1, MAX_TRAY, "level", errors)
 	level.tray_par = PlankData.read_int(d, "tray_par", 0, 100, "level", errors)
 	level.par_time_s = PlankData.read_int(d, "par_time", 1, 3600, "level", errors)
 	var line_value: Variant = d.get("line", "")
@@ -306,9 +315,9 @@ static func from_dict(d: Dictionary, errors: PackedStringArray) -> LevelData:
 
 
 ## A short text that changes whenever anything that decides the level changes: blueprint,
-## tier, tray par, par time, colors, queue, and a hash of every plank's layer, shape, holes and
-## the fields its shape uses (exactly what to_dict writes, so a level read back from its file
-## has the same fingerprint). Only whole numbers go in (no angles or other floats, whose last
+## tier, tray par, par time, tray slots, colors, queue, and a hash of every plank's layer,
+## shape, holes and the fields its shape uses (exactly what to_dict writes, so a level read
+## back from its file has the same fingerprint). Only whole numbers go in (no angles or other floats, whose last
 ## bits can differ between phones). For the golden test, tools/levels and the saved next level.
 func fingerprint() -> String:
 	var h := 0x57D1
@@ -333,7 +342,7 @@ func fingerprint() -> String:
 			for v: Vector2 in list:
 				h = Seeds.mix(h, int(v.x) * 1000 + int(v.y))
 		h = Seeds.mix(h, sizes)
-	return "%s t%d p%d s%d c%s q%s g%08x" % [blueprint_id, tier, tray_par, par_time_s, "".join(Array(screw_colors).map(func(c: int) -> String: return str(c))), "".join(Array(queue).map(func(c: int) -> String: return str(c))), h]
+	return "%s t%d p%d s%d T%d c%s q%s g%08x" % [blueprint_id, tier, tray_par, par_time_s, tray_size, "".join(Array(screw_colors).map(func(c: int) -> String: return str(c))), "".join(Array(queue).map(func(c: int) -> String: return str(c))), h]
 
 
 ## The level in the file format from_json reads.
@@ -354,6 +363,7 @@ func to_dict() -> Dictionary:
 	if kind == BLUEPRINT:
 		return d
 	d["queue"] = Array(queue)
+	d["tray"] = tray_size
 	d["tray_par"] = tray_par
 	d["par_time"] = par_time_s
 	d["line"] = line

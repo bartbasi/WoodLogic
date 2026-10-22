@@ -13,23 +13,28 @@ static func groups() -> Array:
 	var extra: Dictionary = h["extra_slot"]
 	var driver: Dictionary = h["screwdriver"]
 	var opens := UiText.opens_after() + "."
+	var helpers_group: Array = [
+		["undo", "Undo. Takes back your last move. %s free on level %d." % [UiText.count_word(int(undo["free"])), int(undo["first_level"])]],
+		["extra_slot", "Extra slot. Adds one more tray slot, once per try. %s free on level %d." % [UiText.count_word(int(extra["free"])), int(extra["first_level"])]],
+		["screwdriver", "Screwdriver. Removes any one screw, even a covered one, to where a tap would send it. %s free on level %d." % [UiText.count_word(int(driver["free"])), int(driver["first_level"])]],
+		["", "A Screwdriver is not spent if the screw has nowhere to go."],
+		["", "Out of a helper? Tap it in a level to buy one with stars: Undo %d, Extra slot %d, Screwdriver %d." % [int(undo["price"]), int(extra["price"]), int(driver["price"])]],
+	]
+	var gift := UiText.gift_info_line()
+	if gift != "":
+		helpers_group.append(["", gift])
+	helpers_group.append(["", "Using a helper means no Clean star on that try."])
 	return [
 		["The basics", [
 			["", "Tap a free screw to unscrew it."],
 			["", "It flies into an open box of its color. If no open box fits, it waits in the tray."],
+			["", UiText.tray_line()],
 			["", "Three screws fill a box. The box leaves and the next one slides in."],
 			["", "A screw under another plank is covered. Free the plank on top first."],
 			["", "A plank with no screws falls. A plank with one screw swings."],
 			["", "Clear every screw to win. If the tray is full and nothing fits, you are out of room. Retry is free."],
 		]],
-		["Helpers", [
-			["undo", "Undo. Takes back your last move. %s free on level %d." % [UiText.count_word(int(undo["free"])), int(undo["first_level"])]],
-			["extra_slot", "Extra slot. Adds one more tray slot, once per try. %s free on level %d." % [UiText.count_word(int(extra["free"])), int(extra["first_level"])]],
-			["screwdriver", "Screwdriver. Removes any one screw, even a covered one, to where a tap would send it. %s free on level %d." % [UiText.count_word(int(driver["free"])), int(driver["first_level"])]],
-			["", "A Screwdriver is not spent if the screw has nowhere to go."],
-			["", "Out of a helper? Tap it in a level to buy one with stars: Undo %d, Extra slot %d, Screwdriver %d." % [int(undo["price"]), int(extra["price"]), int(driver["price"])]],
-			["", "Using a helper means no Clean star on that try."],
-		]],
+		["Helpers", helpers_group],
 		["Stars", [
 			["star", "Cleared. Finish the level."],
 			["star", "Fast. Finish within the par time."],

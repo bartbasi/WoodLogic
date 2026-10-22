@@ -35,6 +35,24 @@ const FALL_HANG := 0.08
 const WIN_DELAY := 0.5
 const LOSS_DELAY := 0.3
 const IDLE_HINT := 8.0
+## The tray warning ticks at most this often, in animation seconds (UX 3.2.2).
+const TICK_GAP := 2.0
+## The tray changing size (UX 3.2.2): the closing waits for the board to settle, then takes 300 ms;
+## Extra slot takes 250 ms. The frame's end moves 25 units either way.
+const CLOSING_WAIT := 0.45
+const CLOSING_TIME := 0.3
+const GROW_TIME := 0.25
+const FRAME_SHIFT := 25.0
+## The shrink line (UX 3.2.2): it appears once the board has settled, fades over 150 ms, stays at
+## least 2.5 seconds and at most 6.
+const NOTE_WAIT := 0.45
+const NOTE_FADE := 0.15
+const NOTE_MIN := 2.5
+const NOTE_MAX := 6.0
+const NOTE_NONE := 0
+const NOTE_PENDING := 1
+const NOTE_SHOWING := 2
+const NOTE_LEAVING := 3
 
 const RING_COLOR := Color("fff1c9")
 
@@ -97,6 +115,21 @@ var _tray_shift := 0.0
 var _tray_warned := false
 ## The tick for the tray's one free slot plays when the screw that caused it lands.
 var _tray_tick_due := false
+var _tray_ticks := 0
+var _last_tick_time := -100.0
+## True while one action's events include a screw flying to the tray.
+var _action_to_tray := false
+## While the tray changes size: the old frame in a view of its own, fading out as the new one
+## fades in; and the motion that does it.
+var _swap_ghost: Node2D
+var _swap_anim: LevelAnim
+## The shrink line: where it is in its life, its text, seconds since it began to show (or until
+## it does), whether an action asked it to leave, and the fade out.
+var _note_phase := NOTE_NONE
+var _note_text := ""
+var _note_age := 0.0
+var _note_asked := false
+var _note_out := 0.0
 ## Per open position: when its last screw lands, when it is free for the next step, when the
 ## box that arrived finishes sliding in, and how many tray screws have jumped into it.
 var _pos_land_at := PackedFloat64Array()
@@ -180,10 +213,48 @@ func retry() -> void:
 		_start_attempt()
 
 
+## The tray closing (UX 3.2.2), for a level that comes after a bigger tray (Next from level 11 or
+## 20): the tray shows at the old size, one slot more, and once the board has settled the extra
+## slot closes (the frame's end slides in over 300 ms, a dull wood knock) and the frame is
+## centered again. Call it right after play(). It ends at the first action, at a pause, and at
+## the next play(); the picture then is the tray at the level's own size. The rules never see
+## it: the tray has its own size from the first moment.
+func play_tray_closing() -> void:
+	if _state == null or _tray_view == null or _layout == null:
+		return
+	var old := _tray_screws.size() + 1
+	var empty := PackedByteArray()
+	empty.resize(old)
+	_start_swap(old, empty, CLOSING_WAIT, CLOSING_TIME, -FRAME_SHIFT, true)
+
+
+## The shrink line (UX 3.2.2): `text` shows on a plaque in the helper bar's place, with a steady
+## outline round the tray, once the board has settled. It stays at least 2.5 seconds, and goes at
+## the first action once it has shown that long, or at 6 seconds. It does not start the clock and
+## needs no tap. While it shows, the helper buttons are not there. Call it right after play();
+## the next play() removes it. Whether to show it is the app flow's and Save's to decide.
+func show_tray_note(text: String) -> void:
+	if _state == null or _hud == null or _layout == null or text == "":
+		return
+	_note_text = text
+	_note_age = 0.0
+	_note_asked = false
+	_note_out = 0.0
+	if _instant:
+		_note_phase = NOTE_SHOWING
+		_note_age = 0.0
+		_push_note(1.0)
+	else:
+		_note_phase = NOTE_PENDING
+		_note_age = -NOTE_WAIT
+		_push_note(0.0)
+
+
 ## Covers the board and stops the clock (the pause screen takes over).
 func pause() -> void:
 	if _paused:
 		return
+	_finish_swap()
 	_paused = true
 	_clock.set_paused(true, Time.get_ticks_msec())
 	_press_id = ""
@@ -539,6 +610,7 @@ func _enter_driver() -> void:
 	if _driver or _state.status() == PlayState.WON:
 		return
 	_driver = true
+	_clear_note()
 	_hud.set_banner(true)
 	_set_bright(true)
 	_sfx("tick")
@@ -624,6 +696,7 @@ func _start_attempt() -> void:
 	_last_timer_second = -1
 	_end_anim = null
 	_pending.clear()
+	_clear_note()
 	_clock.reset()
 	_force_unpaused()
 	_relayout()
@@ -678,6 +751,11 @@ func _clear_views() -> void:
 	_tray_shift = 0.0
 	_tray_warned = false
 	_tray_tick_due = false
+	_tray_ticks = 0
+	_last_tick_time = -100.0
+	_action_to_tray = false
+	_swap_ghost = null
+	_swap_anim = null
 
 
 func _build_views() -> void:
@@ -808,12 +886,11 @@ func _apply_layout(force: bool = false) -> void:
 		for k: int in _preview_views.size():
 			_preview_views[k].position = _layout.preview_pos[mini(k, _layout.preview_pos.size() - 1)]
 			_preview_views[k].scale = Vector2.ONE * _layout.box_scale
-		if _tray_view != null:
-			_tray_view.position = _layout.tray_center + Vector2(_tray_shift, 0.0)
-			_tray_view.scale = Vector2.ONE * _layout.box_scale
+		_place_tray_view()
 		for slot: LevelScrewSlot in _screws:
 			_place_screw_now(slot)
 	_hud.set_layout(_layout)
+	_sync_note_frame()
 	if _state != null and _hint.is_showing():
 		_point_hint(false)
 	queue_redraw()
@@ -978,6 +1055,8 @@ func _update_hint_after_tap() -> void:
 
 func _after_accepted_action() -> void:
 	_set_highlight("")
+	_finish_swap()
+	_note_action()
 	if _clock.start(Time.get_ticks_msec()):
 		first_action.emit()
 
@@ -985,11 +1064,16 @@ func _after_accepted_action() -> void:
 func _begin_action() -> void:
 	_action_land = _anim_time
 	_action_arrive = 0.0
+	_action_to_tray = false
 
 
 func _end_action() -> void:
 	_sync_previews()
 	_refresh_tray()
+	# The warning began with no screw flying to the tray (a helper, a box taking tray screws):
+	# its tick plays now, not at a landing.
+	if _tray_tick_due and (_instant or not _action_to_tray):
+		_tray_tick()
 	_reconcile()
 	_update_pips()
 	_hud.set_timer_text(_timer_text())
@@ -1044,6 +1128,7 @@ func _ev_screw_to_box(e: LogicEvent) -> void:
 func _ev_screw_to_tray(e: LogicEvent) -> void:
 	var slot := _screws[e.screw]
 	_tray_screws[e.slot] = e.screw
+	_action_to_tray = true
 	var land := _fly_screw(slot, LevelScrewSlot.TRAY, e.slot, -1, 0.0, false, false, 0.0, 1.0)
 	_action_land = maxf(_action_land, land)
 
@@ -1205,12 +1290,22 @@ func _open_look(box: Variant, color: int) -> void:
 
 
 func _ev_tray_extended(_e: LogicEvent) -> void:
-	# Screws still flying to the tray land first: their targets were worked out for five slots.
+	# Screws still flying to the tray land first: their targets were worked out for the old size.
 	for slot: LevelScrewSlot in _screws:
 		if slot.kind == LevelScrewSlot.TRAY and slot.anim != null and not slot.anim.done:
 			slot.anim.finish()
+	_finish_swap()
+	var old := _tray_screws.size()
+	var was := PackedByteArray()
+	was.resize(old)
+	for i: int in old:
+		was[i] = 1 if _tray_screws[i] >= 0 else 0
 	_tray_screws = _state.tray()
 	LevelViews.setup_tray(_tray_view, _tray_screws.size())
+	_place_tray_view()
+	_sync_note_frame()
+	# The frame widens round its center (250 ms): the old frame fades out as the new one fades in.
+	_start_swap(old, was, 0.0, GROW_TIME, 0.0, false)
 	# The frame widens around its center, so the screws in it slide to their new slots (250 ms).
 	for slot: LevelScrewSlot in _screws:
 		if slot.kind != LevelScrewSlot.TRAY:
@@ -1338,7 +1433,7 @@ func _screw_scale(kind: int) -> float:
 		LevelScrewSlot.BOX:
 			return _layout.box_scale * LevelViews.SCREW_DIAMETERS[LevelViews.SCREW_WELL] / LevelViews.SCREW_DIAMETERS[LevelViews.SCREW_BOARD]
 		LevelScrewSlot.TRAY:
-			return _layout.box_scale * LevelViews.SCREW_DIAMETERS[LevelViews.SCREW_TRAY] / LevelViews.SCREW_DIAMETERS[LevelViews.SCREW_BOARD]
+			return _layout.tray_scale(_tray_screws.size()) * LevelViews.SCREW_DIAMETERS[LevelViews.SCREW_TRAY] / LevelViews.SCREW_DIAMETERS[LevelViews.SCREW_BOARD]
 	return _layout.b
 
 
@@ -1449,8 +1544,7 @@ func _on_screw_landed(screw: int, kind: int, position: int, pitch: float, epoch:
 		_sfx("clink_tray")
 		_refresh_tray()
 		if _tray_tick_due:
-			_tray_tick_due = false
-			_sfx("tick")
+			_tray_tick()
 
 
 func _refresh_tray() -> void:
@@ -1469,7 +1563,152 @@ func _refresh_tray() -> void:
 	LevelViews.set_tray_full(_tray_view, free == 0)
 	if warn and not _tray_warned:
 		_tray_tick_due = true
+	elif not warn:
+		_tray_tick_due = false
 	_tray_warned = warn
+
+
+## The warning's one soft tick (UX 3.2.2): only while the warning still holds, and not more
+## often than once every 2 seconds.
+func _tray_tick() -> void:
+	_tray_tick_due = false
+	if not _tray_warned or _anim_time - _last_tick_time < TICK_GAP:
+		return
+	_last_tick_time = _anim_time
+	_tray_ticks += 1
+	_sfx("tick")
+
+
+## Puts the tray frame where the layout says, at the scale its size needs. It is always centered.
+func _place_tray_view() -> void:
+	if _tray_view == null or _layout == null:
+		return
+	_tray_view.position = _layout.tray_center + Vector2(_tray_shift, 0.0)
+	_tray_view.scale = Vector2.ONE * _layout.tray_scale(_tray_screws.size())
+
+
+# == The tray changing size (UX 3.2.2) ==
+
+## The frame changes size: the old one, `old_slots` wide with `old_filled`, stays in a view of
+## its own and fades out while the real one fades in, sliding in from `from_x` units (at tray
+## scale) to the center. After `wait` seconds, over `seconds`. `knock` ends it with a dull knock.
+## Looks only: the real tray view already has its final size and the screws their final places.
+func _start_swap(old_slots: int, old_filled: PackedByteArray, wait: float, seconds: float, from_x: float, knock: bool) -> void:
+	_finish_swap()
+	if _instant or _tray_view == null or _layout == null:
+		return
+	var ghost := LevelViews.make_tray(old_slots)
+	LevelViews.set_tray_filled(ghost, old_filled)
+	_box_root.add_child(ghost)
+	_box_root.move_child(ghost, _tray_view.get_index())
+	ghost.position = _layout.tray_center + Vector2(_tray_shift, 0.0)
+	ghost.scale = Vector2.ONE * _layout.tray_scale(old_slots)
+	_swap_ghost = ghost
+	_tray_view.modulate.a = 0.0
+	var anim := LevelAnims.Timed.new(wait, seconds, _swap_step.bind(from_x))
+	anim.on_done = _swap_done.bind(knock)
+	_swap_anim = anim
+	_anims.append(anim)
+
+
+func _swap_step(p: float, from_x: float) -> void:
+	var e := LevelAnim.out_cubic(p)
+	if is_instance_valid(_swap_ghost):
+		_swap_ghost.modulate.a = 1.0 - e
+	if _tray_view != null:
+		_tray_view.modulate.a = e
+		_tray_view.position = _layout.tray_center + Vector2(_tray_shift + from_x * _layout.tray_scale(_tray_screws.size()) * (1.0 - e), 0.0)
+
+
+func _swap_done(knock: bool) -> void:
+	_swap_anim = null
+	if is_instance_valid(_swap_ghost):
+		_swap_ghost.free()
+	_swap_ghost = null
+	if _tray_view != null:
+		_tray_view.modulate.a = 1.0
+		_place_tray_view()
+	if knock:
+		_sfx("knock_dull", 0.9)
+
+
+## Ends the change at once, with no sound.
+func _finish_swap() -> void:
+	if _swap_anim == null:
+		return
+	var anim := _swap_anim
+	_muted = true
+	anim.finish()
+	_muted = false
+	_swap_anim = null
+
+
+# == The shrink line (UX 3.2.2) ==
+
+## What the HUD shows of the line: its text, how visible it is, and the frame it outlines.
+func _push_note(alpha: float) -> void:
+	if alpha > 0.999:
+		alpha = 1.0
+	_hud.set_note(_note_text if alpha > 0.0 else "", alpha)
+	_sync_note_frame()
+
+
+func _sync_note_frame() -> void:
+	if _hud == null or _layout == null:
+		return
+	var slots := _tray_screws.size()
+	if slots > 0:
+		_hud.set_note_frame(_layout.tray_frame(slots), _layout.tray_scale(slots))
+
+
+func _clear_note() -> void:
+	_note_phase = NOTE_NONE
+	_note_text = ""
+	_note_age = 0.0
+	_note_asked = false
+	_note_out = 0.0
+	if _hud != null:
+		_hud.set_note("", 0.0)
+
+
+## An action (an accepted tap, a helper) while the line shows: it leaves now if it has shown
+## 2.5 seconds, else when it has.
+func _note_action() -> void:
+	if _note_phase == NOTE_NONE or _note_phase == NOTE_LEAVING:
+		return
+	if _note_phase == NOTE_SHOWING and _note_age >= NOTE_MIN:
+		_leave_note()
+	else:
+		_note_asked = true
+
+
+func _leave_note() -> void:
+	if _instant:
+		_clear_note()
+		return
+	_note_phase = NOTE_LEAVING
+	_note_out = 0.0
+
+
+func _step_note(dt: float) -> void:
+	match _note_phase:
+		NOTE_PENDING:
+			_note_age += dt
+			if _note_age >= 0.0:
+				_note_phase = NOTE_SHOWING
+				_push_note(clampf(_note_age / NOTE_FADE, 0.0, 1.0))
+		NOTE_SHOWING:
+			_note_age += dt
+			if _note_age >= NOTE_MAX or (_note_asked and _note_age >= NOTE_MIN):
+				_leave_note()
+			elif not _instant and _note_age < NOTE_FADE + dt:
+				_push_note(clampf(_note_age / NOTE_FADE, 0.0, 1.0))
+		NOTE_LEAVING:
+			_note_out += dt
+			if _note_out >= NOTE_FADE:
+				_clear_note()
+			else:
+				_push_note(1.0 - _note_out / NOTE_FADE)
 
 
 ## Previews follow the logic's queue: the ones that moved up slide one place, a new one
@@ -1752,13 +1991,26 @@ func _ev_undone_all() -> void:
 
 # == Time ==
 
-@warning_ignore("integer_division")
 func _process(delta: float) -> void:
+	_advance(minf(delta, 0.05))
+
+
+## Tests: runs the scene's own time forward by `seconds`, in steps of 50 ms, as frames would.
+func debug_step(seconds: float) -> void:
+	var left := seconds
+	while left > 0.0:
+		var dt := minf(left, 0.05)
+		_advance(dt)
+		left -= dt
+
+
+@warning_ignore("integer_division")
+func _advance(dt: float) -> void:
 	if _paused or _state == null:
 		return
-	var dt := minf(delta, 0.05)
 	_anim_time += dt
 	_step_anims(dt)
+	_step_note(dt)
 	var now := Time.get_ticks_msec()
 	if _clock.is_running():
 		var second := int(_clock.elapsed_ms(now) / 1000)
@@ -1882,6 +2134,15 @@ func _sfx(effect: String, pitch: float = 1.0, volume_db: float = 0.0) -> void:
 
 # == Tests ==
 
+## The tray frame as its view is drawn now: the view's position and scale with the frame's own
+## width and height (the renderer's), so a test sees what the layout and the view agree on.
+func _tray_view_frame() -> Rect2:
+	if _tray_view == null:
+		return Rect2()
+	var size := Vector2(TrayView.width(_tray_screws.size()), TrayView.HEIGHT) * _tray_view.scale
+	return Rect2(_tray_view.position - size * 0.5, size)
+
+
 ## Takes back the last action, as Phase 4's Undo button will. Tests only for now: the helper
 ## row and its counts belong to the app flow and the save.
 func debug_undo() -> TapResult:
@@ -1967,4 +2228,15 @@ func debug_snapshot() -> Dictionary:
 		"hint_at": _layout.scene_to_gu(_hint.get_target()) if _hint.is_showing() else Vector2(-1000.0, -1000.0),
 		"toast": _hud.get_toast(),
 		"line": _hud.get_line(),
+		"tray_slots": _tray_screws.size(),
+		"tray_warning": _tray_warned,
+		"tray_ticks": _tray_ticks,
+		"tray_frame": _layout.tray_frame(_tray_screws.size()),
+		"tray_view_frame": _tray_view_frame(),
+		"tray_alpha": _tray_view.modulate.a if _tray_view != null else 0.0,
+		"swap": _swap_anim != null or _swap_ghost != null,
+		"note": _hud.get_note(),
+		"note_alpha": _hud.get_note_alpha(),
+		"note_rect": _hud.note_rect(),
+		"note_frame": _hud.get_note_frame(),
 	}

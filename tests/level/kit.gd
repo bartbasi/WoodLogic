@@ -24,12 +24,16 @@ static func numbered(n: int) -> GeneratedLevel:
 	return LevelCatalog.get_level(LevelData.NUMBERED, n, "")
 
 
-## The first numbered level of a tier at or after `from`.
+## The first numbered level of a tier at or after `from`; if there is none after it (a tier may
+## only come early in the sawtooth), the first one at all. Never loops for ever.
 static func level_of_tier(tier: int, from: int) -> int:
-	var n := from
-	while Tuning.tier_for_level(n) != tier:
-		n += 1
-	return n
+	for n: int in range(from, from + 2000):
+		if Tuning.tier_for_level(n) == tier:
+			return n
+	for n: int in range(Tuning.tutorial_levels + 1, from):
+		if Tuning.tier_for_level(n) == tier:
+			return n
+	return from
 
 
 ## Every way the scene's picture differs from the model. Empty when they agree (ARCHITECTURE 5.3).
@@ -105,6 +109,15 @@ static func mismatches(scene: LevelScene, settled: bool = true) -> PackedStringA
 		out.append("preview %s, expected %s" % [str(snap["preview"]), str(state.preview())])
 	if snap["tray"] != tray:
 		out.append("tray %s, expected %s" % [str(snap["tray"]), str(tray)])
+	if snap["tray_slots"] != tray.size():
+		out.append("the tray is drawn with %d slots, the model has %d" % [snap["tray_slots"], tray.size()])
+	if settled and not snap["swap"]:
+		var want_frame: Rect2 = snap["tray_frame"]
+		var drawn_frame: Rect2 = snap["tray_view_frame"]
+		if absf(want_frame.position.x - drawn_frame.position.x) > 0.01 or absf(want_frame.size.x - drawn_frame.size.x) > 0.01 or absf(want_frame.position.y - drawn_frame.position.y) > 0.01:
+			out.append("the tray frame is drawn at %s, the layout says %s" % [str(drawn_frame), str(want_frame)])
+		if absf(float(snap["tray_alpha"]) - 1.0) > 0.001:
+			out.append("the tray is drawn with alpha %.2f" % snap["tray_alpha"])
 	if snap["fixes"] != 0:
 		out.append("the safety net had to correct the view %d times" % snap["fixes"])
 	return out

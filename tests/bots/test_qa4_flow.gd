@@ -227,7 +227,7 @@ func test_acc_13_retry_gives_an_identical_level_and_resets_clock_tray_helpers_an
 		e.pressed = pressed
 		scene().call("_gui_input", e)
 	check(scene().get_state().extra_slot_used(), "Extra slot was used")
-	check_eq(scene().get_state().tray().size(), 6, "six slots")
+	check_eq(scene().get_state().tray().size(), 5, "four slots and the Extra slot (levels 12 to 20 have a 4 slot tray)")
 	check(bool(scene().debug_snapshot()["clock_running"]), "the clock is running")
 	flow.notification(Node.NOTIFICATION_WM_GO_BACK_REQUEST)
 	tap("Retry")
@@ -235,7 +235,7 @@ func test_acc_13_retry_gives_an_identical_level_and_resets_clock_tray_helpers_an
 	check_eq(flow.state, AppFlow.State.LEVEL, "playing again")
 	check_eq(var_to_str(scene().get_level().to_dict()), before, "the identical level")
 	var state := scene().get_state()
-	check_eq(state.tray().size(), 5, "the normal five slots")
+	check_eq(state.tray().size(), 4, "the level's normal four slots")
 	check_eq(state.tray_uses(), 0, "tray uses reset")
 	check(not state.extra_slot_used(), "Extra slot is available again")
 	check_eq(state.helpers_used().size(), 0, "helpers used reset")

@@ -17,6 +17,7 @@ const BRASS_TEXT := Color("2a1708")
 const BUTTON := Color("4b3121")
 const BUTTON_LIP := Color("24160d")
 const FOCUS := Color("f7ead4")
+const OUTLINE := Color("f2b84b")
 const HELPERS: Array[String] = ["undo", "extra_slot", "screwdriver"]
 const NAMES := {"undo": "Undo", "extra_slot": "Extra slot", "screwdriver": "Screwdriver"}
 const BANNER_SECONDS := 0.15
@@ -43,6 +44,12 @@ var _shake_id := ""
 var _shake_t := 0.0
 var _toast := ""
 var _toast_left := 0.0
+## The shrink line (UX 3.2.2): its text, how visible it is (0 to 1), the tray frame it outlines
+## and the scale that frame is drawn at.
+var _note := ""
+var _note_alpha := 0.0
+var _note_frame := Rect2()
+var _note_scale := 1.0
 ## The touch targets of the controls that can be pressed now: id to rectangle.
 var _rects := {}
 var _line_rect := Rect2()
@@ -256,6 +263,51 @@ func shake(id: String) -> void:
 	set_process(true)
 
 
+## The shrink line in the helper bar's place, with a steady outline round the tray. `alpha` is
+## how visible both are; "" or 0 takes them away and the helper buttons come back.
+func set_note(text: String, alpha: float) -> void:
+	var a := clampf(alpha, 0.0, 1.0) if text != "" else 0.0
+	if text == _note and is_equal_approx(a, _note_alpha):
+		return
+	_note = text
+	_note_alpha = a
+	_bottom.modulate.a = 1.0 - a
+	_bottom.visible = a < 0.999
+	queue_redraw()
+
+
+## The tray frame the outline goes round (scene units) and the scale it is drawn at.
+func set_note_frame(frame: Rect2, frame_scale: float) -> void:
+	if frame != _note_frame or not is_equal_approx(frame_scale, _note_scale):
+		_note_frame = frame
+		_note_scale = frame_scale
+		if _note_alpha > 0.0:
+			queue_redraw()
+
+
+func get_note() -> String:
+	return _note if _note_alpha > 0.0 else ""
+
+
+func get_note_alpha() -> float:
+	return _note_alpha
+
+
+func get_note_frame() -> Rect2:
+	return _note_frame
+
+
+## Where the line's plaque goes: the helper bar's place, 336 by 48 like the tutorial lines.
+func note_rect() -> Rect2:
+	if _layout == null:
+		return Rect2()
+	var f := _layout.f
+	var bar := _layout.helper_bar
+	var margin := 0.0 if _layout.split else 12.0
+	var width := minf(bar.size.x - 2.0 * margin, 336.0 * f)
+	return Rect2(bar.get_center() - Vector2(width, 48.0 * f) * 0.5, Vector2(width, 48.0 * f))
+
+
 func get_toast() -> String:
 	return _toast if _toast_left > 0.0 else ""
 
@@ -271,6 +323,9 @@ func show_toast(text: String, seconds: float = 2.0) -> void:
 ## own rectangle and nothing snaps or grows (UX 6.1).
 func hit(p: Vector2) -> String:
 	for id: String in _rects:
+		# The helper buttons are not there while the shrink line takes their place.
+		if _note_alpha > 0.0 and HELPERS.has(id):
+			continue
 		if (_rects[id] as Rect2).has_point(p):
 			return id
 	return ""
@@ -390,6 +445,8 @@ func _draw() -> void:
 	if _layout == null:
 		return
 	var f := _layout.f
+	if _note_alpha > 0.0 and _note != "":
+		_draw_note()
 	if _toast_left > 0.0 and _toast != "":
 		var size := int(round(16.0 * f))
 		var wide: float = ThemeDB.fallback_font.get_string_size(_toast, HORIZONTAL_ALIGNMENT_LEFT, -1.0, size).x
@@ -401,6 +458,49 @@ func _draw() -> void:
 		draw_multiline_string(ThemeDB.fallback_font, Vector2(rect.position.x + 12.0, rect.position.y + 20.0 * f), _toast, HORIZONTAL_ALIGNMENT_CENTER, text_w, size, 2, TEXT)
 
 
+
+
+## The shrink line: Tutorial line style (18 bold, 16 if it wraps) on the 336 by 48 plaque, and
+## a steady 3 unit outline just outside the tray frame (UX 3.2.2).
+func _draw_note() -> void:
+	var a := _note_alpha
+	var f := _layout.f
+	var rect := note_rect()
+	draw_rect(rect, Color(PLAQUE, PLAQUE.a * a))
+	draw_rect(rect, Color(PLAQUE_EDGE, PLAQUE_EDGE.a * a), false, 1.0)
+	var bold := RenderFonts.bold()
+	var inner := rect.size.x - 16.0
+	var size := int(round(18.0 * f))
+	var wide := bold.get_string_size(_note, HORIZONTAL_ALIGNMENT_LEFT, -1.0, size).x
+	var two_lines := false
+	if wide > inner:
+		size = int(round(16.0 * f))
+		two_lines = bold.get_string_size(_note, HORIZONTAL_ALIGNMENT_LEFT, -1.0, size).x > inner
+	var y := rect.get_center().y + (-size * 0.2 if two_lines else size * 0.35)
+	draw_multiline_string(bold, Vector2(rect.position.x + 8.0, y), _note, HORIZONTAL_ALIGNMENT_CENTER, inner, size, 2, Color(TEXT, a))
+	if _note_frame.size.x > 0.0:
+		var width := 3.0 * _note_scale
+		var outer := _note_frame.grow(width * 0.5)
+		var radius := 12.0 * _note_scale + width * 0.5
+		draw_polyline(_rounded_loop(outer, radius), Color(OUTLINE, a), width, true)
+
+
+## A closed loop round a rectangle with rounded corners.
+func _rounded_loop(rect: Rect2, radius: float) -> PackedVector2Array:
+	var out := PackedVector2Array()
+	var corners := [
+		[Vector2(rect.end.x - radius, rect.position.y + radius), -PI * 0.5],
+		[Vector2(rect.end.x - radius, rect.end.y - radius), 0.0],
+		[Vector2(rect.position.x + radius, rect.end.y - radius), PI * 0.5],
+		[Vector2(rect.position.x + radius, rect.position.y + radius), PI],
+	]
+	for corner: Array in corners:
+		var c: Vector2 = corner[0]
+		var start: float = corner[1]
+		for i: int in 7:
+			out.append(c + Vector2.from_angle(start + PI * 0.5 * i / 6.0) * radius)
+	out.append(out[0])
+	return out
 
 
 func _paint_top(ci: CanvasItem) -> void:

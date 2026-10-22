@@ -650,3 +650,52 @@ func test_4_3_a_failed_action_has_no_events() -> void:
 	var state := _house(E4_COLORS, E4_QUEUE)
 	for r: TapResult in [state.tap(6), state.tap(99), state.undo()]:
 		check(not r.ok and r.events.is_empty(), "failed with no events")
+
+
+## Twelve screws, boxes A, B, C, D. A big C disc in front covers the six A and B screws; the
+## other C and D screws are free. So at the start nothing fits the open boxes A and B.
+func _covered_ab_level(slots: int) -> LevelData:
+	var planks := [Kit.disc(0, [43, 45], 20, [2])]
+	for xy: Array in [[31, 45], [55, 45], [43, 33], [43, 57], [35, 37], [51, 53]]:
+		planks.append(Kit.disc(1, xy, 4, [0 if planks.size() <= 3 else 1]))
+	for xy: Array in [[10, 10], [25, 10]]:
+		planks.append(Kit.disc(1, xy, 4, [2]))
+	for xy: Array in [[60, 10], [75, 10], [10, 80]]:
+		planks.append(Kit.disc(1, xy, 4, [3]))
+	var level := Kit.level(planks, [0, 1, 2, 3])
+	var errors := PackedStringArray()
+	return level.with_colors(level.screw_colors, level.queue, errors, {"tray": slots})
+
+
+func test_r30_extra_slot_adds_one_slot_to_a_three_or_four_slot_tray() -> void:
+	# GDD 6.8 trays: the Extra slot gives one more slot for the rest of the attempt, and the loss
+	# rule (R23) counts it. Screws: 0 the big C disc, 1 to 3 A, 4 to 6 B, 7 and 8 C, 9 to 11 D.
+	for slots: int in [3, 4]:
+		var level := _covered_ab_level(slots)
+		var state := PlayState.start(level)
+		check_eq(state.tray().size(), slots, "%d slots at the start" % slots)
+		var fill := [9, 10, 11, 7].slice(0, slots)
+		for s: int in fill:
+			check(state.tap(s).ok, "%d slots: screw %d into the tray" % [slots, s])
+		check_eq(state.status(), PlayState.LOST, "%d slots: the full tray with nothing that fits is lost" % slots)
+		var extra := state.use_extra_slot()
+		check(extra.ok and extra.events[-1].kind == LogicEvent.RESUMED, "%d slots: the Extra slot clears the loss" % slots)
+		check_eq(state.tray().size(), slots + 1, "%d slots: one more slot" % slots)
+		# Fill the new slot with another screw that fits nothing: lost again.
+		var next := 8 if slots == 4 else 7
+		check(state.tap(next).ok, "%d slots: the new slot takes a screw" % slots)
+		check_eq(state.status(), PlayState.LOST, "%d slots: full again, lost again" % slots)
+		check(state.undo().ok, "%d slots: undo after the loss" % slots)
+		check_eq(state.tray().size(), slots + 1, "%d slots: undo keeps the extra slot (R27)" % slots)
+		check_eq(state.status(), PlayState.PLAYING, "%d slots: and play goes on" % slots)
+		# The big disc goes into the last slot and uncovers A and B: not lost, and the level wins.
+		check(state.tap(0).ok and state.status() == PlayState.PLAYING, "%d slots: the disc frees A and B" % slots)
+		for s: int in range(1, 12):
+			if state.is_on_board(s) and state.is_free(s) and state.destination(s).x == PlayState.BOX:
+				state.tap(s)
+		for _round: int in 12:
+			for s: int in range(1, 12):
+				if state.is_on_board(s) and state.is_free(s):
+					state.tap(s)
+		check_eq(state.status(), PlayState.WON, "%d slots: won with the extra slot" % slots)
+		check(not state.use_extra_slot().ok, "%d slots: only once" % slots)

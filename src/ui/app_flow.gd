@@ -57,6 +57,9 @@ var _replay := false
 var _file_key := ""
 var _shut_down := false
 var _helper_sheet_for := ""
+## The tray size of the level the player just cleared, set when Next is tapped, so the next
+## level can close its tray if it is smaller. 0 when the level did not come from Next.
+var _arrival_tray := 0
 
 
 func _ready() -> void:
@@ -212,6 +215,8 @@ func show_toast(text: String) -> void:
 ## Shows a menu screen by name (MenuFactory.NAMES). The dock's tabs replace the screen, so
 ## they never add history; a paused level stays alive underneath.
 func show_menu(menu_name: String) -> void:
+	# A menu is no arrival by Next.
+	_arrival_tray = 0
 	_clear_overlay()
 	_set_level_visible(false)
 	menu = menu_name
@@ -412,6 +417,7 @@ func _clear_primary(kind: int) -> void:
 		LevelData.RELAXED:
 			play_relaxed(_current.band)
 		_:
+			_arrival_tray = _current.tray_size
 			play_number(_current.number + 1)
 
 
@@ -587,7 +593,27 @@ func _begin(level: LevelData, replay: bool) -> void:
 				_abandon(_ahead_key)
 			_ahead_key = key
 	_sync_next_file()
+	_tray_moments(level, replay)
 	_maybe_helper_sheet(level)
+
+
+## The smaller tray (UX 3.2.2): the closing animation when the player arrives by Next and
+## the tray is smaller than the one just played, and the one-time line on the first numbered
+## level whose tray is smaller than the starting size. Never on Retry (it does not come
+## here), a replay, the Daily or Relaxed.
+func _tray_moments(level: LevelData, replay: bool) -> void:
+	var came_from := _arrival_tray
+	_arrival_tray = 0
+	if level.kind != NUMBERED and level.kind != LevelData.TUTORIAL:
+		return
+	# The tray the board really has (a stored level can differ from the schedule).
+	var tray := level.tray_size
+	if came_from > 0 and tray < came_from and not replay and level_scene.has_method("play_tray_closing"):
+		level_scene.call("play_tray_closing")
+	if not replay and level.kind == NUMBERED and tray < Tuning.tray_size and not Save.tray_note_shown():
+		Save.mark_tray_note_shown()
+		if level_scene.has_method("show_tray_note"):
+			level_scene.call("show_tray_note", "The tray is smaller now. Every slot counts.")
 
 
 func _ensure_level_scene() -> bool:
@@ -749,9 +775,32 @@ func _on_won(result: Object) -> void:
 			Save.record_relaxed(level.band)
 		_:
 			info["gain"] = Save.record_win(level, elapsed, stars)
+			info["gifts"] = _grant_gifts()
 	info["unlocks"] = _apply_unlocks(highest_before)
 	_sync_next_file()
 	_show_clear(info)
+
+
+## Gives every gift the player's next level has reached and not yet received (UX 3.13.4). The
+## helpers are saved with the record of the gift before anything is shown, so a gift is given
+## exactly once even if the app dies at once; a save already past a gift's level gets it on
+## its next clear. Returns the plaque lines (one, with the sum, if two are due).
+func _grant_gifts() -> Array[String]:
+	var next := Save.next_level()
+	var levels := []
+	var sum := {}
+	for g: Dictionary in Tuning.gifts:
+		var at := int(g["level"])
+		if at > next or Save.is_gift_given(at):
+			continue
+		if Save.grant_gift(at, g):
+			levels.append(at)
+			for h: String in HELPER_ORDER:
+				sum[h] = int(sum.get(h, 0)) + int(g.get(h, 0))
+	var notes: Array[String] = []
+	if not levels.is_empty():
+		notes.append("A gift for reaching %s: %s." % [UiText.gift_levels(levels), UiText.gift_helpers(sum)])
+	return notes
 
 
 ## Applies the unlocks this clear passed and returns their notes (UX 3.4).
@@ -839,6 +888,7 @@ func _retry_from_lost() -> void:
 ## Quit to title (and every other way out of a level to the title): the level is dropped, and
 ## Play starts it again from the beginning (UX 4.3).
 func quit_to_title() -> void:
+	_arrival_tray = 0
 	_lost_while_paused = false
 	_paused_level = false
 	_clear_overlay()

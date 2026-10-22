@@ -30,10 +30,19 @@ class TierSpec extends RefCounted:
 	var tray_uses := Vector2i()
 	var novice: int
 	var covered_pct := Vector2i()
+	## The tray's slots for this tier's levels (GDD 6.8; the file's "tray", or tray_size).
+	var tray: int = 5
+	## G10: the least peak tray load (x), and the most (y, -1 when the file gives only one
+	## number). Only the least is required; the most is reported.
+	var peak := Vector2i(0, -1)
+	## Blueprint ids kept out of this tier's deal (the file's "skip"; LevelCatalog.suits_tier).
+	var skip := PackedStringArray()
 
 
-## Tray slots at the start of an attempt (R1).
+## Tray slots at the start of an attempt (R1): the tutorial's, and any tier's without its own.
 static var tray_size: int = 5
+## Relaxed levels' tray when the file gives one ("relaxed_tray"), else 0: their tier's.
+static var relaxed_tray: int = 0
 ## Open box positions (R2, R4).
 static var open_boxes: int = 2
 ## Screws per box (R3, R18).
@@ -46,6 +55,9 @@ static var tiers: Array[TierSpec] = _default_tiers()
 ## Sawtooth steps for levels N with (N - 1) mod 5 = 0 .. 4, and [first level, base] pairs.
 static var sawtooth_steps := PackedInt32Array([-2, -1, 0, 1, 2])
 static var sawtooth_bases: Array[Vector2i] = [Vector2i(9, 2), Vector2i(21, 3), Vector2i(36, 4), Vector2i(56, 5), Vector2i(81, 6), Vector2i(111, 7), Vector2i(151, 8)]
+## The other sawtooth form (GDD 6.8), used instead of steps and bases when the file has it:
+## [first level, tiers] entries (see tier_for_level). Empty when the file uses steps and bases.
+static var sawtooth_ranges: Array[Array] = []
 ## [first level, slack] pairs for tray par (S7).
 static var tray_par_slack: Array[Vector2i] = [Vector2i(9, 2), Vector2i(31, 1), Vector2i(101, 0)]
 ## Par time (S8): base seconds, tenths of a second per screw by group, and the rounding step.
@@ -65,6 +77,10 @@ static var helpers: Dictionary = {
 }
 ## For the app flow: [{"what", "id", "level" or "best_streak"}, ...] in file order.
 static var unlocks: Array[Dictionary] = []
+## For the app flow: helpers given on reaching a level, [{"level", "undo", "extra_slot",
+## "screwdriver"}, ...] with levels rising and every helper's count (0 when the file leaves it
+## out). Empty when the file has no "gifts".
+static var gifts: Array[Dictionary] = []
 static var modes_open_after_level: int = 8
 static var recent_blueprints_excluded: int = 5
 
@@ -91,7 +107,7 @@ static func load_text(text: String, errors: PackedStringArray) -> bool:
 	var d: Dictionary = json.data
 	var before := errors.size()
 	var keys: Array[String] = ["format", "tray_size", "open_boxes", "box_slots", "preview", "tutorial_levels", "tiers", "sawtooth", "tray_par_slack", "par_time", "daily", "relaxed", "helpers", "unlocks", "modes_open_after_level", "recent_blueprints_excluded"]
-	_exact_keys(d, keys, "tuning", errors)
+	_exact_keys(d, keys, "tuning", errors, ["relaxed_tray", "gifts"])
 	if _int(d, "format", 1, 1, "tuning", errors) != 1:
 		return false
 	var new_tray := _int(d, "tray_size", 1, 7, "tuning", errors)
@@ -99,6 +115,7 @@ static func load_text(text: String, errors: PackedStringArray) -> bool:
 	var new_slots := _int(d, "box_slots", 2, 4, "tuning", errors)
 	var new_preview := _int(d, "preview", 0, 4, "tuning", errors)
 	var new_tutorials := _int(d, "tutorial_levels", 0, 20, "tuning", errors)
+	var new_relaxed_tray := _int(d, "relaxed_tray", 1, 7, "tuning", errors) if d.has("relaxed_tray") else 0
 	# Tiers.
 	var new_tiers: Array[TierSpec] = []
 	var tier_list: Variant = d.get("tiers")
@@ -111,7 +128,7 @@ static func load_text(text: String, errors: PackedStringArray) -> bool:
 				errors.append("tier %d is not an object" % (i + 1))
 				continue
 			var where := "tier %d" % (i + 1)
-			_exact_keys(row, ["tier", "group", "screws", "colors", "layers", "tray_uses", "novice", "covered_pct"], where, errors)
+			_exact_keys(row, ["tier", "group", "screws", "colors", "layers", "tray_uses", "novice", "covered_pct"], where, errors, ["tray", "peak", "skip"])
 			var t := TierSpec.new()
 			t.tier = _int(row, "tier", i + 1, i + 1, where, errors)
 			t.group = _choice(row, "group", GROUPS, where, errors)
@@ -121,6 +138,24 @@ static func load_text(text: String, errors: PackedStringArray) -> bool:
 			t.tray_uses = _range(row, "tray_uses", 0, 20, where, errors)
 			t.novice = NOVICE_NAMES.find(_choice(row, "novice", NOVICE_NAMES, where, errors))
 			t.covered_pct = _range(row, "covered_pct", 0, 100, where, errors)
+			t.tray = _int(row, "tray", 1, 7, where, errors) if (row as Dictionary).has("tray") else new_tray
+			var peak: Variant = (row as Dictionary).get("peak", 0)
+			if peak is Array:
+				var both := _range(row, "peak", 0, 7, where, errors)
+				t.peak = Vector2i(both.x, both.y)
+			else:
+				t.peak = Vector2i(_whole(peak, 0, 7, where + ".peak", errors), -1)
+			if t.peak.x > t.tray or t.peak.y > t.tray:
+				errors.append("%s: a peak tray load above the tray's %d slots" % [where, t.tray])
+			var skip: Variant = (row as Dictionary).get("skip", [])
+			if not skip is Array:
+				errors.append("%s.skip must be a list of blueprint ids" % where)
+			else:
+				for id: Variant in skip:
+					if id is String and LevelData.is_id(id) and not t.skip.has(id):
+						t.skip.append(id)
+					else:
+						errors.append("%s.skip must list blueprint ids, each once" % where)
 			var fits := false
 			for m: int in range(t.screws.x, t.screws.y + 1):
 				fits = fits or m % maxi(new_slots, 1) == 0
@@ -129,13 +164,18 @@ static func load_text(text: String, errors: PackedStringArray) -> bool:
 			if new_slots > 0 and t.colors.x * new_slots > t.screws.y:
 				errors.append("%s: %d colors need more than %d screws" % [where, t.colors.x, t.screws.y])
 			new_tiers.append(t)
-	# Sawtooth.
-	var new_steps := PackedInt32Array()
-	var new_bases: Array[Vector2i] = []
+	# Sawtooth: steps and bases, or ranges.
+	var new_steps := sawtooth_steps
+	var new_bases := sawtooth_bases
+	var new_ranges: Array[Array] = []
 	var saw: Variant = d.get("sawtooth")
 	if not saw is Dictionary:
 		errors.append("sawtooth must be an object")
+	elif (saw as Dictionary).has("ranges"):
+		_exact_keys(saw, ["ranges"], "sawtooth", errors)
+		new_ranges = _ranges((saw as Dictionary).get("ranges"), new_tutorials + 1, errors)
 	else:
+		new_steps = PackedInt32Array()
 		_exact_keys(saw, ["steps", "bases"], "sawtooth", errors)
 		var steps: Variant = (saw as Dictionary).get("steps")
 		if not (steps is Array and (steps as Array).size() == 5):
@@ -231,11 +271,34 @@ static func load_text(text: String, errors: PackedStringArray) -> bool:
 			else:
 				errors.append(where + " needs exactly one of level and best_streak")
 			new_unlocks.append(entry)
+	var new_gifts: Array[Dictionary] = []
+	var gif: Variant = d.get("gifts", [])
+	if not gif is Array:
+		errors.append("gifts must be a list")
+	else:
+		for i: int in (gif as Array).size():
+			var row: Variant = (gif as Array)[i]
+			var where := "gifts[%d]" % i
+			if not row is Dictionary:
+				errors.append(where + " must be an object")
+				continue
+			_exact_keys(row, ["level"], where, errors, HELPERS)
+			var entry := {"level": _int(row, "level", 1, 100000, where, errors)}
+			var any := false
+			for h: String in HELPERS:
+				entry[h] = _int(row, h, 0, 100, where, errors) if (row as Dictionary).has(h) else 0
+				any = any or (row as Dictionary).has(h)
+			if not any:
+				errors.append(where + " gives no helper")
+			if not new_gifts.is_empty() and int(entry["level"]) <= int(new_gifts[-1]["level"]):
+				errors.append("gifts: levels must rise")
+			new_gifts.append(entry)
 	var new_modes := _int(d, "modes_open_after_level", 0, 100000, "tuning", errors)
 	var new_recent := _int(d, "recent_blueprints_excluded", 0, 10, "tuning", errors)
 	if errors.size() > before:
 		return false
 	tray_size = new_tray
+	relaxed_tray = new_relaxed_tray
 	open_boxes = new_open
 	box_slots = new_slots
 	preview = new_preview
@@ -243,6 +306,7 @@ static func load_text(text: String, errors: PackedStringArray) -> bool:
 	tiers = new_tiers
 	sawtooth_steps = new_steps
 	sawtooth_bases = new_bases
+	sawtooth_ranges = new_ranges
 	tray_par_slack = new_slack
 	par_base_s = new_base_s
 	par_tenths = new_tenths
@@ -253,6 +317,7 @@ static func load_text(text: String, errors: PackedStringArray) -> bool:
 	relaxed = new_relaxed
 	helpers = new_helpers
 	unlocks = new_unlocks
+	gifts = new_gifts
 	modes_open_after_level = new_modes
 	recent_blueprints_excluded = new_recent
 	return true
@@ -263,9 +328,20 @@ static func tier(t: int) -> TierSpec:
 	return tiers[clampi(t, 1, tiers.size()) - 1]
 
 
-## GDD 6.3: tier(N) = clamp(base(N) + steps[(N - 1) mod 5], 1, 10), for numbered levels after
-## the tutorial.
+## The tier of numbered level n, after the tutorial. With steps and bases (GDD 6.3):
+## clamp(base(n) + steps[(n - 1) mod 5], 1, 10). With ranges (GDD 6.8): the last entry whose
+## first level is at most n; an entry of five tiers gives tiers[(n - 1) mod 5], any other lists
+## its levels one by one from its first level.
 static func tier_for_level(n: int) -> int:
+	if not sawtooth_ranges.is_empty():
+		var entry: Array = sawtooth_ranges[0]
+		for e: Array in sawtooth_ranges:
+			if int(e[0]) <= n:
+				entry = e
+		var list: PackedInt32Array = entry[1]
+		if list.size() == 5:
+			return list[posmod(n - 1, 5)]
+		return list[clampi(n - int(entry[0]), 0, list.size() - 1)]
 	return clampi(_step_value(sawtooth_bases, n) + sawtooth_steps[(n - 1) % sawtooth_steps.size()], 1, tiers.size())
 
 
@@ -305,6 +381,7 @@ static func _default_tiers() -> Array[TierSpec]:
 	var out: Array[TierSpec] = []
 	for r: Array in rows:
 		var t := TierSpec.new()
+		t.tray = 5
 		t.tier = r[0]
 		t.group = r[1]
 		t.screws = Vector2i(r[2], r[3])
@@ -317,9 +394,10 @@ static func _default_tiers() -> Array[TierSpec]:
 	return out
 
 
-static func _exact_keys(d: Dictionary, keys: Array, where: String, errors: PackedStringArray) -> void:
+## Every key in keys must be there; those in optional may be; nothing else.
+static func _exact_keys(d: Dictionary, keys: Array, where: String, errors: PackedStringArray, optional: Array = []) -> void:
 	for k: Variant in d.keys():
-		if not (k is String and keys.has(k)):
+		if not (k is String and (keys.has(k) or optional.has(k))):
 			errors.append("%s: unknown field %s" % [where, str(k)])
 	for k: Variant in keys:
 		if not d.has(k):
@@ -356,6 +434,38 @@ static func _range(d: Dictionary, key: String, low: int, high: int, where: Strin
 	if a > b:
 		errors.append("%s.%s: low is above high" % [where, key])
 	return Vector2i(a, b)
+
+
+## sawtooth.ranges: [first level, tiers] entries, first levels rising from first_level, tiers 1
+## to 10. An entry of five tiers cycles by (n - 1) mod 5; any other must list exactly the levels
+## up to the next entry's first level, one by one; the last entry must have five.
+static func _ranges(v: Variant, first_level: int, errors: PackedStringArray) -> Array[Array]:
+	var out: Array[Array] = []
+	if not (v is Array and not (v as Array).is_empty()):
+		errors.append("sawtooth.ranges must be a list of [first level, tiers] entries")
+		return out
+	for item: Variant in v:
+		if not (item is Array and (item as Array).size() == 2 and (item as Array)[1] is Array and not ((item as Array)[1] as Array).is_empty()):
+			errors.append("sawtooth.ranges must be a list of [first level, tiers] entries")
+			return out
+		var lv := _whole((item as Array)[0], 1, 100000, "sawtooth.ranges", errors)
+		var list := PackedInt32Array()
+		for t: Variant in (item as Array)[1]:
+			list.append(_whole(t, 1, 10, "sawtooth.ranges tiers", errors))
+		if not out.is_empty() and lv <= int(out[-1][0]):
+			errors.append("sawtooth.ranges: first levels must rise")
+		out.append([lv, list])
+	if int(out[0][0]) != first_level:
+		errors.append("sawtooth.ranges: the first entry must start at level %d, after the tutorial" % first_level)
+	for i: int in out.size():
+		var list: PackedInt32Array = out[i][1]
+		if list.size() == 5:
+			continue
+		if i == out.size() - 1:
+			errors.append("sawtooth.ranges: the last entry must have five tiers")
+		elif list.size() != int(out[i + 1][0]) - int(out[i][0]):
+			errors.append("sawtooth.ranges: the entry from level %d must list each level up to %d" % [out[i][0], int(out[i + 1][0]) - 1])
+	return out
 
 
 ## [first level, value] pairs: at least one, first levels rising, the first one at first_level.

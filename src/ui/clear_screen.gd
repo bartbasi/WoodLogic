@@ -28,6 +28,8 @@ var gain := 0
 var streak := 0
 ## Plain lines such as "Unlocked: Walnut wood".
 var unlock_notes: Array[String] = []
+## The quiet gift plaques (UX 3.13.4), such as "A gift for reaching level 50: ...".
+var gift_notes: Array[String] = []
 var _age := 0.0
 var _next: UiButton
 var _replay: UiButton
@@ -49,6 +51,8 @@ static func make(info: Dictionary) -> ClearScreen:
 	s.streak = int(info.get("streak", 0))
 	for note: Variant in info.get("unlocks", []):
 		s.unlock_notes.append(str(note))
+	for note: Variant in info.get("gifts", []):
+		s.gift_notes.append(str(note))
 	return s
 
 
@@ -70,6 +74,8 @@ func _build() -> void:
 		if daily:
 			column.add_child(plaque("Streak: %s" % UiText.days(streak), "BodyLabel", true))
 	for note: String in unlock_notes:
+		column.add_child(plaque(note, "BodyLabel"))
+	for note: String in gift_notes:
 		column.add_child(plaque(note, "BodyLabel"))
 	column.add_child(spacer())
 	var big := "Next"
@@ -172,6 +178,9 @@ func _start() -> void:
 			pitch *= 1.12
 	if not unlock_notes.is_empty():
 		get_tree().create_timer(0.5).timeout.connect(func() -> void: play_sound("unlock"))
+	if not gift_notes.is_empty():
+		# One soft clink for the gift (UX 3.13.4).
+		get_tree().create_timer(0.5).timeout.connect(func() -> void: play_sound("clink", 1.0, -6.0))
 
 
 ## A tap on the screen (not on a button) skips the rest of the celebration.

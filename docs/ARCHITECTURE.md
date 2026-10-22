@@ -1,11 +1,11 @@
 # WoodLogic architecture
 
 The contract every area builds against. The rules themselves are in docs/GDD.md (rule ids R1
-to R38, B1 to B13, G1 to G7, S1 to S9); screens, sizes and words are in docs/UX.md; the look
+to R38, B1 to B13, G1 to G10, S1 to S9); screens, sizes and words are in docs/UX.md; the look
 and motion timings are in docs/DESIGN.md. Where UX.md and DESIGN.md give different numbers,
 UX.md wins for sizes and layout and DESIGN.md wins for motion and color. If you need something
-here changed, ask the lead. Status: Phase 4 (section 10 is what Phase 3 built, section 11
-what Phase 4 adds).
+here changed, ask the lead. Status: Phase 5 (section 10 is what Phase 3 built, section 11
+what Phase 4 adds, section 12 what Phase 5 changes).
 
 ## 1. Areas and how they depend on each other
 
@@ -93,14 +93,17 @@ them through `Tuning`; nobody hardcodes them.
   "tray_size": 5, "open_boxes": 2, "box_slots": 3, "preview": 2,
   "tutorial_levels": 8,
   "tiers": [{"tier": 1, "group": "easy", "screws": [9, 12], "colors": [2, 3], "layers": [1, 2],
-             "tray_uses": [0, 0], "novice": "win", "covered_pct": [0, 20]}],
-  "sawtooth": {"steps": [-2, -1, 0, 1, 2], "bases": [[9, 2], [21, 3], [36, 4], [56, 5], [81, 6], [111, 7], [151, 8]]},
+             "tray_uses": [0, 0], "novice": "win", "covered_pct": [0, 20],
+             "tray": 5, "peak": 0, "skip": []}],
+  "relaxed_tray": 5,
+  "gifts": [{"level": 50, "undo": 2, "extra_slot": 1}, {"level": 100, "undo": 2, "extra_slot": 1}],
+  "sawtooth": {"steps": [-1, -1, -1, 0, 0], "bases": [[9, 1], [11, 3], [12, 4], [14, 3], [16, 5], [19, 4], [21, 6], [50, 8], [100, 10]]},
   "tray_par_slack": [[9, 2], [31, 1], [101, 0]],
   "par_time": {"base_s": 10, "per_screw_s": {"easy": 3.0, "medium": 3.5, "hard": 4.0, "expert": 4.5}, "round_to_s": 5},
   "daily": {"tier": 6, "tray_par_slack": 1, "group": "medium"},
   "relaxed": {"easy": [1, 3], "medium": [4, 6], "hard": [7, 8]},
-  "helpers": {"undo": {"price": 4, "first_level": 8, "free": 2},
-              "extra_slot": {"price": 6, "first_level": 15, "free": 2},
+  "helpers": {"undo": {"price": 3, "first_level": 8, "free": 2},
+              "extra_slot": {"price": 5, "first_level": 15, "free": 2},
               "screwdriver": {"price": 8, "first_level": 25, "free": 2}},
   "unlocks": [{"what": "wood", "id": "walnut", "level": 10}, {"what": "metal", "id": "copper", "best_streak": 3}],
   "modes_open_after_level": 8,
@@ -150,7 +153,7 @@ not unlocked (after a progress reset) reads as the default.
 
 A stored level is `LevelData.to_dict()`: the tutorial format of GDD 9.3 (planks with
 `colors`, `queue`, `tray_par`, `par_time`, `line`, `hint`) with `kind` "numbered", "daily" or
-"relaxed", plus `number`, `tier`, `group`, `blueprint`, `generator` (the version that made
+"relaxed", plus `tray` (the level's own tray size; a missing one reads as `Tuning.tray_size`), `number`, `tier`, `group`, `blueprint`, `generator` (the version that made
 it) and `band`. A fallback file is `{"format": 1, "tier": t, "levels": [{"level": {...},
 "solve": {...}}, ...]}`, one level per line, where `solve` is the stored `SolveResult`
 (including `novice_taps` and `last_tray_use`). The test suite solves every stored level again
@@ -793,3 +796,91 @@ focus, the effects stop and the music position is kept; it resumes on return. Ne
 - game-designer retunes skyline and bookshelf (GDD 6.4.1's recommendation, approved by Bart on
   21 October 2026); level-engine-dev then makes generator version 5 and measures the fallback
   gate again, checking that no two levels within 5 of each other hand out the same stored level.
+
+## 12. Phase 5: harder levels with a smaller tray
+
+Bart's Gate 2 verdict was "far, far too easy", with a wrong-move budget by level range. He chose
+route B on 22 October 2026: the tray shrinks with the level, every level needs a least tray
+peak (G10), helpers get cheaper, and levels 50 and 100 give a gift. docs/GDD.md 6.8 has the
+schedule and the measurements; docs/UX.md 3.2.2, 3.4, 3.13.4 and 3.14 the screens.
+
+### 12.1 Data and the generator (game-designer, level-engine-dev)
+
+- **Tuning file (3.3).**
+  - Tier rows take optional `"tray"` (1 to 7, default `tray_size`), `"peak"` (a number, or
+    [least, most], at most the tray, default 0; only the least is enforced) and `"skip"`
+    (blueprint ids kept out of that tier's deal).
+  - The top level takes optional `"relaxed_tray"` (1 to 7) and `"gifts"` (levels rising, counts
+    0 to 100, at least one helper per entry).
+  - `sawtooth` may also be `{"ranges": [[first level, tiers], ...]}`: an entry of five tiers
+    cycles by (n - 1) mod 5, any other lists levels one by one up to the next entry, and the
+    last entry must have five.
+- **Tuning API:** `TierSpec.tray: int`, `TierSpec.peak: Vector2i` (y is -1 when only one number
+  is given), `TierSpec.skip: PackedStringArray`, `Tuning.relaxed_tray` (0 means the tier's
+  tray), `Tuning.gifts: Array[Dictionary]` (sorted by level; int keys `level`, `undo`,
+  `extra_slot`, `screwdriver`, 0 when absent), `Tuning.sawtooth_ranges`.
+- **The level's own tray.**
+  - Every non-blueprint level dict carries `"tray"`, and the fingerprint includes it.
+  - `with_colors` takes a `"tray"` play field, `LevelData.MAX_TRAY` is 7, and
+    `from_planks(..., tray := 0)`.
+  - Numbered levels take their tier's tray, the Daily its tier's (tier 6: 3), Relaxed
+    `relaxed_tray` (5), and tutorials 5.
+  - PlayState and the solver already read the level's size; Extra slot adds one more.
+- **Generator version 6.**
+  - `Plan.tray`, `Plan.peak` and `GeneratedLevel.low_peak` and `peak_unknown`.
+  - The acceptance order:
+    1. the novice (G4, G9a);
+    2. the search on `spec_for(plan)`'s widened tray uses;
+    3. G10a, which replays the solution's tray loads;
+    4. G10b, `peak_holds(level, r, peak, max_states)`: no solution with peak - 1 slots;
+    5. G9b.
+  - A G10 failure raises the pressure.
+  - Budgets: 2 for tiers with G9 or a peak, `HARD_BUDGET` 3 for tiers 7 and 8.
+  - `least_peak(...)` and `with_tray(...)` are for tools and tests.
+  - **The deal.** G7 is now `numbered_schedule()`: each level takes its tier's least used board
+    not among the last 5. From the level where the tiers start repeating, the schedule repeats
+    every `NUMBERED_PERIOD` (60) levels. `LevelCatalog.halves` and `Generator.deal` are gone.
+    `LevelCatalog.load_all(tuning_path := Tuning.PATH)`, and `suits_tier` honors `skip`.
+  - **Stored levels** keep their tray, or grow to the plan's (never shrink). Their stored solve
+    requires `peak_tray`.
+- **SolveResult** gains `peak_tray`, the solution's own most crowded tray. Report-only solver
+  functions for tools and tests: `probe`, `winnable_after`, `tray_loads(level, taps)` and
+  `mistakes_at(level, solution, at, k, trials, max_states, seed)`, with `ProbeResult`.
+- **tools/levels** adds `--tuning=PATH`, `--fallback-dir=DIR` and `--probe`, and reports tray,
+  peak, least peak and W per level, tier, Daily and range.
+
+### 12.2 The level scene (gameplay-dev)
+
+Both are called by the app flow right after `play()`; neither decides when to show.
+
+- `show_tray_note(text: String) -> void`
+  - Shows the line on the tutorial line plaque in the helper bar position, with a brass outline
+    round the tray, 0.45 s after the call.
+  - It stays 2.5 to 6 s; any accepted tap or helper use after 2.5 s ends it. A pause freezes
+    its timer, and a new `play()` or retry removes it.
+  - It is not an animation and is not in `busy`.
+- `play_tray_closing() -> void`
+  - Shows the tray one slot larger, then closes it to the level's size with `knock_dull`.
+  - The rules use the level's own size from the first frame.
+  - The first accepted action or a pause ends it at once.
+- Both do nothing before the first `play()`.
+- Layout: `LevelLayout.tray_scale(slots)` and `tray_frame(slots)`. The tray is never shrunk
+  for 3 to 6 slots and fits 7 in the column.
+
+### 12.3 Screens, app flow and saves (ui-dev)
+
+- **Save** (section 8) gains:
+  - `tray_note_shown() -> bool`, `mark_tray_note_shown()`;
+  - `gifts_given() -> PackedInt32Array`, `is_gift_given(level) -> bool`;
+  - `grant_gift(level, helpers: Dictionary) -> bool`, which adds the helpers and records the
+    level in one write, and is false if already given.
+  - The progress file stores `shrink_line_shown` and `gifts_given`, and older saves load as
+    nothing shown and nothing given.
+- **The shrink line:** on the first non-replay numbered level whose tray is smaller than
+  `Tuning.tray_size`, once per save, never on Retry, a replay, the Daily or Relaxed.
+- **The tray closing:** only when the player arrives by Next and the new level's tray is
+  smaller.
+- **Gifts:** on a numbered clear, every due and ungiven gift is granted and saved before the
+  clear screen is built. One quiet plaque shows the sum, and Next stays one tap.
+- **Info** builds the tray and gift lines and the prices from Tuning.
+  `UiText.tray_for(n)` gives a numbered level's tray.

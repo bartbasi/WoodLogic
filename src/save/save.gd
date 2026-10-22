@@ -130,6 +130,8 @@ func default_progress() -> Dictionary:
 		"relaxed": {"next": {"easy": 0, "medium": 0, "hard": 0}, "last_band": ""},
 		"stats": {"cleared": 0, "three_star": 0, "helpers_used": 0, "time": time},
 		"unlocked": {"wood": [DEFAULT_WOOD], "metal": [DEFAULT_METAL]},
+		"shrink_line_shown": false,
+		"gifts_given": [],
 	}
 
 
@@ -219,6 +221,46 @@ func record_win(level: LevelData, elapsed_ms: int, stars: Vector3i) -> int:
 
 
 # helpers, stars spent, unlocks, the daily and Relaxed
+
+## True once the "The tray is smaller now" line has been shown.
+func tray_note_shown() -> bool:
+	return bool(_progress["shrink_line_shown"])
+
+
+func mark_tray_note_shown() -> void:
+	if not tray_note_shown():
+		_progress["shrink_line_shown"] = true
+		_progress_changed()
+
+
+## The levels whose gift has been given, so a third gift needs no format change.
+func gifts_given() -> PackedInt32Array:
+	var out := PackedInt32Array()
+	for level: Variant in _progress["gifts_given"]:
+		out.append(int(level))
+	return out
+
+
+func is_gift_given(level: int) -> bool:
+	return (_progress["gifts_given"] as Array).has(level)
+
+
+## Gives a level's gift: the helpers are added and the level recorded in one write, so a
+## gift is granted exactly once even if the app dies right after. `helpers` maps helper
+## names to counts. False (nothing given) if that level's gift was already given.
+func grant_gift(level: int, helpers: Dictionary) -> bool:
+	if level < 1 or level > MAX_LEVEL or is_gift_given(level):
+		return false
+	# A full list could not record it, and an unrecorded gift would repeat: give nothing.
+	if (_progress["gifts_given"] as Array).size() >= 32:
+		return false
+	var owned: Dictionary = _progress["helpers"]
+	for h: String in HELPERS:
+		var count := clampi(int(helpers.get(h, 0)), 0, MAX_HELPERS)
+		owned[h] = mini(MAX_HELPERS, int(owned[h]) + count)
+	(_progress["gifts_given"] as Array).append(level)
+	_progress_changed()
+	return true
 
 ## Owned count of a helper ("undo", "extra_slot" or "screwdriver").
 func helper_count(helper: String) -> int:
@@ -682,6 +724,13 @@ func _clean_progress(raw: Dictionary) -> Dictionary:
 	out["relaxed"] = _clean_relaxed(_dict_in(raw, "relaxed", "progress"))
 	out["stats"] = _clean_stats(_dict_in(raw, "stats", "progress"))
 	out["unlocked"] = _clean_unlocked(_dict_in(raw, "unlocked", "progress"))
+	# An older save has neither: nothing shown, nothing given.
+	if raw.has("shrink_line_shown"):
+		if raw["shrink_line_shown"] is bool:
+			out["shrink_line_shown"] = raw["shrink_line_shown"]
+		else:
+			_problem("progress.shrink_line_shown must be true or false")
+	out["gifts_given"] = _clean_gifts(raw.get("gifts_given", []))
 	return out
 
 
@@ -776,6 +825,19 @@ func _clean_stats(raw: Dictionary) -> Dictionary:
 			"total_ms": _whole_in(g_raw, "total_ms", 0, MAX_TOTAL_MS, 0, "stats.time"),
 			"best_ms": _whole_in(g_raw, "best_ms", 0, MAX_MS, 0, "stats.time"),
 		}
+	return out
+
+
+## The levels whose gift was given: whole numbers 1 to MAX_LEVEL, each once, at most 32.
+func _clean_gifts(raw: Variant) -> Array:
+	var out := []
+	if not raw is Array:
+		_problem("gifts_given must be a list")
+		return out
+	for item: Variant in raw:
+		var level := _whole(item, 1, MAX_LEVEL, 0, "gifts_given")
+		if level > 0 and not out.has(level) and out.size() < 32:
+			out.append(level)
 	return out
 
 

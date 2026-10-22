@@ -4,7 +4,8 @@ Owner: ux-designer. Status: updated after Hard Stop 1 (the GDD is approved and B
 Workshop look, docs/design/directions.md), and again on 21 October 2026 after Bart played
 Phase 3 on a Galaxy Z Fold5 (coffee buttons, Settings from Pause, one nav dock, the progress map
 and the Info screen), and a third time on the same day after Bart's answers (coffee in the top
-bar, Info confirmed, "Back to level" goes straight into the level).
+bar, Info confirmed, "Back to level" goes straight into the level), and on 22 October 2026 for
+Phase 5 (the tray changes size by level, new helper prices, gifts at levels 50 and 100).
 Anything that depends on a number the game designer owns is tagged `[C:name]` (a layout count)
 or `[GDD]` (a value that comes from docs/GDD.md, now filled in). When those change, search
 this file for the tag.
@@ -289,15 +290,16 @@ layouts tagged with it must be redone by the ux-designer; do not just stretch th
 | `[C:open]` | open boxes at once | 2 | boxes row (3.2.2), box width, the out of room rule |
 | `[C:slots]` | slots per box | 3 | open box width 92 (3 wells of 24 + gaps), lid closes on slot 3, preview box |
 | `[C:prev]` | boxes previewed in the queue | 2 | preview boxes 62 wide each, boxes row total width |
-| `[C:tray]` | tray slots | 5 | tray width 260; with Extra slot 310; wording of the tray warning ("one free slot") |
+| `[C:tray]` | tray slots | **5, 4 or 3 by level** (3.2.2): 5 up to level 11 and in the tutorial, 4 on levels 12 to 20, 3 from level 21 and in the daily, Relaxed 5 `[GDD: pending]`; plus 1 with Extra slot | tray frame width 160, 210 or 260 (210, 260 or 310 with Extra slot); the tray warning at one free slot |
 
 Width check for the boxes row (usable width 336 = 360 minus 12 each side):
 `open * 92 + (open - 1) * 8 + 12 + prev * 62 + (prev - 1) * 8`. With the defaults that is
 `2*92 + 8 + 12 + 2*62 + 8 = 336`. It fits exactly. Any change that makes it larger than 336
 needs a new layout (smaller wells down to 20 units, or two rows). Ask the ux-designer.
 
-Tray width check: `slots * 44 + (slots - 1) * 6 + 16` must be at most 336. Five slots: 260.
-Six (with Extra slot): 310. Seven would need 40 unit slots: `7*40 + 6*5 + 16 = 326`.
+Tray width check: `slots * 44 + (slots - 1) * 6 + 16` must be at most 336. Three slots: 160.
+Four: 210. Five: 260. Six (five plus Extra slot, the most there ever is): 310. Seven would need
+40 unit slots: `7*40 + 6*5 + 16 = 326`.
 
 ## 3. Screens
 
@@ -575,17 +577,74 @@ pause button are 256 units apart.
 
 **Tray** (52 tall at base, 56 at 800)
 
-- Five slots `[C:tray]`, each 44 x 44 with 6 between, in a frame 260 x 52 centered (x 50 to
-  310). The frame is the brushed steel parts tray with riveted ends. Each slot is a neutral
-  hollow of 38 units; a screw in it is drawn 32 units across with its symbol.
-- Filling order: leftmost free slot first.
-- With Extra slot used, a sixth slot grows in on the right and the frame becomes 310 wide
-  (x 25 to 335).
+- **Slots by level `[C:tray]` (decided by Bart, 22 October 2026).** The tray shrinks to make
+  play harder. The number of slots belongs to the level, so a replay from the map has the
+  size that level had:
+
+| Where | Slots |
+|-|-|
+| Tutorial levels 1 to 8 | 5 |
+| Levels 9 to 11 | 5 |
+| Levels 12 to 20 | 4 |
+| Levels 21 and up | 3 |
+| Daily | 3 |
+| Relaxed | 5 `[GDD: the game designer is deciding]` |
+| After using Extra slot | one more than the level's number, for the rest of that try |
+
+- **Layout for each size.** Each slot is 44 x 44 with 6 between, in a frame with 8 units of
+  padding at each end, 52 tall, centered in the content column (x is for a 360 wide content
+  rect). The frame is the brushed steel parts tray with riveted ends, so a smaller tray is a
+  shorter steel tray, never a stretched one. Each slot is a neutral hollow of 38 units; a screw
+  in it is drawn 32 units across with its symbol. The box row above (92 wide open boxes, 62 wide
+  previews) and every touch target are unchanged at every tray size.
+
+| Slots | Frame width | Frame x range | Slot left edges (x) |
+|-|-|-|-|
+| 3 | 160 | 100 to 260 | 108, 158, 208 |
+| 4 | 210 | 75 to 285 | 83, 133, 183, 233 |
+| 5 | 260 | 50 to 310 | 58, 108, 158, 208, 258 |
+| 6 (5 plus Extra slot) | 310 | 25 to 335 | 33, 83, 133, 183, 233, 283 |
+| 5 (4 plus Extra slot) | 260 | 50 to 310 | as the 5 row |
+| 4 (3 plus Extra slot) | 210 | 75 to 285 | as the 4 row |
+
+  On phones the widest tray (310) fits the 336 unit column with 13 units spare each side. On
+  tablets and in the split arrangement (3.2.1a) the whole tray scales with f like the other bars
+  and stays centered in the bar or the rail; it never needs more width than 310 x f.
+- Filling order: leftmost free slot first. Slots never rearrange themselves (GDD).
+- **Extra slot** widens the frame by 50, keeping it centered: the existing slots slide left by
+  25 (250 ms, ease out, screws travel with their slots, order unchanged) and the new slot grows
+  in at the right end. Retry gives back the level's normal size.
 - **Warning at one free slot `[C:tray]`:** when exactly one slot is free, the frame turns a warm
   warning tone and a small triangle with an exclamation mark is drawn inside the free slot
-  (a symbol, so it is not only color). One soft tick sound plays once as the state is entered.
-  There is no looping animation. If a screw leaves the tray (a box opens and takes it) and two
-  slots are free again, the warning clears without sound.
+  (a symbol, so it is not only color). One soft tick sound plays as the state is entered, and no
+  more often than once every 2 seconds. There is no looping animation. If a screw leaves the
+  tray (a box opens and takes it) and two slots are free again, the warning clears without
+  sound.
+  - **Is "one left" still right on a 3 slot tray? Yes, for every size.** The warning means "the
+    next screw that goes to the tray is the last one it can take", and that is true whatever the
+    size. On a 3 slot tray it shows after two screws wait in the tray, which is simply how tight
+    that tray is. It stays a steady, quiet state with one soft tick, so it cannot become
+    nagging, and it follows the tray as it is now, so Extra slot clears it (the free count goes
+    from one to two).
+- **The shrink line (once only).** The first time the player plays a numbered level whose tray is
+  smaller than the 5 slots they started with (level 12 on the normal path), one short line shows:
+  "The tray is smaller now. Every slot counts."
+  - **Wording:** exactly that text, Tutorial line style (18 bold, or 16 if it wraps to two
+    lines) on the same 336 x 48 plaque as the tutorial lines.
+  - **Placement:** in the helper bar position, in place of the helper buttons for a short time
+    (the board and the tray are never covered). The helper bar fades back afterwards. A steady
+    3 unit outline around the tray frame shows for the same time (fades in and out over 150 ms
+    each, no pulsing).
+  - **Timing:** it appears when the board has settled (after the planks have dropped). It stays
+    at least 2.5 seconds and at most 6, and leaves at the player's first action after the 2.5
+    seconds (or at 6 seconds). The line itself never starts the clock and never needs a tap.
+  - **Once:** it is never shown again for this player (the save keeps one flag), not on Retry, a
+    replay, the daily or Relaxed. A progress reset shows it again, like the helper sheets.
+  - **The tray closing:** when the player arrives by Next from level 11 (or from level 20 to 21),
+    the new board slides in with the tray at the old size, then the extra slot closes (the
+    frame's end slides in over 300 ms, a dull wood knock, and the frame re-centers). On level 21
+    no line is shown, only the closing. From the title or the map the tray simply appears at its
+    new size.
 - **Full tray:** all slots filled. If any free screw can still go to an open box, play
   continues. The tray frame holds the warning tone with a closed-lid icon in the frame corner.
   A tap on a free screw that has nowhere to go is refused (section 6.1, rule R25).
@@ -611,7 +670,7 @@ what is under what.
     "Nothing to undo."
   - Extra slot: adds one tray slot for the rest of this try, once per try `[GDD R30]`. After it
     is used the button shows "Used" in place of the count and is disabled. Retry gives back the
-    normal five slots.
+    level's normal tray size.
   - Screwdriver: enters a mode. A banner replaces the helper bar: "Tap any screw to remove it."
     with a Cancel button (96 x 48 at the right). The next tap on any screw, covered or free,
     removes it. Cancel, the system back button, or tapping the pause button leaves the mode and
@@ -620,7 +679,7 @@ what is under what.
     back (as in 6.1), the mode stays, and the toast says "That screw has nowhere to go."
 
 - **Not owned (count 0):** the badge shows the price instead, with a small star icon (for
-  example "4" and a star for Undo, "6" for Extra slot, "8" for Screwdriver `[GDD]`). A tap opens the buy dialog (3.13.3) if the bank can pay. If it
+  example "3" and a star for Undo, "5" for Extra slot, "8" for Screwdriver `[GDD]`). A tap opens the buy dialog (3.13.3) if the bank can pay. If it
   cannot, the button looks dimmed and a tap shows the toast "Not enough stars. {price} needed."
 - **Relaxed (decided by Bart):** the bar shows only the free Undo, centered, with no count. Its
   badge reads "Free" and it never runs out. Extra slot and Screwdriver are hidden, and the buy
@@ -709,6 +768,7 @@ already saved at the moment of the clear, so it can never be lost by skipping.
 | Star captions | 30, 200, 300, 72 | three columns of 100: label (Button 18) then detail (Caption 13) |
 | Summary line | 32, 284, 296, 28 | "+{k} stars" or "No new stars this time" (Heading 20) |
 | Unlock note (when any) | 32, 322, 296, 48 | "Unlocked: {name} wood" or "Unlocked: {name} metal" |
+| Gift note (when due) | 32, 322, 296, 48 (or 32, 374, 296, 48 under an unlock note) | "A gift for reaching level {n}: 2 Undos and 1 Extra slot." |
 | **Next** | 32, 460, 296, 72 | "Next" with a right arrow, note "Level {n+1}" (primary) |
 | Replay | 32, 540, 296, 48 | "Replay" (secondary) |
 
@@ -728,6 +788,9 @@ player learns what to aim for):
 - The star bank in the corner is not on this screen; the summary line is the confirmation.
 - Unlock note shows only when this clear passes a theme milestone `[GDD]`. It is a plaque, not a
   dialog, and does not need a tap.
+- **Gift note (decided by Bart, 22 October 2026).** Reaching level 50, and again level 100,
+  gives 2 Undos and 1 Extra slot. It is shown on the level clear screen, in the same quiet way as
+  the unlock note, so Next stays one tap. See 3.13.4.
 - **Daily clear:** heading "Daily puzzle solved". The summary line is followed by "Streak: {n}
   days" (or "Streak: 1 day"). The big button reads "Done" and goes to the title. Replay stays.
 - **Relaxed clear:** no stars, no timing. Heading "Nicely done". The big button reads "Another"
@@ -1054,7 +1117,7 @@ active), and no game row, because the three buttons below start a game.
 #### 3.13.1 First-time explanation
 
 Appears the first time a helper is available, at the levels the GDD sets: **Undo on level 8,
-Extra slot on level 15, Screwdriver on level 25** (two free of each, price 4, 6 and 8 stars). It
+Extra slot on level 15, Screwdriver on level 25** (two free of each, price 3, 5 and 8 stars). It
 is a sheet shown when that level appears, before the player's first tap. The timer has not
 started and stays stopped while the sheet is open.
 The helper bar is visible below the sheet with the new helper's button outlined by a steady ring
@@ -1128,10 +1191,11 @@ shown by itself: the tutorial teaches by doing, and this is where a player looks
 Group "The basics":
 1. "Tap a free screw to unscrew it."
 2. "It flies into an open box of its color. If no open box fits, it waits in the tray."
-3. "Three screws fill a box. The box leaves and the next one slides in."
-4. "A screw under another plank is covered. Free the plank on top first."
-5. "A plank with no screws falls. A plank with one screw swings."
-6. "Clear every screw to win. If the tray is full and nothing fits, you are out of room. Retry is
+3. "The tray starts with 5 slots. It shrinks to 4 from level 12 and to 3 from level 21."
+4. "Three screws fill a box. The box leaves and the next one slides in."
+5. "A screw under another plank is covered. Free the plank on top first."
+6. "A plank with no screws falls. A plank with one screw swings."
+7. "Clear every screw to win. If the tray is full and nothing fits, you are out of room. Retry is
    free."
 
 Group "Helpers" (each entry starts with its icon):
@@ -1139,8 +1203,9 @@ Group "Helpers" (each entry starts with its icon):
 2. "Extra slot. Adds one more tray slot, once per try. Two free on level 15."
 3. "Screwdriver. Removes any one screw, even a covered one, to where a tap would send it. Two free on level 25."
 4. "A Screwdriver is not spent if the screw has nowhere to go."
-5. "Out of a helper? Tap it in a level to buy one with stars: Undo 4, Extra slot 6, Screwdriver 8."
-6. "Using a helper means no Clean star on that try."
+5. "Out of a helper? Tap it in a level to buy one with stars: Undo 3, Extra slot 5, Screwdriver 8."
+6. "Reach level 50 and level 100 for a gift each time: 2 Undos and 1 Extra slot."
+7. "Using a helper means no Clean star on that try."
 
 Group "Stars" (each entry starts with a filled star icon):
 1. "Cleared. Finish the level."
@@ -1158,6 +1223,34 @@ changes, change these lines too.
 - **Empty state:** none; it is the same for every player.
 - **Tall and wide:** the list simply gets longer or the column stays at most 480.
 - **Back button:** goes back to where the player came from (Title, or Pause), section 4.2.
+
+#### 3.13.4 Gifts at levels 50 and 100 (decided by Bart, 22 October 2026)
+
+Reaching level 50 gives 2 Undos and 1 Extra slot, and reaching level 100 gives the same again.
+These are the two steps where the game gets stricter (GDD), so help arrives with them.
+
+- **When.** A gift is due when the player's next level is 50 (or 100) or higher and that gift has
+  not been given yet. The usual moment is the clear screen of level 49 (or 99). Because it
+  follows the player's progress and not a fixed screen, a player who was already past 50 when
+  this was added gets it on their next numbered level clear. If both are due at once, one note
+  shows the sum.
+- **Where and how.** On the level clear screen, as a quiet plaque in the unlock note place
+  (3.4, rect 32, 322, 296, 48): "A gift for reaching level 50: 2 Undos and 1 Extra slot." (or
+  "level 100"). It fades in with the other clear screen items (150 ms), plays one soft clink,
+  and has no button, no animation after that, no badge and no ask. The helpers are added to the
+  player's counts at that moment and saved.
+- **Dismissal.** None is needed. It stays until the player taps Next or Replay, like the unlock
+  note. Back and every other button behave as on any clear screen.
+- **Why not a sheet.** The first-time helper sheet needs a "Got it" tap, which would break "from
+  level clear to the next level in one tap" (the fun checklist). A plaque keeps that tap and still
+  tells the player. (The GDD suggested the sheet; this is the quieter alternative.)
+- **On the next level.** The helper bar's count badges for Undo and Extra slot count up from the
+  old number to the new one when the next level shows (one soft tick per step, 200 ms apart, once).
+  No sheet and no highlight.
+- **Never** in Relaxed (no gifts there), never on a replay of an earlier level once given, and
+  never repeated: the save keeps one flag per gift. A progress reset clears the flags.
+- **Coffee rule.** Nothing here asks the player for anything, so it is in keeping with ground
+  rule 1: a gift is the game giving, and it never links anywhere.
 
 ## 4. Flows and the Android back button
 
@@ -1381,7 +1474,7 @@ touch down).
 | Input | What moves | Sound | Starts within |
 |-|-|-|-|
 | Undo tap | the last action (a tap or a Screwdriver removal) reverses: the screw reverses its flight (350 ms) from its box or the tray slot back to its hole, turning backwards; a fallen plank rises back onto the board; a closed box (lid shut) reopens and slides back; a swung plank swings back to where it was | a soft reverse of the ratchet | 16 ms |
-| Extra slot tap | a new tray slot grows in on the right (250 ms) and the frame widens to 310 | a small wooden pop | 16 ms |
+| Extra slot tap | a new tray slot grows in on the right (250 ms), the frame widens by 50 (to 210, 260 or 310 slots wide) and re-centers, and the warning clears if there are now two free slots | a small wooden pop | 16 ms |
 | Screwdriver tap | a banner slides in over the helper bar (150 ms); all screws show their symbols bright | soft tick | 16 ms |
 | Screwdriver then a screw with nowhere to go | the screw shakes back as in the refused tap above; the mode stays; the toast "That screw has nowhere to go." | a dull knock | 16 ms |
 | Screwdriver then screw tap | the screwdriver icon touches the screw (100 ms), then the screw rises through the planks above it (it is drawn on top of everything) and flies as usual | ratchet, pop, clink | 16 ms |
@@ -1529,6 +1622,21 @@ For the lead to pass on.
   (inputs Wc, Hc, dpu; outputs b, f, stacked or split) is in 3.2.1a, and needs the safe area
   and the device's dp per unit.
 - **audio-dev:** sound list is the brief's; a button press reuses the knock quietly.
+- **New from 22 October 2026 (Phase 5):**
+  - **gameplay-dev:** the tray takes its slot count from the level (3.2.2): tutorial 5, levels 9
+    to 11 five, 12 to 20 four, 21 and up three, daily three, Relaxed five `[GDD]`; Extra slot
+    adds one; the tray frame and the slot layout per the table in 3.2.2 (frame centered, widths
+    160, 210, 260 and 310); the warning at exactly one free slot, tick at most once per 2
+    seconds; the shrink line and the tray closing (3.2.2); the Extra slot row in 6.2.
+  - **ui-dev:** the gift plaque on the clear screen and the badge count up (3.13.4); the flags in
+    the save (shrink line shown, gift 50 given, gift 100 given); prices 3, 5 and 8 everywhere;
+    the changed Info lines (3.14).
+  - **level-engine-dev and the game designer:** tray size by level and for the daily and Relaxed
+    is a rule of the logic and the GDD (the tray size in R1, R2 and R30, which still say 5 and a
+    sixth slot); the gifts and prices belong in data/tuning.json (GDD 6.8).
+  - **graphic-designer:** the tray frame at 3, 4, 5 and 6 slots (one steel tray with riveted ends
+    that can be drawn at any of those widths), the slot closing animation and its steady
+    outline, and a gift plaque in the Workshop look.
 - **New from 21 October 2026:**
   - **ui-dev:** the menu frame and nav dock (1.6) as one shared component used by every menu
     screen; the origin and paused level model (4.1); Settings from Pause (3.3); the progress map
@@ -1585,6 +1693,11 @@ For the lead to pass on.
 19. The progress map opens centered on the next level, shows 4 locked levels, and answers a
     locked tap with the knock and "Clear level {n} first."; it scrolls smoothly at level 500.
 20. Checked at both Fold5 sizes: folded 360 x 922 and opened 533 x 640.
+21. The tray has 5 slots through level 11, 4 on levels 12 to 20, 3 from 21 and in the daily; the
+    steel frame is centered and the box row and targets do not move; with Extra slot it is one
+    slot wider and the warning follows the new count.
+22. The shrink line shows once, at level 12, in the helper bar place, and never again; the gift
+    note shows once at 50 and once at 100 on the clear screen, with no button.
 
 ## 10. Decided by Bart
 
@@ -1634,6 +1747,15 @@ For the lead to pass on.
 17. **"Back to level" goes straight into the level,** not to Pause first (21 October 2026). The
     clock starts again when the board is showing. (Sections 1.6, 4.1.)
 
+18. **The tray shrinks, helpers get new prices, gifts at 50 and 100 (22 October 2026).**
+    - **Tray size:** 5 slots up to level 11, 4 on levels 12 to 20, 3 from level 21. The tutorial
+      keeps 5 and the daily has 3. (Section 3.2.2.)
+    - **The shrink line:** the first time the tray shrinks (level 12) one short line shows, once
+      only: "The tray is smaller now. Every slot counts." (Section 3.2.2.)
+    - **New prices:** Undo 3 stars, Extra slot 5, Screwdriver 8. (Sections 3.2.2, 3.13, 3.14.)
+    - **Gifts:** reaching level 50, and again level 100, gives 2 Undos and 1 Extra slot, shown
+      quietly on the level clear screen. (Section 3.13.4.)
+
 ## 11. Open questions and notes for the lead
 
 **For Bart:**
@@ -1642,7 +1764,19 @@ For the lead to pass on.
    no tracking, no internet. The game itself sends nothing." for that build only. It is fixed
    wording in CLAUDE.md, so it needs your approval before the store build.
 
+**Pending for Phase 5:**
+- **Relaxed tray size.** The game designer is deciding whether Relaxed keeps 5 slots. This file
+  assumes 5 until the GDD says otherwise (3.2.2).
+- **Daily with 3 slots at level 9.** The daily opens after level 8 and always has 3 slots, so a
+  player can meet a 3 slot tray in the daily before they reach level 12. The shrink line belongs
+  to the numbered levels and never shows in the daily. Worth checking at Gate 2 that this does
+  not confuse.
+
 **Choices I made that are easy to undo:**
+- The gift is a quiet plaque on the clear screen, not the first-time helper sheet the GDD
+  suggested, so Next stays one tap.
+- The shrink line replaces the helper buttons for 2.5 to 6 seconds (the clock has not started),
+  because the board and tray must stay uncovered.
 - The title's four small buttons (Levels, Stats, Settings, About) are now tabs in the dock, so
   the title shows Play, Daily and Relaxed with a bigger decoration.
 - The top bar cup is hidden on levels 1 to 3 (it appears with the timer and pips at level 4),

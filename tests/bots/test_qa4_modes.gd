@@ -107,58 +107,93 @@ func test_relaxed_undo_is_free_and_unlimited_on_the_real_scene() -> void:
 	check(scene().debug_snapshot().has("cup"), "the level is the real scene")
 
 
-func test_acc_13c_too_few_stars_to_buy_toasts_and_spends_nothing() -> void:
+const PRICES := {"undo": 3, "extra_slot": 5, "screwdriver": 8}
+const HELPER_LABELS := {"undo": "Undo", "extra_slot": "Extra slot", "screwdriver": "Screwdriver"}
+
+
+## A level 9 attempt with every helper met (none owned) and a bank of exactly `bank` stars.
+func _with_bank(bank: int) -> void:
 	start_real(8, "2026-10-21", false)
 	var save := save_node()
 	for h: String in ["undo", "extra_slot", "screwdriver"]:
 		save.mark_helper_met(h, 0)
-	save.spend_stars(save.star_bank() - 3)
-	check_eq(save.star_bank(), 3, "3 stars")
+	save.spend_stars(save.star_bank() - bank)
+	check_eq(save.star_bank(), bank, "a bank of %d" % bank)
 	check(await level_on(), "level 9 is on")
 	await play_taps(2)
-	var before := state_text()
+
+
+func test_acc_13c_one_star_short_gives_one_message_and_spends_nothing() -> void:
+	# The player must see ONE message when a helper costs more than the bank: the level's own
+	# "Not enough stars" note, not that and a second toast from the app flow as well.
+	for helper: String in ["undo", "extra_slot", "screwdriver"]:
+		var price: int = PRICES[helper]
+		check_eq(int(Tuning.helpers[helper]["price"]), price, "%s costs %d in the data" % [helper, price])
+		await _with_bank(price - 1)
+		var save := save_node()
+		var before := state_text()
+		_press(helper)
+		await frames(2)
+		check(flow.overlay == null, "%s: no dialog, the bank cannot pay" % helper)
+		check_eq(scene().debug_snapshot()["toast"], "Not enough stars. %d needed." % price, "%s: the level says what it costs" % helper)
+		check(not flow.toast.is_showing(), "%s: and the app flow adds no second message (it shows \"%s\")" % [helper, flow.toast.text])
+		check_eq(save.star_bank(), price - 1, "%s: nothing spent" % helper)
+		check_eq(save.helper_count(helper), 0, "%s: nothing given" % helper)
+		check_eq(state_text(), before, "%s: the board is untouched" % helper)
+		flow.queue_free()
+		await frames(2)
+	# The flow's own wording exists for a bank the scene does not know changed; it is the only
+	# message in that case too.
+	await _with_bank(PRICES["undo"])
+	var save2 := save_node()
+	save2.spend_stars(save2.star_bank())
 	_press("undo")
 	await frames(2)
-	check(flow.overlay == null, "no dialog: the bank cannot pay")
-	check_eq(scene().debug_snapshot()["toast"], "Not enough stars. 4 needed.", "the level says what it costs")
-	check_eq(save.star_bank(), 3, "nothing spent")
-	check_eq(save.helper_count("undo"), 0, "nothing given")
-	check_eq(state_text(), before, "the board is untouched")
-	_press("screwdriver")
+	check(flow.overlay == null, "a stale bank: no dialog")
+	check(flow.toast.is_showing(), "the flow explains instead")
+	check_eq(flow.toast.text, "Undo costs 3 stars. You have 0.", "its words")
+	check_eq(scene().debug_snapshot()["toast"], "", "and the level says nothing then")
+	flow.queue_free()
 	await frames(2)
-	check_eq(scene().debug_snapshot()["toast"], "Not enough stars. 8 needed.", "Screwdriver names its price")
 
 
 func test_acc_13c_with_exactly_the_price_the_dialog_opens_and_back_or_not_now_buy_nothing() -> void:
-	start_real(8, "2026-10-21", false)
-	var save := save_node()
-	for h: String in ["undo", "extra_slot", "screwdriver"]:
-		save.mark_helper_met(h, 0)
-	save.spend_stars(save.star_bank() - 4)
-	check(await level_on(), "level 9 is on")
-	await play_taps(2)
-	var before := state_text()
-	_press("undo")
-	await frames(2)
-	check(flow.overlay is UiDialog, "the buy dialog opens with exactly 4 stars")
-	check(not bool(scene().debug_snapshot()["clock_running"]), "the clock is stopped while the dialog is open (S6)")
-	back()
-	check(flow.overlay == null, "Back closes it")
-	check_eq(save.star_bank(), 4, "nothing spent by Back")
-	check(bool(scene().debug_snapshot()["clock_running"]), "the clock runs again once it is closed")
-	_press("undo")
-	await frames(2)
-	tap("Not now", true)
-	check_eq(save.star_bank(), 4, "nothing spent by Not now")
-	check_eq(state_text(), before, "and the board is untouched")
-	_press("undo")
-	await frames(2)
-	tap("Get and use", true)
-	await frames(2)
-	check_eq(save.star_bank(), 0, "Get and use spends exactly the price")
-	check(state_text() != before, "and used the Undo (a tap was taken back)")
-	check_eq(save.helper_count("undo"), 0, "the bought Undo was used up")
-	check_eq(int(save.progress_copy()["stats"]["helpers_used"]), 1, "counted once")
+	for helper: String in ["undo", "extra_slot", "screwdriver"]:
+		var price: int = PRICES[helper]
+		await _with_bank(price)
+		var save := save_node()
+		var before := state_text()
+		_press(helper)
+		await frames(2)
+		check(flow.overlay is UiDialog, "%s: the buy dialog opens with exactly %d stars" % [helper, price])
+		check(not bool(scene().debug_snapshot()["clock_running"]), "%s: the clock is stopped while the dialog is open (S6)" % helper)
+		back()
+		check(flow.overlay == null, "%s: Back closes it" % helper)
+		check_eq(save.star_bank(), price, "%s: nothing spent by Back" % helper)
+		check(bool(scene().debug_snapshot()["clock_running"]), "%s: the clock runs again once it is closed" % helper)
+		_press(helper)
+		await frames(2)
+		tap("Not now", true)
+		check_eq(save.star_bank(), price, "%s: nothing spent by Not now" % helper)
+		check_eq(state_text(), before, "%s: and the board is untouched" % helper)
+		_press(helper)
+		await frames(2)
+		tap("Get and use", true)
+		await frames(2)
+		check_eq(save.star_bank(), 0, "%s: Get and use spends exactly the price" % helper)
+		# The Screwdriver is taken from the save when a screw is removed, not when the mode starts.
+		var left := 1 if helper == "screwdriver" else 0
+		check_eq(save.helper_count(helper), left, "%s: the bought helper is used up (the Screwdriver waits for a screw)" % helper)
+		check_eq(int(save.progress_copy()["stats"]["helpers_used"]), 0 if helper == "screwdriver" else 1, "%s: counted once it has taken effect" % helper)
+		match helper:
+			"undo":
+				check(state_text() != before, "undo: a tap was taken back")
+			"extra_slot":
+				check(scene().get_state().extra_slot_used(), "extra slot: the extra slot opened")
+			"screwdriver":
+				check(bool(scene().get("_driver")), "screwdriver: the mode started")
+		flow.queue_free()
+		await frames(2)
 
 
 ## Loses the level on the screen by random taps (instant mode). True if the level got lost.
@@ -194,7 +229,7 @@ func test_acc_13b_the_out_of_room_sheet_offers_exactly_the_owned_usable_helpers(
 			save.add_helper(h, 1)
 		var lost := false
 		for attempt: int in 6:
-			flow.play_number(40 + 5 * case_index)
+			flow.play_number([25, 30, 35, 40, 45, 40][case_index])
 			if not await level_on():
 				break
 			if await _drive_to_loss(100 + case_index * 10 + attempt):
@@ -205,7 +240,11 @@ func test_acc_13b_the_out_of_room_sheet_offers_exactly_the_owned_usable_helpers(
 			await frames(2)
 			continue
 		shown_cases += 1
+		# What is really owned now (a won attempt before the loss can pay stars, never helpers below level 50).
+		for h1: String in ["undo", "extra_slot", "screwdriver"]:
+			check_eq(save.helper_count(h1) > 0, owned.has(h1), "case %d: %s owned as set up" % [case_index, h1])
 		var state := scene().get_state()
+		check_eq(state.tray().size(), 3, "case %d: levels 21 and up have a 3 slot tray" % case_index)
 		# The rule, worked out here (R37): Undo with something to take back, Extra slot not yet
 		# used, Screwdriver if some screw on the board fits an open box.
 		var usable := PackedStringArray()

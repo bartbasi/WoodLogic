@@ -326,7 +326,11 @@ func _setup(level: LevelData) -> bool:
 
 
 ## The layered search described at the top.
-func _search(max_states: int, result: SolveResult, max_tray_uses: int = -1) -> void:
+## From the start, or from another state (from_key and from_aux, as _child makes them; then the
+## solution and last_tray_use are not filled in, and fewest_tray_uses counts from there).
+func _search(max_states: int, result: SolveResult, max_tray_uses: int = -1, from_key: int = -1, from_aux: int = 0) -> void:
+	var root := _start_key if from_key < 0 else from_key
+	var root_aux := 0 if from_key < 0 else from_aux
 	# Locals are faster than members in GDScript's inner loops.
 	var n := _n
 	var ob_mask := _ob_mask
@@ -359,14 +363,14 @@ func _search(max_states: int, result: SolveResult, max_tray_uses: int = -1) -> v
 	var byte_bits := _byte_bits
 	var bytes := (n + 7) >> 3
 	var two := _k == 2
-	var visited := {_start_key: -1}
+	var visited := {root: -1}
 	var pending := {}
-	var stack := PackedInt64Array([_start_key, 0])
+	var stack := PackedInt64Array([root, root_aux])
 	var later := PackedInt64Array()
 	var cost := 0
 	var win := -1
-	if _start_key & ob_mask == 0:
-		win = _start_key
+	if root & ob_mask == 0:
+		win = root
 	# On the last tray use count the cap allows, tray moves are not followed at all.
 	var skipped := false
 	while win < 0:
@@ -494,8 +498,11 @@ func _search(max_states: int, result: SolveResult, max_tray_uses: int = -1) -> v
 	result.solved = true
 	result.complete = true
 	result.fewest_tray_uses = cost
-	result.solution = moves
-	result.last_tray_use = _last_tray_use(moves)
+	if from_key < 0:
+		result.solution = moves
+		var stats := _tray_stats(moves)
+		result.last_tray_use = stats.x
+		result.peak_tray = stats.y
 	result.states = visited.size() + pending.size()
 
 
@@ -581,30 +588,20 @@ func _fits(key: int, s: int) -> bool:
 ## counted). An empty board is a win (R3 and I1 leave nothing in the tray then). With no rng,
 ## the novice policy (GDD 6.4): the topmost free screw that fits an open box, otherwise the
 ## topmost free screw. With an rng, the careless player of the trap measure.
-func _playout(rng: RandomNumberGenerator) -> int:
-	var key := _start_key
-	var aux := 0
+func _playout(rng: RandomNumberGenerator, from_key: int = -1, from_aux: int = 0) -> int:
+	var key := _start_key if from_key < 0 else from_key
+	var aux := 0 if from_key < 0 else from_aux
 	var taps := 0
 	var fits := PackedInt32Array()
 	var others := PackedInt32Array()
 	while key & _ob_mask != 0:
-		var loose := _free(key & _ob_mask)
 		var pick := -1
 		if rng == null:
-			var first := -1
-			for s: int in _top_order:
-				if loose & (1 << s) == 0:
-					continue
-				if first < 0:
-					first = s
-				if _fits(key, s):
-					pick = s
-					break
+			pick = _novice_pick(key, aux)
 			if pick < 0:
-				if (aux >> _tt_shift) >= _tray_size:
-					return taps
-				pick = first
+				return taps
 		else:
+			var loose := _free(key & _ob_mask)
 			fits.clear()
 			others.clear()
 			for s: int in _n:
@@ -625,19 +622,242 @@ func _playout(rng: RandomNumberGenerator) -> int:
 	return taps
 
 
-## The tap number (from 1) of the last tap in moves that sends its screw to the tray, or 0.
-func _last_tray_use(moves: PackedInt32Array) -> int:
+## The novice's tap in this state (GDD 6.4): the topmost free screw that fits an open box,
+## otherwise the topmost free screw if the tray has room; -1 when the level is lost (R23).
+func _novice_pick(key: int, aux: int) -> int:
+	var loose := _free(key & _ob_mask)
+	var first := -1
+	for s: int in _top_order:
+		if loose & (1 << s) == 0:
+			continue
+		if first < 0:
+			first = s
+		if _fits(key, s):
+			return s
+	if (aux >> _tt_shift) >= _tray_size:
+		return -1
+	return first
+
+
+## Report only: how forgiving a level is and how far ahead it makes a player think, measured
+## along a solution of it (see ProbeResult). Each search is the fewest tray use search from
+## that state with max_states, uncapped; a state searched once is not searched again. trials
+## random sets of wrong taps per point and count, from a RandomNumberGenerator seeded by
+## seed_value, so the same call gives the same answer everywhere.
+static func probe(level: LevelData, solution: PackedInt32Array, trials: int, max_states: int, seed_value: int) -> ProbeResult:
+	var started := Time.get_ticks_usec()
+	var out := ProbeResult.new()
+	var solver := Solver.new()
+	if solver._setup(level) and solution.size() == solver._n:
+		solver._probe(solution, trials, max_states, seed_value, out)
+	@warning_ignore("integer_division")
+	out.ms = (Time.get_ticks_usec() - started) / 1000
+	return out
+
+
+## For tests and tools: after these taps from the start, can the level still be won? 1 yes, 0
+## no (also when a tap is refused or the taps already lost it), -1 not proven within max_states.
+static func winnable_after(level: LevelData, taps: PackedInt32Array, max_states: int) -> int:
+	var solver := Solver.new()
+	if not solver._setup(level):
+		return -1
+	var key := solver._start_key
+	var aux := 0
+	for s: int in taps:
+		if key & (1 << s) == 0 or solver._free(key & solver._ob_mask) & (1 << s) == 0:
+			return 0
+		key = solver._child(key, aux, s)
+		if key < 0:
+			return 0
+		aux = solver._child_aux
+	return solver._winnable(key, aux, max_states, {}, ProbeResult.new())
+
+
+func _probe(solution: PackedInt32Array, trials: int, max_states: int, seed_value: int, out: ProbeResult) -> void:
+	# The states along the solution: after i taps, keys[i] and auxes[i].
+	var keys := PackedInt64Array([_start_key])
+	var auxes := PackedInt64Array([0])
+	for s: int in solution:
+		var key := _child(keys[-1], auxes[-1], s)
+		if key < 0:
+			return
+		keys.append(key)
+		auxes.append(_child_aux)
+	# Search results by state: 1 winnable, 0 not, -1 not proven. (The key alone is the state:
+	# the tray counts follow from it.)
+	var known := {}
+	var m := ProbeResult.MAX_MISTAKES
+	for p: int in ProbeResult.POINTS:
+		@warning_ignore("integer_division")
+		var at: int = _n * p / ProbeResult.POINTS
+		for k: int in range(1, m + 1):
+			var rng := RandomNumberGenerator.new()
+			rng.seed = Seeds.derive(seed_value, p, k)
+			var slot := p * m + k - 1
+			for _t: int in trials:
+				var answer := _mistake_trial(keys[at], auxes[at], k, rng, max_states, known, out)
+				if answer > 0:
+					out.won[slot] += 1
+				elif answer == 0:
+					out.lost[slot] += 1
+				elif answer == -1:
+					out.unknown[slot] += 1
+				else:
+					out.skipped[slot] += 1
+	# Lookahead: the novice's move along the solution.
+	for i: int in solution.size():
+		var g := _novice_pick(keys[i], auxes[i])
+		if g < 0:
+			continue
+		out.greedy_states += 1
+		if g == solution[i]:
+			continue
+		out.greedy_differs += 1
+		var key := _child(keys[i], auxes[i], g)
+		var aux := _child_aux
+		var answer := _winnable(key, aux, max_states, known, out)
+		if answer == 0:
+			out.greedy_fatal += 1
+			out.trap_delays.append(_playout(null, key, aux))
+		elif answer < 0:
+			out.greedy_unknown += 1
+	for i: int in auxes.size():
+		out.peak_tray = maxi(out.peak_tray, auxes[i] >> _tt_shift)
+	# The novice's point of no return: the first state on its path with no win left. The start
+	# can be won and a stuck state cannot, and winnability never comes back along a path, so a
+	# binary search between them.
+	var path_keys := PackedInt64Array([_start_key])
+	var path_auxes := PackedInt64Array([0])
+	while path_keys[-1] & _ob_mask != 0:
+		var g := _novice_pick(path_keys[-1], path_auxes[-1])
+		if g < 0:
+			break
+		path_keys.append(_child(path_keys[-1], path_auxes[-1], g))
+		path_auxes.append(_child_aux)
+	out.novice_taps = path_keys.size() - 1
+	if path_keys[-1] & _ob_mask == 0:
+		return
+	var lo := 0
+	var hi := path_keys.size() - 1
+	while hi - lo > 1:
+		@warning_ignore("integer_division")
+		var mid := (lo + hi) / 2
+		var answer := _winnable(path_keys[mid], path_auxes[mid], max_states, known, out)
+		if answer == 0:
+			hi = mid
+		else:
+			# Not proven either way counts as winnable, so no_return is an upper bound.
+			out.no_return_unknown = out.no_return_unknown or answer < 0
+			lo = mid
+	out.no_return = hi
+	out.hidden = out.novice_taps - hi
+
+
+## One mistake trial (see ProbeResult): k wrong taps in a row from this state, picked by rng,
+## then a search. 1 still winnable, 0 not (or the wrong taps lost the level), -1 not proven,
+## -2 skipped (k wrong taps could not be made).
+func _mistake_trial(key: int, aux: int, k: int, rng: RandomNumberGenerator, max_states: int, known: Dictionary, out: ProbeResult) -> int:
+	var made := 0
+	while made < k:
+		var loose := _free(key & _ob_mask)
+		var fit := false
+		var wrong := PackedInt32Array()
+		for s: int in _n:
+			if loose & (1 << s):
+				if _fits(key, s):
+					fit = true
+				else:
+					wrong.append(s)
+		var full := (aux >> _tt_shift) >= _tray_size
+		if not fit and full:
+			return 0
+		if not fit or full or wrong.is_empty():
+			return -2
+		key = _child(key, aux, wrong[rng.randi_range(0, wrong.size() - 1)])
+		aux = _child_aux
+		made += 1
+	return _winnable(key, aux, max_states, known, out)
+
+
+## Report only: from the state after `at` taps of the solution, `trials` sets of k wrong taps in
+## a row, each then searched as in probe. Vector4i(still winnable, not, not proven, skipped).
+static func mistakes_at(level: LevelData, solution: PackedInt32Array, at: int, k: int, trials: int, max_states: int, seed_value: int) -> Vector4i:
+	var counts := Vector4i()
+	var solver := Solver.new()
+	if not solver._setup(level) or at < 0 or at > solution.size():
+		return counts
+	var key := solver._start_key
+	var aux := 0
+	for i: int in at:
+		key = solver._child(key, aux, solution[i])
+		if key < 0:
+			return counts
+		aux = solver._child_aux
+	var rng := RandomNumberGenerator.new()
+	rng.seed = Seeds.derive(seed_value, at, k)
+	var known := {}
+	var out := ProbeResult.new()
+	for _t: int in trials:
+		var answer := solver._mistake_trial(key, aux, k, rng, max_states, known, out)
+		if answer > 0:
+			counts.x += 1
+		elif answer == 0:
+			counts.y += 1
+		elif answer == -1:
+			counts.z += 1
+		else:
+			counts.w += 1
+	return counts
+
+
+## Report only: the screws in the tray after each tap of these taps (index i: after i + 1 taps);
+## stops at the first tap that is not a legal move.
+static func tray_loads(level: LevelData, taps: PackedInt32Array) -> PackedInt32Array:
+	var loads := PackedInt32Array()
+	var solver := Solver.new()
+	if not solver._setup(level):
+		return loads
+	var key := solver._start_key
+	var aux := 0
+	for s: int in taps:
+		key = solver._child(key, aux, s)
+		if key < 0:
+			break
+		aux = solver._child_aux
+		loads.append(aux >> solver._tt_shift)
+	return loads
+
+
+## 1 if the level can still be won from this state, 0 if the search proves it cannot, -1 if
+## the search stopped at max_states.
+func _winnable(key: int, aux: int, max_states: int, known: Dictionary, out: ProbeResult) -> int:
+	if known.has(key):
+		return known[key]
+	var r := SolveResult.new()
+	_search(max_states, r, -1, key, aux)
+	out.searches += 1
+	var answer := 1 if r.solved else (0 if r.complete else -1)
+	known[key] = answer
+	return answer
+
+
+## Along these moves from the start: Vector2i(the tap number, from 1, of the last tap that
+## sends its screw to the tray, or 0; the most screws in the tray at once, after each tap's
+## jumps into arriving boxes).
+func _tray_stats(moves: PackedInt32Array) -> Vector2i:
 	var key := _start_key
 	var aux := 0
 	var last := 0
+	var peak := 0
 	for i: int in moves.size():
 		key = _child(key, aux, moves[i])
 		aux = _child_aux
 		if key < 0:
-			return 0
+			return Vector2i(0, peak)
 		if _child_tray:
 			last = i + 1
-	return last
+		peak = maxi(peak, aux >> _tt_shift)
+	return Vector2i(last, peak)
 
 
 ## Bits needed to hold every value from 0 to value (at least 1).

@@ -30,14 +30,15 @@ func test_seeds_pinned_values() -> void:
 	check_eq(Seeds.mix(0, 0), _mix_reference(0, 0), "mix(0, 0) matches the reference steps")
 	check_eq(Seeds.mix(123456789, 987654321), _mix_reference(123456789, 987654321), "mix matches the reference steps")
 	check_eq(Seeds.numbered(9), Seeds.mix(Seeds.mix(Seeds.mix(Seeds.NUMBERED, Generator.GENERATOR_VERSION), 9), 0), "numbered(9) is built from mix")
-	# Values worked out separately (a Python copy of the hash) for GENERATOR_VERSION 5. (The
+	# Values worked out separately (a Python copy of the hash) for GENERATOR_VERSION 6. (The
 	# same copy gives the pins this test held before: 4234036603, 1203915924, 1879349264 and
-	# 2682991825 for version 3, and 2964654434, 515664493, 366284331 and 2638488513 for 4.)
-	check_eq(Generator.GENERATOR_VERSION, 5, "these pins are for version 5 (work them out again for a new version)")
-	check_eq(Seeds.numbered(9), 3734918167, "numbered(9)")
-	check_eq(Seeds.numbered(100), 2009240434, "numbered(100)")
-	check_eq(Seeds.daily(2026, 10, 19), 2977863998, "daily(2026, 10, 19)")
-	check_eq(Seeds.relaxed("easy", 7), 2132706817, "relaxed(easy, 7)")
+	# 2682991825 for version 3; 2964654434, 515664493, 366284331 and 2638488513 for 4; and
+	# 3734918167, 2009240434, 2977863998 and 2132706817 for 5.)
+	check_eq(Generator.GENERATOR_VERSION, 6, "these pins are for version 6 (work them out again for a new version)")
+	check_eq(Seeds.numbered(9), 3743490928, "numbered(9)")
+	check_eq(Seeds.numbered(100), 3173997372, "numbered(100)")
+	check_eq(Seeds.daily(2026, 10, 19), 4146691760, "daily(2026, 10, 19)")
+	check_eq(Seeds.relaxed("easy", 7), 2899422311, "relaxed(easy, 7)")
 
 
 func test_day_number_counts_days_from_2000() -> void:

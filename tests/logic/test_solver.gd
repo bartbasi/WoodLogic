@@ -96,6 +96,161 @@ func test_g9b_last_tray_use_is_the_tap_number_of_the_solutions_last_tray_tap() -
 	check(quick.trap == 0.0 and full.trap > 0.0, "and leaves the trap unmeasured (full: %.2f)" % full.trap)
 
 
+func test_probe_mistakes_and_traps_on_the_forced_level() -> void:
+	# Phase 5 report measures (ProbeResult). At the start only the bar (A, fits box A) and the
+	# top C screw are free, so the one wrong tap there is the top C screw into the tray.
+	var base := Kit.level(FORCED, [0, 1, 2])
+	var five := Solver.probe(base, Solver.solve(base, MAX_STATES).solution, 6, MAX_STATES, 1)
+	check_eq(five.tolerance_at(0, 1), 1.0, "five slots: one wrong tap at the start is still winnable")
+	check_eq(five.skipped[1], 6, "and then no second wrong tap can be made (only the bar is free, and it fits)")
+	check_eq(five.greedy_fatal, 0, "five slots: no novice move along the solution is fatal")
+	# One slot: the wrong tap fills the tray, and after the bar the disc's C screw is stuck.
+	var one := _with_tray(base, 1)
+	var p := Solver.probe(one, Solver.solve(one, MAX_STATES).solution, 6, MAX_STATES, 1)
+	check_eq(p.tolerance_at(0, 1), 0.0, "one slot: one wrong tap at the start loses the level")
+	# After the bar, the novice taps the top C screw (topmost, nothing fits) instead of the
+	# disc's: the tray is full and the disc's C screw is stuck at once.
+	check(p.greedy_fatal >= 1 and p.trap_delays.has(0), "one slot: a novice trap that springs at once (%d traps, delays %s)" % [p.greedy_fatal, p.trap_delays])
+	check(p.trap_share() > 0.0, "a trap share")
+
+
+func test_tray_loads_and_mistakes_at_on_the_forced_level() -> void:
+	# The solution taps the bar (tray 0), then the disc's C screw into the tray (1), and the
+	# tray empties when the C box arrives.
+	var base := Kit.level(FORCED, [0, 1, 2])
+	var solution := Solver.solve(base, MAX_STATES).solution
+	var loads := Solver.tray_loads(base, solution)
+	check_eq(loads.size(), 9, "a load after every tap")
+	check_eq([loads[0], loads[1], loads[-1]], [0, 1, 0], "0 after the bar, 1 after the disc's screw, 0 at the end")
+	# The one wrong tap at the start (the top C screw) is forgiven with five slots, fatal with one.
+	check_eq(Solver.mistakes_at(base, solution, 0, 1, 4, MAX_STATES, 1), Vector4i(4, 0, 0, 0), "five slots: winnable every time")
+	var one := _with_tray(base, 1)
+	check_eq(Solver.mistakes_at(one, Solver.solve(one, MAX_STATES).solution, 0, 1, 4, MAX_STATES, 1), Vector4i(0, 4, 0, 0), "one slot: lost every time")
+	check_eq(Solver.mistakes_at(base, solution, 0, 2, 4, MAX_STATES, 1), Vector4i(0, 0, 0, 4), "no second wrong tap can be made, so skipped")
+
+
+func test_probe_novice_point_of_no_return() -> void:
+	# The forced level: with five slots the novice wins (no point of no return); with one slot
+	# it taps the bar, then the top C screw into the tray, and is stuck at once.
+	var base := Kit.level(FORCED, [0, 1, 2])
+	var five := Solver.probe(base, Solver.solve(base, MAX_STATES).solution, 2, MAX_STATES, 1)
+	check_eq([five.novice_taps, five.no_return, five.hidden, five.peak_tray], [9, -1, 0, 1], "five slots: taps, no return, hidden, peak tray")
+	var one := _with_tray(base, 1)
+	var p := Solver.probe(one, Solver.solve(one, MAX_STATES).solution, 2, MAX_STATES, 1)
+	check_eq([p.novice_taps, p.no_return, p.hidden, p.peak_tray], [2, 2, 0, 1], "one slot: taps, no return, hidden, peak tray")
+	# Random colorings the novice loses: one tap before its point of no return the level can
+	# still be won, and at it, it cannot.
+	var rng := _rng(17)
+	var checked := 0
+	var hidden := 0
+	var ids: Array[String] = ["bridge", "tree", "rings", "bricks", "pagoda", "barn", "castle", "crates", "ladybug", "dominoes"]
+	for attempt: int in 40:
+		if checked >= 4:
+			break
+		var id := ids[attempt % ids.size()]
+		var bp := Kit.blueprint(id)
+		var level := Kit.random_colors(bp, mini(7, int(bp.screw_count() / 3.0)), rng)
+		var r := Solver.solve(level, MAX_STATES)
+		if not r.solved or r.novice_won:
+			continue
+		var q := Solver.probe(level, r.solution, 2, MAX_STATES, 3)
+		var path := _novice_path(level)
+		check_eq(q.novice_taps, path.size(), "%s: the novice's taps" % id)
+		check(q.no_return >= 1 and q.no_return <= path.size() and not q.no_return_unknown, "%s: a point of no return (%d of %d)" % [id, q.no_return, path.size()])
+		check_eq(Solver.winnable_after(level, path.slice(0, q.no_return - 1), MAX_STATES), 1, "%s: still winnable one tap before" % id)
+		check_eq(Solver.winnable_after(level, path.slice(0, q.no_return), MAX_STATES), 0, "%s: not at it" % id)
+		check_eq(q.hidden, path.size() - q.no_return, "%s: the hidden stretch" % id)
+		checked += 1
+		hidden = maxi(hidden, q.hidden)
+	check(checked >= 4, "checked %d novice losses (longest hidden stretch %d taps)" % [checked, hidden])
+	print("        %d novice losses checked, longest hidden stretch %d taps" % [checked, hidden])
+
+
+## The novice's taps through PlayState until the level ends.
+func _novice_path(level: LevelData) -> PackedInt32Array:
+	var order: Array[int] = []
+	for s: int in level.screw_count():
+		order.append(s)
+	order.sort_custom(func(a: int, b: int) -> bool:
+		var pa := level.screw_center(a)
+		var pb := level.screw_center(b)
+		return pa.y < pb.y if pa.y != pb.y else (pa.x < pb.x if pa.x != pb.x else a < b))
+	var state := PlayState.start(level)
+	var path := PackedInt32Array()
+	while state.status() == PlayState.PLAYING:
+		var pick := -1
+		for s: int in order:
+			if state.is_free(s) and (pick < 0 or state.destination(s).x == PlayState.BOX):
+				pick = s
+				if state.destination(s).x == PlayState.BOX:
+					break
+		if pick < 0 or not state.tap(pick).ok:
+			break
+		path.append(pick)
+	return path
+
+
+func test_probe_is_deterministic_and_counts_every_trial() -> void:
+	var level := Kit.random_colors(Kit.blueprint("bridge"), 6, _rng(41))
+	var r := Solver.solve(level, MAX_STATES)
+	check(r.solved, "solved")
+	var a := Solver.probe(level, r.solution, 5, MAX_STATES, 7)
+	var b := Solver.probe(level, r.solution, 5, MAX_STATES, 7)
+	check_eq([a.won, a.lost, a.unknown, a.skipped, a.greedy_fatal, a.trap_delays], [b.won, b.lost, b.unknown, b.skipped, b.greedy_fatal, b.trap_delays], "the same answer twice")
+	for slot: int in ProbeResult.POINTS * ProbeResult.MAX_MISTAKES:
+		check_eq(a.won[slot] + a.lost[slot] + a.unknown[slot] + a.skipped[slot], 5, "slot %d: every trial counted once" % slot)
+	check_eq(a.greedy_states, level.screw_count(), "the novice is asked at every state along the solution")
+
+
+func test_winnable_after_agrees_with_a_brute_force_over_play_state() -> void:
+	# The probe's searches start mid level. From the start and a third along the solution, every
+	# wrong tap (a free screw into the tray while another fits a box): the solver's answer must
+	# match an independent search over PlayState for a win with any number of tray uses. Each
+	# coloring also with a one slot tray, so that some wrong taps lose.
+	var rng := _rng(63)
+	var counts := PackedInt32Array([0, 0])
+	for id: String in ["house", "windmill", "fish", "sailboat"]:
+		for colors: int in [4, 5]:
+			var five := Kit.random_colors(Kit.blueprint(id), colors, rng)
+			for level: LevelData in [five, _with_tray(five, 1)]:
+				_compare_wrong_taps(level, "%s, %d colors, %d slots" % [id, colors, level.tray_size], counts)
+	check(counts[0] >= 40 and counts[1] >= 5, "compared %d wrong taps (%d of them lose the level)" % [counts[0], counts[1]])
+	print("        %d wrong taps compared, %d lose the level" % [counts[0], counts[1]])
+
+
+## Compares Solver.winnable_after with _reach for every wrong tap at two points of the solution.
+## counts gets the wrong taps compared and those that lose.
+func _compare_wrong_taps(level: LevelData, what: String, counts: PackedInt32Array) -> void:
+	var r := Solver.solve(level, MAX_STATES)
+	if not r.solved:
+		return
+	for at: int in [0, int(level.screw_count() / 3.0)]:
+		var state := PlayState.start(level)
+		for i: int in at:
+			state.tap(r.solution[i])
+		var fits := false
+		var wrong := PackedInt32Array()
+		for s: int in level.screw_count():
+			if state.is_on_board(s) and state.is_free(s):
+				var d := state.destination(s)
+				if d.x == PlayState.BOX:
+					fits = true
+				elif d.x == PlayState.TRAY:
+					wrong.append(s)
+		if not fits:
+			continue
+		for s: int in wrong:
+			var taps := r.solution.slice(0, at)
+			taps.append(s)
+			var answer := Solver.winnable_after(level, taps, MAX_STATES)
+			state.tap(s)
+			var brute := _reach(state, 30, {}, level.screw_count() - at - 1)
+			state.undo()
+			check_eq(answer, 1 if brute else 0, "%s: tap %d then %d" % [what, at, s])
+			counts[0] += 1
+			counts[1] += 0 if brute else 1
+
+
 func test_g9_measures_match_play_state_on_random_colorings() -> void:
 	# The solver's own model against PlayState: the novice's taps (won or lost) and the tap
 	# number of every tray use along the solution.
@@ -574,3 +729,38 @@ func _key(state: PlayState, boxes: int) -> String:
 	for s: int in state.tray():
 		parts.append(str(level.screw_colors[s]) if s >= 0 else "-")
 	return ",".join(parts)
+
+
+func test_g10_least_peak_is_the_smallest_tray_that_still_solves() -> void:
+	# G10b rests on this: a solution whose fullest moment holds L screws fits a tray of L slots,
+	# and a tray of L slots holds no more, so the least peak over every solution is the smallest
+	# tray that still has one. Checked against a brute force over PlayState (any number of tray
+	# uses) on small random colorings, and peak_holds against it.
+	var rng := _rng(808)
+	var compared := 0
+	var below := 0
+	for id: String in ["house", "windmill", "fish", "sailboat", "bridge", "tree"]:
+		for colors: int in [4, 5, 6]:
+			var base := Kit.blueprint(id)
+			var level := Kit.random_colors(base, mini(colors, int(base.screw_count() / 3.0)), rng)
+			var r := Solver.solve(level, MAX_STATES)
+			if not r.solved:
+				continue
+			var least := Generator.least_peak(level, r, 0, MAX_STATES)
+			var brute := -1
+			for slots: int in Tuning.tray_size + 1:
+				if _reach(PlayState.start(_with_tray(level, slots)), 30, {}, level.screw_count()):
+					brute = slots
+					break
+			check_eq(least, brute, "%s with %d colors: least peak" % [id, colors])
+			check(least <= r.peak_tray, "%s: the least is at most the solution's own peak" % id)
+			check_eq(Generator.peak_holds(level, r, least, MAX_STATES), 1, "%s: G10 holds at the least peak" % id)
+			check_eq(Generator.peak_holds(level, r, least + 1, MAX_STATES), 0, "%s: and not one above it" % id)
+			compared += 1
+			below += 1 if least < r.peak_tray else 0
+	check(compared >= 12, "compared %d colorings (%d with a least peak below the solution's own)" % [compared, below])
+	print("        %d colorings compared; on %d the least peak is below the solution's own peak" % [compared, below])
+	# The forced level: the disc's C screw must wait, alone.
+	var forced := Kit.level(FORCED, [0, 1, 2])
+	var f := Solver.solve(forced, MAX_STATES)
+	check_eq([f.peak_tray, Generator.peak_holds(forced, f, 1, MAX_STATES), Generator.peak_holds(forced, f, 2, MAX_STATES)], [1, 1, 0], "forced level: peak 1 holds, 2 does not")

@@ -115,3 +115,15 @@ func lose() -> void:
 
 func refresh_looks() -> void:
 	looks_refreshed += 1
+
+
+var tray_notes: Array[String] = []
+var tray_closings := 0
+
+
+func show_tray_note(text: String) -> void:
+	tray_notes.append(text)
+
+
+func play_tray_closing() -> void:
+	tray_closings += 1

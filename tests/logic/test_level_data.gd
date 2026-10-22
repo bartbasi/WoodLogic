@@ -170,3 +170,40 @@ func test_3_bad_data_is_rejected_with_a_reason() -> void:
 		(tutorial_edits[label] as Callable).call(d)
 		var errors := PackedStringArray()
 		check(LevelData.parse(JSON.stringify(d), errors) == null and not errors.is_empty(), "rejected: " + label)
+
+
+func test_6_8_a_level_carries_its_own_tray() -> void:
+	var colored := Kit.random_colors(Kit.blueprint("house"), 4, RandomNumberGenerator.new())
+	var errors := PackedStringArray()
+	var play := {"kind": LevelData.NUMBERED, "number": 30, "tier": 5, "group": "medium", "generator": 6, "par_time": 60, "blueprint": "house", "id": "numbered-30", "tray": 3}
+	var three := colored.with_colors(colored.screw_colors, colored.queue, errors, play)
+	check(three != null and three.tray_size == 3, "with_colors sets the tray: %s" % "; ".join(errors))
+	var d := three.to_dict()
+	check_eq(d["tray"], 3, "to_dict writes it")
+	var back := LevelData.parse(JSON.stringify(d), errors)
+	check(back != null and back.tray_size == 3, "from_dict reads it back")
+	if back != null:
+		check_eq(back.fingerprint(), three.fingerprint(), "with the same fingerprint")
+	play["tray"] = 5
+	var five := colored.with_colors(colored.screw_colors, colored.queue, errors, play)
+	check(five.fingerprint() != three.fingerprint(), "the tray is part of the fingerprint")
+	# A level saved by generator 5 or older has no tray: it reads with the tuning's 5.
+	d.erase("tray")
+	var old := LevelData.parse(JSON.stringify(d), errors)
+	check(old != null and old.tray_size == Tuning.tray_size and old.tray_size == 5, "a level without a tray reads with 5 slots")
+	for bad: Variant in [0, 8, 2.5, "3"]:
+		d["tray"] = bad
+		var errs := PackedStringArray()
+		check(LevelData.parse(JSON.stringify(d), errs) == null and not errs.is_empty(), "rejected: tray %s" % str(bad))
+	check_eq(Kit.tutorial(1).tray_size, 5, "a tutorial level has 5 slots")
+	check_eq(Kit.blueprint("house").to_dict().has("tray"), false, "a bare blueprint has no tray in its file")
+
+
+func test_6_8_with_colors_takes_a_tray_of_1_to_7() -> void:
+	var colored := Kit.random_colors(Kit.blueprint("house"), 4, RandomNumberGenerator.new())
+	for slots: int in [1, 7]:
+		var errors := PackedStringArray()
+		check(colored.with_colors(colored.screw_colors, colored.queue, errors, {"tray": slots}) != null, "a tray of %d" % slots)
+	for slots: int in [0, 8]:
+		var errors := PackedStringArray()
+		check(colored.with_colors(colored.screw_colors, colored.queue, errors, {"tray": slots}) == null and not errors.is_empty(), "no tray of %d" % slots)

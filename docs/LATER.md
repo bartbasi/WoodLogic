@@ -115,3 +115,16 @@ QA (qa-tester):
 - A screenshot gate script at 360 x 800, 412 x 915 and 360 x 922 before each playtest gate.
 - A bot that retries and buys helpers, so the Hard and Expert star economy can be measured.
 - `tests/bots/acceptance.gd` as the per-tier report in tools/levels.
+
+## From Phase 5 (22 October 2026)
+
+- **Tight endings (wave coloring).** A level is tight in its opening, but in its last third
+  the tray is nearly empty and late wrong taps are always forgiven, whatever the tray size.
+  A coloring with several tight moments along the queue, plus a "second peak" check from
+  halfway, would fix that. It is unproven engine work, so it waits until Bart has played the
+  smaller tray and says whether the endings still feel too easy.
+- **A second shrink line at level 21,** such as "Only three slots now." The tray closing
+  already marks the change.
+- **Real width animation for the tray frame,** once TrayView can draw a fractional width, so
+  Extra slot and the closing slide the frame instead of crossfading two frames.
+- **One move from 11 to 12:** start the tray closing as the last box of level 11 clears.

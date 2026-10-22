@@ -54,6 +54,8 @@ var grid_px := 4.0
 var open_pos: Array[Vector2] = []
 var preview_pos: Array[Vector2] = []
 var tray_center := Vector2.ZERO
+## The widest the tray may be drawn, in scene units: the width of its column or rail.
+var tray_room := 0.0
 
 
 static func tray_width(slots: int) -> float:
@@ -115,6 +117,7 @@ func _stacked(open: int, previews: int, f_floor: float, b_value: float) -> void:
 	var row_y := boxes_bar.position.y + (boxes_bar.size.y - BOXES_H * box_scale) * 0.5
 	_place_boxes(open, previews, row_x, row_y + 6.0 * box_scale, row_y + 10.0 * box_scale)
 	tray_center = Vector2(x0 + wc * 0.5, tray_bar.position.y + tray_bar.size.y * 0.5)
+	tray_room = wc - 24.0
 	_place_core()
 
 
@@ -152,6 +155,7 @@ func _split(open: int, previews: int, f_floor: float, b_value: float) -> void:
 	for k: int in previews:
 		preview_pos.append(Vector2(cx - prev_w * 0.5 + k * (PREVIEW_W + BOX_GAP) * f, prev_y + 4.0 * f))
 	tray_center = Vector2(cx, tray_y + TRAY_H * f * 0.5)
+	tray_room = rail_w - 24.0 * f
 	_place_core()
 
 
@@ -176,9 +180,26 @@ func well_center(position: int, well: int) -> Vector2:
 	return open_pos[position] + Vector2(WELL_FIRST_X + WELL_STEP * well, WELL_Y) * box_scale
 
 
-## Where a tray slot's center is, in scene units.
+## The scale the tray is drawn at for this many slots: the boxes' scale, trimmed only if the
+## frame would be wider than its column (UX 3.2.2: 310 at most, which fits at every size; a
+## level with a longer tray still fits).
+func tray_scale(slots: int) -> float:
+	if tray_room <= 0.0:
+		return box_scale
+	return minf(box_scale, tray_room / tray_width(slots))
+
+
+## Where a tray slot's center is, in scene units. The frame is always centered on tray_center,
+## so the slots of a smaller tray sit closer together around the middle.
 func tray_slot_center(slot: int, slots: int) -> Vector2:
-	return tray_center + Vector2(tray_slot_x(slot, slots) * box_scale, 0.0)
+	return tray_center + Vector2(tray_slot_x(slot, slots) * tray_scale(slots), 0.0)
+
+
+## The tray frame as drawn, in scene units.
+func tray_frame(slots: int) -> Rect2:
+	var s := tray_scale(slots)
+	var size := Vector2(tray_width(slots), TRAY_H) * s
+	return Rect2(tray_center - size * 0.5, size)
 
 
 func gu_to_scene(gu: Vector2) -> Vector2:

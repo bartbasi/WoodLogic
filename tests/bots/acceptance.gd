@@ -8,7 +8,7 @@ extends SceneTree
 ## random bot's games) on the same levels.
 ##
 ##   godot --headless --path . -s res://tests/bots/acceptance.gd -- [--per-tier=N] [--seed=S]
-##         [--g7=A-B] [--random-games=R]
+##         [--g7=A-B] [--random-games=R] [--peaks=A-B]
 ##
 ## Tiers 1 to 8 come from the Relaxed streams (the only place those tiers are plentiful: the
 ## numbered levels visit tiers 1 and 2 only a few times), tiers 9 and 10 from numbered levels.
@@ -26,6 +26,8 @@ var _per_tier := 100
 var _seed := 7
 var _g7_from := 9
 var _g7_to := 200
+var _numbered_from := 9
+var _numbered_to := 400
 var _games := 2
 
 ## Per tier: an Array of Dictionary {level, solve, fell, attempts, where}.
@@ -65,6 +67,13 @@ func _parse() -> bool:
 					return false
 				_g7_from = span[0].to_int()
 				_g7_to = span[1].to_int()
+			"--peaks":
+				var pk := value.split("-")
+				if pk.size() != 2 or not pk[0].is_valid_int() or not pk[1].is_valid_int() or pk[0].to_int() < 9 or pk[1].to_int() < pk[0].to_int() or pk[1].to_int() > 3000:
+					print("--peaks needs a range like 9-400 (from level 9)")
+					return false
+				_numbered_from = pk[0].to_int()
+				_numbered_to = pk[1].to_int()
 			_:
 				print("Unknown option ", arg)
 				return false
@@ -132,12 +141,16 @@ func _run() -> int:
 	for t: int in range(1, 11):
 		rows.append(_check_tier(t))
 	_check_g7()
+	var peak_lines := _numbered_peaks()
 	var done := Time.get_ticks_msec()
 	print("WoodLogic acceptance run: generator version %d, %d levels per tier, seed %d" % [Generator.GENERATOR_VERSION, _per_tier, _seed])
 	print("took %.0f s to make the levels and %.0f s to check them\n" % [(made - started) / 1000.0, (done - made) / 1000.0])
 	print("tier  levels  fallback  screws    colors  layers  free(max)  fewest tray  novice win  novice taps(median)/needed  last tray use(median)  random wins  generation ms (median / p95 / max)")
 	for r: Variant in rows:
 		print(r)
+	print("")
+	for line: String in peak_lines:
+		print(line)
 	print("")
 	if _fail_counts.is_empty():
 		print("Every check passed.")
@@ -273,6 +286,86 @@ func _check_tier(t: int) -> String:
 		100.0 * novice_wins / maxi(list.size(), 1), med_taps, str(needed) if needed > 0 else "-", med_last,
 		100.0 * random_wins / maxi(random_games, 1), gen_med, gen_p95, gen_max]
 
+
+
+## The tray and the least peak of numbered levels `_numbered_from` to `_numbered_to` (22b): each
+## level's tray is its tier's; no solution exists with one slot fewer than the least peak when
+## that is 2 or more (G10); and the TRUE least peak (the fewest slots any solution needs, from
+## a search with 1, 2, ... slots) against the schedule's, so the wrong moves a level really
+## forgives (tray minus true peak) can be read off. Returns the lines of the table.
+func _numbered_peaks() -> PackedStringArray:
+	var lines := PackedStringArray()
+	var by_range: Dictionary = {}
+	var ranges: Array[Vector2i] = [Vector2i(9, 11), Vector2i(12, 15), Vector2i(16, 20), Vector2i(21, 49), Vector2i(50, 99), Vector2i(100, 100000)]
+	var unproven := 0
+	for n: int in range(_numbered_from, _numbered_to + 1):
+		var g := LevelCatalog.get_level(LevelData.NUMBERED, n, "")
+		var where := LevelPrefetcher.key_for(LevelData.NUMBERED, n, "")
+		if g == null or g.level == null:
+			_fail("a level exists", where, "the generator gave nothing")
+			continue
+		var level := g.level
+		var spec := Tuning.tier(level.tier)
+		var want_tray := 5 if n <= 11 else (4 if n <= 20 else 3)
+		if level.tray_size != want_tray:
+			_fail("22b the level's tray is its range's (5, 4, 3)", where, "tray %d, wanted %d" % [level.tray_size, want_tray])
+		if level.tray_size != spec.tray:
+			_fail("22b the level's tray is its tier's", where, "tray %d, tier %d has %d" % [level.tray_size, level.tier, spec.tray])
+		var peak := 0
+		var proven := true
+		var s := level.tray_size - 1
+		peak = level.tray_size
+		while s >= 1:
+			var r := Solver.solve(_tray_copy(level, s), 600000)
+			if not r.complete:
+				proven = false
+				break
+			if not r.solved:
+				break
+			peak = s
+			s -= 1
+		if not proven:
+			unproven += 1
+			continue
+		if spec.peak.x >= 2 and peak < spec.peak.x:
+			_fail("G10 no solution with one slot fewer than the least peak", where, "a solution needs only %d slots, tier %d wants a least peak of %d" % [peak, level.tier, spec.peak.x])
+		if spec.peak.x == 1 and g.solve.fewest_tray_uses < 1:
+			_fail("G3 a least peak of 1 needs the tray", where, "fewest tray uses %d" % g.solve.fewest_tray_uses)
+		for r: Vector2i in ranges:
+			if n >= r.x and n <= r.y:
+				var key := "%d-%d" % [r.x, mini(r.y, _numbered_to)]
+				if not by_range.has(key):
+					by_range[key] = {"n": 0, "tray": level.tray_size, "peak": spec.peak.x, "exact": 0, "forgiven": [], "fell": 0}
+				var d: Dictionary = by_range[key]
+				d["n"] = int(d["n"]) + 1
+				d["exact"] = int(d["exact"]) + (1 if peak == spec.peak.x else 0)
+				d["fell"] = int(d["fell"]) + (1 if g.fell_back else 0)
+				(d["forgiven"] as Array).append(level.tray_size - peak)
+	lines.append("Numbered levels %d to %d: the tray and the least peak (true = the fewest slots any solution needs)" % [_numbered_from, _numbered_to])
+	lines.append("levels       n   tray  schedule peak  true peak = schedule   wrong moves forgiven (tray - true peak): min / mean / max   fallback")
+	for key: Variant in by_range.keys():
+		var d: Dictionary = by_range[key]
+		var list: Array = d["forgiven"]
+		var lo := 99
+		var hi := 0
+		var sum := 0
+		for f: Variant in list:
+			lo = mini(lo, int(f))
+			hi = maxi(hi, int(f))
+			sum += int(f)
+		lines.append("%-11s %3d  %4d  %13d  %18.0f%%   %5d / %.2f / %d                                    %3.0f%%" % [key, d["n"], d["tray"], d["peak"], 100.0 * int(d["exact"]) / maxi(int(d["n"]), 1), lo, float(sum) / maxi(list.size(), 1), hi, 100.0 * int(d["fell"]) / maxi(int(d["n"]), 1)])
+	if unproven > 0:
+		lines.append("(%d levels whose smaller-tray search did not finish are left out)" % unproven)
+	return lines
+
+
+## A copy of a level with another tray (the board, colors and queue are shared).
+func _tray_copy(level: LevelData, slots: int) -> LevelData:
+	var errors := PackedStringArray()
+	var copy := level.with_colors(level.screw_colors, level.queue, errors, {"tray": slots})
+	if copy == null:
+		push_error("a copy with %d slots: %s" % [slots, "; ".join(errors)])
+	return copy
 
 func _check_g7() -> void:
 	# Numbered levels A to B in a row, then each Relaxed stream in a row.

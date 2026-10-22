@@ -7,7 +7,8 @@ tiers (section 6.1). Approved by Bart at Hard Stop 2, 19 October 2026 (section 0
 updates: the cover rule G8 and the soft step G9 (section 6.4), and covering added to eight
 blueprints plus three new ones, 43 in all (section 10). Bart's decisions of 21 October 2026
 (section 0) and Phase 4 updates: R35a and R36a (section 2.10), skyline and bookshelf retuned
-(section 10.2). Each change says why.
+(section 10.2). Gate 2 and the Phase 5 tuning proposal, round 1 (sections 0 and 6.8). Each
+change says why.
 
 Board sizes come from docs/UX.md (section 3.2.1). The layout counts are the brief's defaults
 and are unchanged. The data formats in section 9 are the ones docs/ARCHITECTURE.md section 3
@@ -23,34 +24,38 @@ screws out of the tray. A plank on one screw swings to hang straight below it, a
 screws it falls away. Clear every screw to win. If the tray is full and no free screw fits an
 open box, you are out of room. Retry is free and gives the same level.
 
-**Key numbers (no change to the brief's defaults).**
+**Key numbers** (the brief's defaults, except the tray from level 12, Bart, Phase 5).
 
 | Thing | Value | Why, in one line |
 |-|-|-|
-| Open boxes / slots per box / previewed boxes / tray slots | 2 / 3 / 2 / 5 | the brief's defaults; enough room for planning, tight enough to matter; UX's layout fits them exactly |
+| Open boxes / slots per box / previewed boxes | 2 / 3 / 2 | the brief's defaults; enough room for planning, tight enough to matter; UX's layout fits them exactly |
+| Tray slots | 5 in the tutorial and levels 9 to 11, 4 in 12 to 20, 3 from 21 (Relaxed always 5) | Bart's wrong move schedule, Phase 5 (section 6.8) |
 | Board | 344 x 360 design units, same on every phone | level N must be identical for everyone (UX 3.2.1) |
 | Screw head / touch target | 28 units across / 48 unit circle | UX numbers; every pair of screws is at least 48 apart, so targets never overlap in any state |
 | Screws per level | 9 to 36 | at most 7 screws fit across the board; 36 keeps a hard level readable |
 | Colors per level | 2 to 8 | |
 | Layers | 1 to 5 | |
 | Tutorial levels | 8 | one idea each, the brief's list |
-| Difficulty stops climbing | level 151 | after that it cycles through the five hardest tiers |
+| Difficulty stops climbing | level 100 | Bart's schedule: from 100 on, no wrong move; the tiers cycle 9, 9, 9, 10, 10 |
 
 **Stars.** Cleared (always), Fast (within par time: 10 seconds plus 3.0 to 4.5 seconds per
 screw by difficulty), Clean (tray used no more than tray par, no helpers). Tray par is the
 solver's fewest tray uses plus slack: +2 on levels 9 to 30, +1 on 31 to 100 and on the daily,
 0 after that.
 
-**Helpers and economy.** Undo 4 stars, Extra slot 6, Screwdriver 8. Two free of each when it
-first appears (Undo on level 8, Extra slot on 15, Screwdriver on 25). A player who plays
+**Helpers and economy.** Undo 3 stars, Extra slot 5, Screwdriver 8 (Bart, Phase 5). Two free of
+each when it first appears (Undo on level 8, Extra slot on 15, Screwdriver on 25), and a gift
+of 2 Undos and 1 Extra slot on reaching levels 50 and 100. A player who plays
 reasonably well earns about 19 to 25 stars per ten levels, which buys a helper every 2 to 3
 levels. A careless player earns about 15, a helper every 3 to 4 levels.
 
 **Difficulty.** Ten tiers, from 9 screws in 2 or 3 colors on 1 or 2 layers up to 36 screws in
 8 colors on 4 or 5 layers. Each level's tier is a base for its level range plus a five step
 sawtooth: breather, three climbing steps, then a hard level on every fifth level (10, 15, 20,
-...). The base rises from level 9 to level 151 and then stays put. The daily is tier 6 for
-everyone. Relaxed offers easy (tiers 1 to 3), medium (4 to 6) and hard (7 and 8).
+...). From Phase 5 the tiers follow Bart's wrong move schedule: one tier after another from
+level 9 to 20, then tiers 5 and 6 to level 49, 7 and 8 to 99, and 9 and 10 from 100 (section
+6.8). The daily is tier 6 for everyone. Relaxed offers easy (tiers 1 to 3), medium (4 to 6) and
+hard (7 and 8), always with 5 tray slots.
 
 **Themes.** Unlocked by playing, never by stars: walnut at level 10, brass screws at 25, maple
 at 50, cherry at 100, ebony at 150, copper screws at a 3 day daily streak, black screws at 7.
@@ -113,6 +118,33 @@ at 50, cherry at 100, ebony at 150, copper screws at a 3 day daily streak, black
 8. Info is "How to play": the rules in a few lines, the helpers and the stars (UX 3.14). Its
    numbers come from this document.
 
+**Playtest Gate 2** (Bart, on his phone, Phase 4 build, generator version 5, 22 October 2026;
+the record is docs/playtests/gate-2.md). Everything is approved except difficulty: "Looks good,
+love it everything works. Speed is good. Music and sound are good, keep them. Coffee buttons work
+great. Folded and unfolded work great." On difficulty: "Levels are far, far too easy. I'm on
+level 40 and even when I intentionally pull the wrong screws more than once I can recover and
+solve the puzzle. By that level 2 wrong moves and you should need to start over; there's almost
+no thought needed to solve this; you see what's hidden and the planning to solve is trivial. At
+most I've had to think 1 move ahead; and I can make repeated errors and still end up with a
+solve. It needs to get tougher, not a lot but a little."
+
+**Bart's difficulty schedule** (22 October 2026, replacing the options A and B put to him):
+"At level 10 to 20 we ramp up level by level the screw placement so the player learns they have
+to think about which screw to remove, the puzzles need to show them that they can make up to 5
+wrong moves at the most levels 9-15 and 15-20 they can make at most 3 wrong moves, above that
+they can make only 2 wrong moves, at level 50 and above it's only 1 wrong move, at level 100 and
+above it's only 0 wrong moves."
+
+**Decided by Bart on 22 October 2026** (after the feasibility numbers for a higher peak alone).
+
+1. Route B, "Tray now, then try": a smaller tray by level range (5, 4, then 3 slots) with low
+   least peaks, G10, and a re-deal of the tiers to his ranges (section 6.8). This replaces
+   decision 6 of Hard Stop 1: difficulty stops climbing at level 100, not 151. A wave coloring
+   is the next experiment, only if he still finds the endings too easy.
+2. Helpers "cheaper, with gifts": Undo 3 stars, Extra slot 5, Screwdriver 8, and 2 Undos and 1
+   Extra slot as a gift on reaching level 50 and again at level 100 (section 5).
+3. "One short line" the first time the tray shrinks, shown once; UX writes it (section 6.8).
+
 ## 1. Board, units and geometry
 
 ### 1.1 Units and the grid
@@ -165,7 +197,8 @@ Each rule has an id so a unit test can name it.
 ### 2.1 State
 
 - **R1.** A level is: planks (shape, layer, holes), each screw's color, the box queue (an
-  ordered list of colors, one entry per box), the tray size (5), and par numbers.
+  ordered list of colors, one entry per box), the tray size (its tier's `tray`: 5, 4 or 3 slots;
+  5 for the tutorial and in Relaxed, section 6.8), and par numbers.
 - **R2.** The state is: which screws are on the board; for each plank whether it is fixed (two
   or more screws), hanging (one screw, with its rest pose) or fallen (none); the two open box
   positions (left 0, right 1), each empty or holding a box (color and screws in it, 0 to 3);
@@ -273,9 +306,10 @@ Each rule has an id so a unit test can name it.
 
 ### 2.9 Helpers
 
-- **R30. Extra slot.** Adds a sixth tray slot on the right for the rest of this attempt. At
-  most once per attempt (the button then reads "Used"). It may be used at any time while
-  playing. Retry gives back the normal five slots.
+- **R30. Extra slot.** Adds one more tray slot on the right for the rest of this attempt (a
+  fourth, fifth or sixth, after the level's 3, 4 or 5). At most once per attempt (the button
+  then reads "Used"). It may be used at any time while playing. Retry gives back the level's
+  own number of slots.
 - **R31. Screwdriver.** Removes any one screw on the board, free or covered, and sends it to
   its destination exactly as a tap would (R12, R13). It counts as an action for Undo. If that
   screw has no destination the removal is refused and the Screwdriver is not spent.
@@ -347,7 +381,7 @@ These use the shipped blueprints in data/blueprints/.
 | Open boxes | 2 | two live colors make every tap a small choice; three would make early levels trivial, and one would make the tray the whole story |
 | Slots per box | 3 | each color's count is a multiple of 3, and a box closes often (a small win every three right taps) |
 | Previewed boxes | 2 | enough to plan two closes ahead; UX's row fits exactly 2. Boxes after those stay hidden, and tray par is computed on the full queue; Retry gives the same level, so a second try is fully informed. Revisit at Gate 1. |
-| Tray slots | 5 | the brief's default; with 2 open boxes a careless player fills it on mid levels but a thoughtful one rarely does. If Gate 1 says hard levels are too soft, the first lever is coloring and queue order, the second is a 4 slot tray. |
+| Tray slots | 5 in the tutorial, levels 9 to 11 and Relaxed; 4 in levels 12 to 20; 3 from level 21 and in the Daily | Bart's wrong move schedule (Gate 2): with 5 slots everywhere a player could make 3 or more needless tray taps and still win at level 40. A smaller tray is the direct lever: the wrong moves a level forgives are its tray minus its least peak (section 6.8). |
 | Tutorial levels | 8 | one per idea in the brief's list; UX already wrote a line for each |
 | Tray par slack | +2 levels 9 to 30, +1 levels 31 to 100 and the daily, 0 from 101; tutorial levels set their own | new players learn the tray before we ask for neat solves; later the Clean star means best play |
 | Par time | 10 s plus 3.0 s per screw (Easy tiers), 3.5 (Medium), 4.0 (Hard), 4.5 (Expert), rounded up to 5 s | harder levels need more thinking per tap; a mid level of 24 screws gets 1:35. Tuned from playtests and bots at Gate 2. |
@@ -355,7 +389,7 @@ These use the shipped blueprints in data/blueprints/.
 | Daily band | tier 6, tray slack +1, Medium par time | "medium hard": a good puzzle for most players, and the same for everyone |
 | Relaxed bands | easy tiers 1 to 3, medium 4 to 6, hard 7 to 8 | Relaxed is for unwinding, so it stops below Expert |
 | Where difficulty stops climbing | level 151 | about four hours of play; after that variety comes from blueprints. Tune at Gate 2. |
-| Extra slot per attempt | once | keeps the tray at 5 or 6 slots (UX layout) and keeps it a rescue, not a habit |
+| Extra slot per attempt | once | keeps the tray at most one slot above the level's own (UX layout) and keeps it a rescue, not a habit; on a 3 slot tray it is exactly one more wrong move |
 | Two open boxes of one color | allowed; the fuller box fills first | simple and kind; the generator avoids it at the start (G6) |
 | Tray gaps | stay where they are | the tray never rearranges itself, so the player's memory of it holds |
 
@@ -386,14 +420,19 @@ These use the shipped blueprints in data/blueprints/.
 
 | Helper | Price | First appears (2 free) | Why that level |
 |-|-|-|-|
-| Undo | 4 stars | level 8 (tutorial) | the tutorial teaches it |
-| Extra slot | 6 stars | level 15 | the third hard level; the tray first gets tight here |
+| Undo | 3 stars (4 until Phase 5) | level 8 (tutorial) | the tutorial teaches it |
+| Extra slot | 5 stars (6 until Phase 5) | level 15 | the third hard level; the tray first gets tight here |
 | Screwdriver | 8 stars | level 25 | a hard level with real covering, and the brass unlock |
 
 - Buying happens on the level screen: a helper at count 0 shows its price, and a tap asks to
   get and use one (UX 3.13.3). Stars are never spent anywhere else.
 - Using a helper also costs that attempt's Clean star, so the real price is one star more when
   the Clean star was in reach.
+- **Gifts** (Bart, Phase 5): 2 Undos and 1 Extra slot on reaching level 50, and again on reaching
+  level 100, the two steps where the tray forgives one fewer wrong move. Each is given once,
+  shown with the first time helper sheet (UX 3.13.1), and never on a replay.
+- The worked economy below is the Phase 1 estimate at the old prices. Section 6.8 has the
+  Phase 5 estimate with the tray schedule and the new prices.
 
 **Worked economy.** Assumed rates for a player who plays reasonably well (a guess to be
 checked against bot data and Gate 2), with an assumed buying mix of 2 Undo : 1 Extra slot :
@@ -436,6 +475,9 @@ Arithmetic, first row: 1 + 0.8 + 0.7 = 2.5 stars per level, 25 per ten; 25 / 4 =
 | 9 | Expert | 33 to 36 | 7 | 4 to 5 | 3 to 4 | must lose | 25 to 55 |
 | 10 | Expert | 33 to 36 | 7 to 8 | 4 to 5 | 3 to 5 | must lose | 25 to 60 |
 
+Each tier also has a tray size and a least peak (Bart's wrong move schedule, section 6.8): tiers
+1 and 2: 5 slots, peak 0; 3: 4, 0; 4: 4, 1; 5 and 6: 3, 1; 7 and 8: 3, 2; 9 and 10: 3, 3.
+
 Colors never exceed screws / 3. "Tray pressure" is the fewest tray uses column together with
 the novice policy column: a careless order must be able to fail from tier 7 up. The same numbers
 are in data/tuning.json (section 9.4).
@@ -472,30 +514,41 @@ tier(N) = clamp(base(N) + step(N mod 5), 1, 10), for numbered levels N from 9 (1
 tutorial).
 
 In data/tuning.json, `sawtooth.steps` lists the steps in the order of this table, so the step
-for level N is `steps[(N - 1) mod 5]`: level 11 gets -2, level 15 gets +2. `sawtooth.bases`
-lists [first level, base] pairs: base(N) is the base of the last pair whose first level is at
-most N.
+for level N is `steps[(N - 1) mod 5]`. `sawtooth.bases` lists [first level, base] pairs: base(N)
+is the base of the last pair whose first level is at most N.
+
+**From Phase 5** (Bart's wrong move schedule, section 6.8) the steps and bases are:
 
 | N mod 5 | 1 | 2 | 3 | 4 | 0 |
 |-|-|-|-|-|-|
 | role | breather | climb | climb | climb | hard |
-| step | -2 | -1 | 0 | +1 | +2 |
+| step | -1 | -1 | -1 | 0 | 0 |
 
-| Levels | 9 to 20 | 21 to 35 | 36 to 55 | 56 to 80 | 81 to 110 | 111 to 150 | 151 on |
-|-|-|-|-|-|-|-|-|
-| base | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
-| tiers in a cycle | 1, 1, 2, 3, 4 | 1, 2, 3, 4, 5 | 2, 3, 4, 5, 6 | 3, 4, 5, 6, 7 | 4, 5, 6, 7, 8 | 5, 6, 7, 8, 9 | 6, 7, 8, 9, 10 |
+| Levels | 9 to 10 | 11 | 12 to 13 | 14 to 15 | 16 to 18 | 19 to 20 | 21 to 49 | 50 to 99 | 100 on |
+|-|-|-|-|-|-|-|-|-|-|
+| base | 1 | 3 | 4 | 3 | 5 | 4 | 6 | 8 | 10 |
+| tiers | 1 | 2 | 3 | 3 | 4 | 4 | 5, 5, 5, 6, 6 | 7, 7, 7, 8, 8 | 9, 9, 9, 10, 10 |
 
-Levels 9 to 30 in full: 9: 3, 10: 4, 11: 1, 12: 1, 13: 2, 14: 3, 15: 4, 16: 1, 17: 1, 18: 2,
-19: 3, 20: 4, 21: 1, 22: 2, 23: 3, 24: 4, 25: 5, 26: 1, 27: 2, 28: 3, 29: 4, 30: 5.
+The bases in 9 to 20 only cancel the steps, so those levels climb one tier after another with no
+breather: 9 and 10 tier 1, 11 tier 2, 12 to 15 tier 3, 16 to 20 tier 4. From level 21 each range
+has two tiers with the same tray and least peak; the breather and the climbs are the smaller one,
+the last two of each five the larger one.
 
-Every hard level (10, 15, 20, ...) is followed by a breather four tiers lower. Theme
-milestones (10, 25, 50, 100, 150) all land on hard levels, so the reward follows the effort.
-From level 151 the tiers cycle 6, 7, 8, 9, 10 for good.
+Levels 9 to 30 in full: 9: 1, 10: 1, 11: 2, 12: 3, 13: 3, 14: 3, 15: 3, 16: 4, 17: 4, 18: 4,
+19: 4, 20: 4, 21: 5, 22: 5, 23: 5, 24: 6, 25: 6, 26: 5, 27: 5, 28: 5, 29: 6, 30: 6.
 
-Mid game levels (tiers 5 to 7, 21 to 30 screws) at 3.5 seconds a screw (Medium, tiers 5 and 6)
-or 4.0 (Hard, tier 7) take about 85 to 130 seconds (21 x 3.5 + 10 = 83.5, so 85; 30 x 4.0 + 10 =
-130): inside the checklist's 1 to 3 minutes.
+Every hard level (10, 15, 20, ...) from level 21 is followed by a breather one tier lower,
+with the same tray and least peak, so it is smaller but never looser. Theme milestones (10, 25,
+50, 100, 150) all land on hard levels, so the reward follows the effort. From level 100 the
+tiers cycle 9, 9, 9, 10, 10 for good.
+
+Until Phase 5 the steps were -2, -1, 0, +1, +2 and the bases 2 (levels 9 to 20), 3 (21 to 35), 4
+(36 to 55), 5 (56 to 80), 6 (81 to 110), 7 (111 to 150) and 8 (151 on), with a breather four
+tiers below each hard level and the climb ending at level 151.
+
+Mid game levels (tiers 5 and 6, 21 to 27 screws) at 3.5 seconds a screw (Medium) take about 85
+to 105 seconds (21 x 3.5 + 10 = 83.5, so 85; 27 x 3.5 + 10 = 104.5, so 105): inside the
+checklist's 1 to 3 minutes.
 
 ### 6.4 Generator acceptance rules
 
@@ -521,6 +574,9 @@ A variation is shown only if all of these hold. Otherwise the generator tries th
   checked again on the varied board.
 - **G9. The soft step into Hard** (tiers 7 to 10, approved by Bart at Hard Stop 2, with a
   proposed change). See section 6.4.1.
+- **G10. The least peak** (Bart's wrong move schedule, Phase 5). On a tier whose least peak P is 2
+  or more, a coloring is kept only if no solution exists with a tray of P - 1 slots. See section
+  6.8.
 
 **Novice policy** (a cheap stand in for a careless player, deterministic): at every step, if
 some free screw fits an open box, tap the topmost such screw (smallest y, then smallest x);
@@ -662,14 +718,16 @@ is the main thing to prove at Hard Stop 2.
 
 ### 6.6 Daily and Relaxed
 
-- **Daily:** tier 6 every day, tray slack +1, par k = 3.5. Opens after level 8. Built from the
+- **Daily:** tier 6 every day (3 tray slots, least peak 1, section 6.8), tray slack +1, par k =
+  3.5. Opens after level 8. Built from the
   local date and the generator version. Stars as for any level; replays add only above best.
   **Streak:** solving the daily of date D adds one if the last counted daily was D minus 1,
   otherwise the streak becomes 1. A daily counts only if its date is later than the last
   counted date, so moving the clock back gains nothing. The daily keeps the date it was started
   on (UX 4.3).
 - **Relaxed:** opens after level 8. Its own seed stream. Easy picks a tier from 1 to 3, medium
-  from 4 to 6, hard from 7 to 8, by seed, and applies G1 to G9. No stars, no clock. Undo is free
+  from 4 to 6, hard from 7 to 8, by seed, and applies G1 to G10. Every Relaxed level has 5 tray
+slots (`relaxed_tray`) and its tier's least peak, so it stays calm. No stars, no clock. Undo is free
   and unlimited. When R23 would make the level lost, it is not lost: the stuck sheet offers a
   free Undo (UX 3.5). Relaxed does not move the level count or the stats beyond "helpers used".
 
@@ -678,6 +736,139 @@ is the main thing to prove at Hard Stop 2.
 Stats times are grouped by tier group: **Easy** (tiers 1 to 3), **Medium** (4 to 6), **Hard**
 (7 and 8), **Expert** (9 and 10). The daily counts in its group (Medium). Tutorial levels and
 Relaxed are not timed in Stats.
+
+### 6.8 Phase 5 tuning: Bart's wrong move schedule, route B (the tray by tier)
+
+**Bart's schedule** (22 October 2026): "At level 10 to 20 we ramp up level by level the screw
+placement so the player learns they have to think about which screw to remove, the puzzles need
+to show them that they can make up to 5 wrong moves at the most levels 9-15 and 15-20 they can
+make at most 3 wrong moves, above that they can make only 2 wrong moves, at level 50 and above
+it's only 1 wrong move, at level 100 and above it's only 0 wrong moves." **His route** (22
+October 2026): "Tray now, then try": a smaller tray by level range now, and a wave coloring
+experiment later only if he still finds the endings too easy.
+
+**The idea.** A wrong move is a screw sent to the tray needlessly. At the tightest moment of the
+best line the tray holds the level's least peak, so the wrong moves a level forgives are its
+tray size minus its least peak. Raising the peak alone (route A, measured in Phase 5) failed on
+today's boards: 70 to 84 percent of levels fell back. Shrinking the tray reaches the same counts
+with low peaks that nearly every board carries.
+
+**The schedule.** Each range is one or two tiers with one tray and one least peak, so tray and
+peak are tier properties (data/tuning.json: each tier's `"tray"` and `"peak"`).
+
+| Levels | Tiers dealt | Tray | Least peak | Wrong moves forgiven | `tray_uses` |
+|-|-|-|-|-|-|
+| 1 to 8 (tutorial) | | 5 | 0 | any | 0 |
+| 9 to 11 | 1, 1, 2 | 5 | 0 | 5 | 0 to 0, 0 to 1 |
+| 12 to 15 | 3 | 4 | 0 | 4 | 0 to 1 |
+| 16 to 20 | 4 | 4 | 1 | 3 | 1 to 2 |
+| 21 to 49 | 5, 5, 5, 6, 6 | 3 | 1 | 2 | 1 to 2, 1 to 3 |
+| 50 to 99 | 7, 7, 7, 8, 8 | 3 | 2 | 1 | 2 to 3, 2 to 4 |
+| 100 on | 9, 9, 9, 10, 10 | 3 | 3 | 0 | 3 to 4, 3 to 5 |
+
+- Bart's "up to 5" for 9 to 15 and "at most 3" for 16 to 20 are met; 12 to 15 already moves to 4
+  slots as the first step of his level by level ramp.
+- **The deal by level.** Levels 9 to 20 go one tier after another (no breathers): 9 and 10 tier
+  1, 11 tier 2, 12 to 15 tier 3, 16 to 20 tier 4. From level 21 the sawtooth works inside each
+  range, by (N - 1) mod 5: breather and two climbs on the smaller tier, then two on the larger
+  (5, 5, 5, 6, 6; 7, 7, 7, 8, 8; 9, 9, 9, 10, 10). In data/tuning.json this stays the `sawtooth`
+  format: `"steps": [-1, -1, -1, 0, 0]`, `"bases": [[9, 1], [11, 3], [12, 4], [14, 3], [16,
+  5], [19, 4], [21, 6], [50, 8], [100, 10]]`.
+- Difficulty stops climbing at level 100 (it was 151). The theme milestones 50 and 100 land
+  where the game gets stricter, and so do the helper gifts.
+- `tray_uses` were already at or above each tier's least peak, so they don't change. The cover
+  rule G8 (Hard Stop 2, 2k + 1 covered screws for k tray uses) stays as it is: with least peaks of
+  0 to 3 it asks for 0 to 7 covered screws, which today's boards have.
+- Tray par slack is unchanged (+2 to level 30, +1 to 100 and on the Daily, 0 after): the tray
+  already does the squeezing, and the Clean star should not take a second cut.
+
+**G10, the least peak** (generator, level-engine-dev). For a tier with least peak P of 2 or more,
+a coloring is kept only if no solution exists with a tray of P - 1 slots (one more search on a
+smaller tray); P = 1 is G3's "fewest tray uses at least 1", and P = 0 asks nothing. A coloring
+that fails is turned down and the generator goes on to its next attempt, like G9. G10 makes sure
+that at some moment every solution holds P screws in the tray at once, so a level on a tray of T
+forgives T - P wrong moves there.
+
+**The Daily and Relaxed.** The Daily is tier 6: 3 slots, least peak 1, two wrong moves, slack +1.
+Relaxed stays calm: `"relaxed_tray": 5`, so a Relaxed level of any tier has 5 slots and its
+tier's least peak (5 - P wrong moves at the tightest moment), and it still can't be lost (free
+Undo).
+
+**The tutorial** (levels 1 to 8) keeps 5 slots (the top level `"tray_size": 5`) and doesn't
+change.
+
+**The first smaller tray.** The first time a player starts a level whose tray is smaller than
+the one before (level 12, 5 to 4 slots), one short line like a tutorial line shows, once. UX
+writes the words. (Level 21, 4 to 3 slots, gets no line unless Bart asks.)
+
+**The capability deal.** A board stays off a tier whose tray and least peak it can't carry
+reliably. Measured with the real generator's code (a scratch copy with the schedule above, 12
+seeds per board and tier, budget twice the base):
+
+| Tier (tray, peak) | Boards that carry it | Taken off | Why |
+|-|-|-|-|
+| 1 to 6 | all their boards (6: 12 of 12 seeds each) | none | |
+| 7 (3, 2) | castle, crates, ladybug, robot (12 of 12), ziggurat (11), dominoes, steamboat (10) | skyline (8 of 12) | it carries tier 8 (12 of 12) |
+| 8 (3, 2) | skyline, ziggurat (12), dominoes, jellyfish, lattice (11), falling-blocks (10) | bookshelf (8), catface, ferris-wheel, ship-wheel (5 of 12 each) | too deep for a least peak of 2 inside tier 8's cap; all four carry tier 9 |
+| 9 (3, 3) | bookshelf, catface, falling-blocks, jellyfish, lattice, tiles (12), ship-wheel (9), ferris-wheel (8) | none | |
+
+In data/tuning.json each tier may list `"skip": [blueprint ids]`, taken off that tier's deal
+before G7 (tier 7: skyline; tier 8: bookshelf, catface, ferris-wheel, ship-wheel). Boards per
+range after the deal: 12 (9 to 11), 12 (12 to 15), 7 (16 to 20), 13 (21 to 49), 11 (50 to 99) and
+8 (100 on). No board needs redrawing.
+
+**Fallbacks, measured** (the same scratch copy; levels 9 to 249):
+
+| Levels | Levels run | Fell back | Notes |
+|-|-|-|-|
+| 9 to 20 | 12 | 0 | |
+| 21 to 49 | 29 | 0 | the earlier 31 to 39 percent came from small boards dealt as breathers, which the new deal no longer does |
+| 50 to 99, no skips | 50 | 8 (16%) | |
+| 50 to 99, with the skips | 50 | 6 (12%) | per board and tier, about 6% on tier 7 and 7% on tier 8; with 3 times the budget on tier 8, 3% |
+| 100 to 249 | 150 | 3 (2%) | all three ferris-wheel on tier 9 |
+
+So the 10 percent gate is met everywhere except possibly 50 to 99, where it needs the skips and
+a budget of 3 times the base on tiers 7 and 8 (level-engine-dev's call). These runs used the
+engine's code while version 6 was being written; level-engine-dev measures the gate again on
+version 6.
+
+**What a player feels.** Levels 9 to 11: everything forgives. 12 to 15: one slot fewer, nothing
+else changes. 16 to 20: the first screw that must wait. 21 to 49: the third needless tray tap
+loses. 50 to 99: the second does. From 100: the exact plan, or Undo, Extra slot or Retry.
+
+**What stays soft, and the next experiment.** Where a level is tight, it is tight in its
+opening: the least peak comes early (taps 3 to 11), and later the tray drains. In the second half
+a level forgives up to its tray size (3) in needless taps at quiet moments, not its W. That is
+better than the 5 of before, but not Bart's literal count all the way through. If Bart still
+finds the endings too easy, the next experiment is a wave coloring: the generator makes a second
+peak after halfway ("from halfway, the rest still needs P slots"). Its success rate is unknown,
+so it is measured before anything ships.
+
+**Helpers and the star economy** (Bart: "Cheaper, with gifts").
+
+- Prices: Undo 3 stars (was 4), Extra slot 5 (was 6), Screwdriver 8. First appearance and the
+  two free of each unchanged (levels 8, 15, 25).
+- Gifts: 2 Undos and 1 Extra slot on reaching level 50, and again at level 100, shown with the
+  first time helper sheet (UX 3.13.1). In data/tuning.json: `"gifts": [{"level": 50, "undo": 2,
+  "extra_slot": 1}, {"level": 100, "undo": 2, "extra_slot": 1}]`.
+- Extra slot on a 3 slot tray is exactly one more wrong move for that try (R30), so from level
+  100 it turns "no wrong move" into "one", which is what a helper is for.
+- Estimates, with the helper mix of section 5 (average price now (3 + 3 + 5 + 8) / 4 = 4.75):
+
+| Levels | Wrong moves | Stars a level | Per 10 levels | Helpers per 10 levels | One helper every |
+|-|-|-|-|-|-|
+| 9 to 20 | 3 to 5 | 2.50 | 25 | 5.3 | 1.9 levels |
+| 21 to 49 | 2 | 2.05 | 20.5 | 4.3 | 2.3 levels |
+| 50 to 99 | 1 | 1.85 | 18.5 | 3.9 | 2.6 levels |
+| 100 on | 0 | 1.75 | 17.5 | 3.7 | 2.7 levels |
+| careless, 50 on | 0 to 1 | 1.35 | 13.5 | 2.8 | 3.5 levels |
+
+  Plus the gifts. A retrying bot (qa-tester) should check these; if a careless player buys less
+  than one helper per 5 levels, Undo goes to 2.
+
+**Data changes.** In data/tuning.json now: each tier's `tray` and `peak`, the `sawtooth` above,
+`relaxed_tray` 5, and the prices. Waiting for version 6's reader: `gifts` and the tiers' `skip`
+lists (the whole file is build/proposed/tuning.json). No blueprint changes.
 
 ## 7. Unlocks
 
@@ -887,10 +1078,11 @@ document wins if they ever differ:
 |-|-|
 | `tray_size`, `open_boxes`, `box_slots`, `preview`, `tutorial_levels` | 3 |
 | `tiers` (screws, colors, layers, tray uses, novice policy, covered at start) | 6.1 |
+| each tier's `tray`, `peak` and `skip`, `relaxed_tray` | 6.8 |
 | `sawtooth` | 6.3 |
 | `tray_par_slack`, `par_time` | 3, 4 (S7, S8) |
 | `daily`, `relaxed` | 6.6 |
-| `helpers` | 5 |
+| `helpers`, `gifts` | 5 |
 | `unlocks`, `modes_open_after_level` | 7 |
 | `recent_blueprints_excluded` | 6.4 (G7) |
 
@@ -956,6 +1148,9 @@ section 10.1):
 |-|-|-|-|-|-|-|-|-|-|-|
 | Before Phase 3 (with the cover rule) | 7 | 6 | 12 | 4 | 5 | 5 | 3 | 8 | 6 | 6 |
 | Now | 7 | 6 | 12 | 7 | 8 | 9 | 8 | 10 | 8 | 8 |
+| After the Phase 5 skips (section 6.8: skyline off tier 7; bookshelf, catface, ferris-wheel and ship-wheel off tier 8) | 7 | 6 | 12 | 7 | 8 | 9 | 7 | 6 | 8 | 8 |
+
+The "Suits tiers" column above is `suits_tier` as authored, before the skips.
 
 G7 itself needs only two boards per tier, but the more a tier has, the longer a player goes
 before seeing the same board at that tier again. From level 151 tiers 6 to 10 come once every
@@ -1171,16 +1366,23 @@ Walk these on Windows (tests and bots) and on the phone. Each item names how to 
     the first action and stops in pause and dialogs.
 17. S3: Clean lost by one tray use over par, and by any helper.
 18. S5: a replay with more stars adds only the difference; a replay with fewer adds nothing.
-19. Prices are 4, 6, 8; each helper arrives with 2 free on levels 8, 15 and 25, once only.
+19. Prices are 3, 5, 8 (from Phase 5); each helper arrives with 2 free on levels 8, 15 and 25, once only.
 20. Bot data per band matches section 5 within a factor of 1.5, or the designer is told.
 
 **Difficulty**
 
-21. tier(N) matches section 6.3 for levels 9 to 30 and 151 to 160.
+21. tier(N) matches section 6.3 for levels 9 to 30 and 100 to 110.
 22. 100 generated levels per tier pass G1 to G7, and G9a on tiers 7 and 8. The report gives
     the fallback rate, the novice survival and the last tray use position per tier next to it.
 22a. G8: `LevelCatalog.suits_tier` gives section 10's "Suits tiers" column for every
-    blueprint, and every tier from 7 to 10 has at least 8 suitable blueprints.
+    blueprint, and every tier from 7 to 10 has at least 8 suitable blueprints before the Phase 5
+    skips and at least 6 after them.
+22b. Tray and G10: every generated level has its tier's tray (5, 5, 4, 4, 3, 3, 3, 3, 3, 3 for
+    tiers 1 to 10), Relaxed levels 5 and tutorial levels 5; on tiers with a least peak of 2 or
+    more no level can be solved with one slot fewer than that peak. Each tier's `skip` list keeps
+    those boards out of its deal.
+22c. Gifts: reaching level 50, and again level 100, gives 2 Undos and 1 Extra slot once, with the
+    helper sheet; a replay gives nothing. Prices are 3, 5 and 8.
 23. The novice policy wins every tier 1 to 3 level and loses every tier 7 to 10 level (G4).
     The greedy novice bot's win rates per tier are reported next to it.
 24. No level shows more than 36 screws, 8 colors, 5 layers or 24 free screws at the start.
@@ -1199,7 +1401,8 @@ Walk these on Windows (tests and bots) and on the phone. Each item names how to 
 **Fun checks (Gate playtests and the designer's review)**
 
 29. Level 1 cleared in under 30 seconds by a new player, no text read.
-30. A hard level is followed by a breather on the progress map (levels 10 and 11, 15 and 16, ...).
+30. From level 21, the level after each hard level (25 and 26, 30 and 31, ...) is one tier lower with the
+    same tray and least peak; levels 9 to 20 climb without a breather (section 6.3).
 31. The fun checklist in section 11, item by item, with notes.
 
 ## 13. Notes for the other roles
@@ -1220,7 +1423,10 @@ Walk these on Windows (tests and bots) and on the phone. Each item names how to 
   (10.1), so `GENERATOR_VERSION` goes to 4, the golden fingerprints are renewed, the fallback
   levels are rebuilt (tiers 7 to 10 must pass G9), and the expected table in
   tests/logic/test_validator.gd (`test_b12_shipped_blueprints_free_at_start_match_the_gdd`)
-  takes its numbers from section 10's table.
+  takes its numbers from section 10's table. Phase 5: each tier's `tray` and `peak`, `relaxed_tray`, the new
+  sawtooth steps and bases, G10 (no solution on a tray of least peak minus one), each tier's
+  `skip` list (off the deal before G7), the `gifts`, and a budget of 3 times the base on tiers 7
+  and 8 if the fallback gate needs it (section 6.8).
 - **graphic-designer.** The palette needs at least 8 screw colors usable in one level. Plank
   outlines drawn by the renderer must match the logic outline (section 1.2). Please draw every
   screw above every plank of its own layer: after a swing, a plank can hang across a free screw

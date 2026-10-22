@@ -125,3 +125,66 @@ func test_note_helper_used_counts_in_stats() -> void:
 	s.note_helper_used()
 	s.note_helper_used()
 	check_eq(s.progress_copy()["stats"]["helpers_used"], 2, "helpers used")
+
+
+func test_the_tray_note_flag_round_trips_and_defaults_to_not_shown() -> void:
+	var s := _new_save("tray_note")
+	check(not s.tray_note_shown(), "not shown at first")
+	s.mark_tray_note_shown()
+	var again := _new_save("tray_note")
+	check(again.tray_note_shown(), "saved")
+	again.reset_progress()
+	check(not again.tray_note_shown(), "a reset shows it again")
+
+
+func test_a_gift_is_granted_once_in_one_write() -> void:
+	var s := _new_save("gift")
+	check(s.grant_gift(50, {"undo": 2, "extra_slot": 1}), "granted")
+	check(not s.grant_gift(50, {"undo": 2, "extra_slot": 1}), "never twice")
+	check_eq(s.helper_count("undo"), 2, "two Undos")
+	check_eq(s.helper_count("extra_slot"), 1, "one Extra slot")
+	check_eq(Array(s.gifts_given()), [50], "recorded")
+	var again := _new_save("gift")
+	check_eq(again.helper_count("undo"), 2, "the helpers and the record were saved together")
+	check(again.is_gift_given(50), "record saved")
+	check(again.grant_gift(100, {"undo": 2, "extra_slot": 1}), "a second gift")
+	check_eq(Array(again.gifts_given()), [50, 100], "a list, so a third needs no new format")
+	again.reset_progress()
+	check_eq(again.gifts_given().size(), 0, "reset clears the gifts")
+	check_eq(again.helper_count("undo"), 0, "and the helpers")
+
+
+func test_an_older_save_has_nothing_shown_and_nothing_given() -> void:
+	var s := _new_save("older_gifts")
+	var f := FileAccess.open(s.dir + "progress.json", FileAccess.WRITE)
+	f.store_string(JSON.stringify({"next_level": 30, "highest_cleared": 29, "star_bank": 7}))
+	f.close()
+	s.load_all()
+	check(not s.tray_note_shown(), "nothing shown")
+	check_eq(s.gifts_given().size(), 0, "nothing given")
+	check(s.problems.is_empty(), "an older save is not a bad one")
+
+
+func test_hostile_gift_fields_fall_back() -> void:
+	var s := _new_save("bad_gifts")
+	var f := FileAccess.open(s.dir + "progress.json", FileAccess.WRITE)
+	f.store_string(JSON.stringify({"shrink_line_shown": "yes", "gifts_given": [50, 50, "x", -5, 1e30, 2.5, 100]}))
+	f.close()
+	s.load_all()
+	check(not s.tray_note_shown(), "a bad flag is not shown")
+	check_eq(Array(s.gifts_given()), [50, 100], "only whole levels in range, once each")
+	var g := FileAccess.open(s.dir + "progress.json", FileAccess.WRITE)
+	g.store_string(JSON.stringify({"gifts_given": {"a": 1}}))
+	g.close()
+	s.load_all()
+	check_eq(s.gifts_given().size(), 0, "not a list: nothing given")
+
+
+func test_a_full_gift_list_grants_nothing() -> void:
+	var s := _new_save("gift_full")
+	for level: int in range(1, 33):
+		check(s.grant_gift(level, {"undo": 1}), "gift %d" % level)
+	check_eq(s.helper_count("undo"), 32, "32 given")
+	check(not s.grant_gift(40, {"undo": 1}), "the 33rd is refused")
+	check_eq(s.helper_count("undo"), 32, "and gives no helpers")
+	check(not s.is_gift_given(40), "and records nothing")

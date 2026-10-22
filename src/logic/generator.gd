@@ -8,25 +8,26 @@ extends RefCounted
 ## budget is a count. Safe on a worker thread once LevelCatalog.load_all() has run.
 ##
 ## Steps for one level:
-## 1. Plan: the tier (the sawtooth, the daily tier, or a seeded pick in a Relaxed band) and the
-##    blueprint (G7, a pure function of kind, number and version: see blueprint_for).
+## 1. Plan: the tier (the sawtooth, the daily tier, or a seeded pick in a Relaxed band), its
+##    tray and least peak tray load (GDD 6.8), and the blueprint (G7, a pure function of kind,
+##    number and version: see blueprint_for).
 ## 2. Up to VARIATIONS varied boards (mirrored, shifted, two layers swapped, a plank dropped),
 ##    each checked against the blueprint rules (G2) and the tier's screws and layers (G1).
 ## 3. Up to COLORINGS colorings per board, colored with intent (see _color). The novice plays
 ##    each one first (G4, and G9a where the tier requires it); one that passes is searched with
-##    the tier's MAX_STATES and with the tier's top tray use count as the cap. A coloring is
-##    kept if the search completes and G1 to G6 hold, and G9 where the tier requires it.
-##    Between tries the coloring pressure goes up when a level came out too easy and down when
-##    it came out too hard; a G9 failure leaves it alone (GDD 6.4.1).
+##    the tier's MAX_STATES and with the top of its tray use range as the cap (the range widened
+##    for its peak, see spec_for). A coloring is kept if the search completes, G1 to G6 hold,
+##    G10 holds (peak_holds, right after the search) and G9 where the tier requires it.
+##    Between tries the coloring pressure goes up when a level came out too easy (or its peak
+##    too low) and down when it came out too hard; a G9 failure leaves it alone (GDD 6.4.1).
 ## 4. If no try is kept after MAX_ATTEMPTS tries or LEVEL_STATES states in all (G9_BUDGET times
-##    as many on a tier that requires G9), a stored fallback level for the tier (exempt from
-##    G7; see _fall_back).
+##    as many on a tier that requires G9 or a peak), a stored fallback level for the tier
+##    (exempt from G7; see _fall_back).
 ##
 ## Every number here counts toward GENERATOR_VERSION: changing one changes levels.
 
-const GENERATOR_VERSION := 5
+const GENERATOR_VERSION := 6
 ## Seed purposes for Seeds.derive.
-const DEAL := 11
 const VARY := 12
 const COLOR := 13
 const TIER := 14
@@ -36,6 +37,10 @@ const SCHEDULE := 17
 const RELABEL := 18
 ## Length of a Relaxed band's schedule, in levels.
 const RELAXED_SCHEDULE := 60
+## Length of the repeating part of the numbered levels' schedule (see numbered_schedule), a
+## multiple of 5, the sawtooth's period.
+const NUMBERED_PERIOD := 60
+const NUMBERED_ORDER := 19
 const FALLBACK_STREAM := 0x66616C6C
 const VARIATIONS := 12
 const COLORINGS := 5
@@ -57,6 +62,11 @@ const LATE_TRAY_TIERS: Array[int] = []
 const SURVIVAL_DIVISOR := 3
 const LATE_TRAY_PART := 3
 const G9_BUDGET := 2
+## A tier that requires G9a and a peak (7 and 8) together gets this many times the base budget:
+## the novice, which must lose yet survive a third of the screws, turns down most colorings
+## there. Measured on version 6, levels 50 to 99 fell back 10 percent of the time with twice
+## the budget and 2 percent with three times.
+const HARD_BUDGET := 3
 ## In _closeness, holding G9 outranks any tray use count.
 const G9_RANK := 100
 ## Coloring pressure to start with, per tier (index tier - 1), and the most it goes to (see
@@ -86,6 +96,9 @@ class Plan extends RefCounted:
 	var seed_value: int
 	## Index into LevelCatalog.blueprints, or -1 if no blueprint suits the tier.
 	var blueprint: int = -1
+	## The level's tray slots and the least peak tray load G10 asks for (from its tier, GDD 6.8).
+	var tray: int = 5
+	var peak: int = 0
 
 
 ## How a board was varied.
@@ -150,6 +163,13 @@ static func plan_for(kind: int, number: int, band: String) -> Plan:
 			plan.group = Tuning.tier(plan.tier).group
 			plan.slack = Tuning.slack_for_level(number)
 			plan.seed_value = Seeds.numbered(number)
+	var spec := Tuning.tier(plan.tier)
+	plan.tray = spec.tray
+	plan.peak = spec.peak.x
+	if plan.kind == LevelData.RELAXED and Tuning.relaxed_tray > 0:
+		# Relaxed can't be lost, so a larger tray of its own only makes it kinder; it keeps its
+		# tier's peak.
+		plan.tray = Tuning.relaxed_tray
 	plan.blueprint = blueprint_for(plan.kind, number, plan.band)
 	return plan
 
@@ -229,20 +249,59 @@ static func relaxed_schedule(band: String) -> Array:
 	return [PackedInt32Array(), PackedInt32Array()]
 
 
-## G7 as a pure function of (kind, number, version), with no other level generated.
-##
-## Numbered levels from the first after the tutorial run in blocks of
-## R = Tuning.recent_blueprints_excluded (5) levels. LevelCatalog
-## splits the blueprints into two halves that each hold some of every tier's blueprints;
-## even blocks deal from one half and odd blocks from the other. Within a block the deal gives
-## each level a different blueprint that suits its tier (a seeded matching). So any R + 1 levels
-## in a row span at most two blocks: within a block they differ, and two neighboring blocks
-## draw from different halves. Hence no blueprint repeats within R levels.
-##
-## The daily walks one seeded order of LevelCatalog.daily_pool, one per day, so it repeats only
-## after that many days, which needs a pool of at least R + 1. Each Relaxed band follows its
-## schedule (relaxed_schedule), which holds G7 by construction, wrap included. The tests check
-## both with the shipped data.
+## The numbered levels' blueprints, built once by LevelCatalog.load_all(): [first level, first
+## level of the repeating part, blueprints], blueprints[i] for level first + i. From the
+## repeating part on (the level from which the sawtooth's tiers repeat every 5) the list
+## repeats every NUMBERED_PERIOD levels. Built like a Relaxed band's schedule: walking the
+## levels in order, each takes the blueprint suiting its tier that the walk has used least and
+## that is not among the last R (a seeded tie break); the walk is kept only if it also holds G7
+## where the repeating part wraps round, else the next seed is tried. Empty if no seed works.
+static func numbered_schedule() -> Array:
+	var r := maxi(Tuning.recent_blueprints_excluded, 1)
+	var first := Tuning.tutorial_levels + 1
+	var periodic := maxi(first, int(Tuning.sawtooth_ranges[-1][0]) if not Tuning.sawtooth_ranges.is_empty() else Tuning.sawtooth_bases[-1].x)
+	var length := periodic - first + NUMBERED_PERIOD
+	for attempt: int in 64:
+		var rng := RandomNumberGenerator.new()
+		rng.seed = Seeds.derive(Seeds.mix(Seeds.NUMBERED, GENERATOR_VERSION), NUMBERED_ORDER, attempt)
+		var blueprints := PackedInt32Array()
+		var use_count := {}
+		var ok := true
+		for i: int in length:
+			var best := -1
+			var best_key := 0
+			for b: int in LevelCatalog.suits[Tuning.tier_for_level(first + i) - 1]:
+				var recent := false
+				for k: int in range(maxi(0, i - r), i):
+					recent = recent or blueprints[k] == b
+				if recent:
+					continue
+				var key: int = int(use_count.get(b, 0)) * 1000000 + rng.randi_range(0, 999999)
+				if best < 0 or key < best_key:
+					best = b
+					best_key = key
+			if best < 0:
+				ok = false
+				break
+			blueprints.append(best)
+			use_count[best] = int(use_count.get(best, 0)) + 1
+		# Where the repeating part starts over after its last level.
+		var from := periodic - first
+		for i: int in range(maxi(from, length - r), length):
+			for k: int in range(1, r + 1):
+				if ok and i + k >= length:
+					ok = blueprints[i] != blueprints[from + i + k - length]
+		if ok:
+			return [first, periodic, blueprints]
+	return [first, periodic, PackedInt32Array()]
+
+
+## G7 as a pure function of (kind, number, version), with no other level generated: numbered
+## levels follow numbered_schedule, the daily walks one seeded order of
+## LevelCatalog.daily_pool, one per day, so it repeats only after that many days (which needs
+## a pool of at least R + 1), and each Relaxed band follows its schedule (relaxed_schedule).
+## The schedules hold G7 by construction, wraps included; the tests check all three with the
+## shipped data.
 static func blueprint_for(kind: int, number: int, band: String) -> int:
 	if kind == LevelData.DAILY:
 		var list := LevelCatalog.daily_pool
@@ -258,77 +317,13 @@ static func blueprint_for(kind: int, number: int, band: String) -> int:
 			return -1
 		var blueprints: PackedInt32Array = schedule[0]
 		return blueprints[posmod(number, blueprints.size())]
-	var first := Tuning.tutorial_levels + 1
-	return _stream_pick(Seeds.mix(Seeds.NUMBERED, GENERATOR_VERSION), maxi(number - first, 0), func(i: int) -> int: return Tuning.tier_for_level(first + i))
-
-
-static func _stream_pick(stream: int, i: int, tier_of: Callable) -> int:
-	var r := maxi(Tuning.recent_blueprints_excluded, 1)
-	@warning_ignore("integer_division")
-	var block := i / r
-	var tiers := PackedInt32Array()
-	for p: int in r:
-		tiers.append(tier_of.call(block * r + p))
-	var picks := deal(LevelCatalog.halves[block % 2], tiers, Seeds.derive(stream, DEAL, block))
-	return picks[i % r]
-
-
-## A different blueprint for each position, each suiting that position's tier, all from the
-## given half, in a seeded order. A position the half cannot serve takes any blueprint that
-## suits its tier (tests check this never happens with the shipped data).
-static func deal(half: PackedInt32Array, tiers: PackedInt32Array, seed_value: int) -> PackedInt32Array:
-	var count := tiers.size()
-	var candidates: Array[PackedInt32Array] = []
-	for p: int in count:
-		var list := PackedInt32Array()
-		for b: int in LevelCatalog.suits[tiers[p] - 1]:
-			if half.has(b):
-				list.append(b)
-		candidates.append(_shuffled(list, Seeds.derive(seed_value, p, 1)))
-	var picks := _assign(candidates)
-	for p: int in count:
-		if picks[p] < 0:
-			var all := LevelCatalog.suits[tiers[p] - 1]
-			picks[p] = all[Seeds.derive(seed_value, p, 2) % all.size()] if not all.is_empty() else -1
-	return picks
-
-
-## A different blueprint for each position from its candidate list (earlier candidates
-## first), most constrained positions first. Positions it cannot fill are -1.
-static func _assign(candidates: Array[PackedInt32Array]) -> PackedInt32Array:
-	var count := candidates.size()
-	var order: Array[int] = []
-	for p: int in count:
-		order.append(p)
-	order.sort_custom(func(a: int, b: int) -> bool:
-		return candidates[a].size() < candidates[b].size() if candidates[a].size() != candidates[b].size() else a < b)
-	var picks := PackedInt32Array()
-	picks.resize(count)
-	picks.fill(-1)
-	if not _match(order, 0, candidates, picks):
-		picks.fill(-1)
-		var used := PackedInt32Array()
-		for p: int in order:
-			for b: int in candidates[p]:
-				if not used.has(b):
-					picks[p] = b
-					used.append(b)
-					break
-	return picks
-
-
-static func _match(order: Array[int], k: int, candidates: Array[PackedInt32Array], picks: PackedInt32Array) -> bool:
-	if k == order.size():
-		return true
-	var p := order[k]
-	for b: int in candidates[p]:
-		if picks.has(b):
-			continue
-		picks[p] = b
-		if _match(order, k + 1, candidates, picks):
-			return true
-		picks[p] = -1
-	return false
+	var numbered := LevelCatalog.numbered_schedule
+	if numbered.is_empty() or (numbered[2] as PackedInt32Array).is_empty():
+		return -1
+	var first: int = numbered[0]
+	var periodic: int = numbered[1]
+	var n := maxi(number, first)
+	return (numbered[2] as PackedInt32Array)[n - first if n < periodic else periodic - first + posmod(n - periodic, NUMBERED_PERIOD)]
 
 
 static func _shuffled(list: PackedInt32Array, seed_value: int) -> PackedInt32Array:
@@ -365,9 +360,82 @@ static func g9_holds(tier: int, level: LevelData, r: SolveResult) -> bool:
 	return (not SURVIVAL_TIERS.has(tier) or survives(level, r)) and (not LATE_TRAY_TIERS.has(tier) or late_tray(level, r))
 
 
-## How many times the base budget (VARIATIONS, MAX_ATTEMPTS, LEVEL_STATES) a tier gets.
+## How many times the base budget (VARIATIONS, MAX_ATTEMPTS, LEVEL_STATES) a tier gets: G9_BUDGET
+## on a tier that requires G9 or a peak (G10), HARD_BUDGET on one that requires both G9a and a
+## peak.
 static func budget_scale(tier: int) -> int:
-	return G9_BUDGET if SURVIVAL_TIERS.has(tier) or LATE_TRAY_TIERS.has(tier) else 1
+	var peak := Tuning.tier(tier).peak.x >= 1
+	if SURVIVAL_TIERS.has(tier) and peak:
+		return HARD_BUDGET
+	return G9_BUDGET if SURVIVAL_TIERS.has(tier) or LATE_TRAY_TIERS.has(tier) or peak else 1
+
+
+## The tier row a plan works with: its tier's, with the fewest tray use range widened to
+## [max(low, P), max(high, P + 1)] for its least peak P (a peak of P needs at least P tray uses,
+## and one more leaves room above the least).
+static func spec_for(plan: Plan) -> Tuning.TierSpec:
+	var base := Tuning.tier(plan.tier)
+	var spec := Tuning.TierSpec.new()
+	spec.tier = base.tier
+	spec.group = base.group
+	spec.screws = base.screws
+	spec.colors = base.colors
+	spec.layers = base.layers
+	spec.novice = base.novice
+	spec.covered_pct = base.covered_pct
+	spec.tray = plan.tray
+	spec.peak = base.peak
+	spec.tray_uses = base.tray_uses if plan.peak <= 0 else Vector2i(maxi(base.tray_uses.x, plan.peak), maxi(base.tray_uses.y, plan.peak + 1))
+	return spec
+
+
+## G10 (GDD 6.8): every solution holds at least `peak` screws in the tray at once. r is the
+## level's fewest tray use solve. G10a: its own peak (r.peak_tray) reaches `peak`, a replay. G10b,
+## for a peak of 2 or more: no solution exists with a tray of peak - 1 slots. (A solution whose
+## most crowded moment holds L screws fits a tray of L slots, and a tray of L slots holds no
+## more, so the least peak over every solution is the smallest tray that still has one.) A
+## peak of 1 needs nothing more: r has a tray use, so every solution does. 1 holds, 0 does not,
+## -1 the search stopped at max_states.
+static func peak_holds(level: LevelData, r: SolveResult, peak: int, max_states: int) -> int:
+	return _peak_check(level, r, peak, max_states).x
+
+
+## peak_holds, and the states G10b searched: Vector2i(answer, states), so _try can count them
+## toward the level's state budget.
+static func _peak_check(level: LevelData, r: SolveResult, peak: int, max_states: int) -> Vector2i:
+	if peak <= 0:
+		return Vector2i(1, 0)
+	if r.peak_tray < peak:
+		return Vector2i(0, 0)
+	if peak == 1:
+		return Vector2i(1, 0)
+	var small := Solver.search_only(with_tray(level, peak - 1), max_states)
+	return Vector2i(0 if small.solved else (1 if small.complete else -1), small.states)
+
+
+## The least peak tray load over every solution of a solved level: the smallest tray, from
+## `from` up to the solution's own peak, that still has a solution. -1 if a search stopped at
+## max_states. For tools and tests (one search per tray size tried).
+static func least_peak(level: LevelData, r: SolveResult, from: int, max_states: int) -> int:
+	for slots: int in range(maxi(from, 0), r.peak_tray):
+		if slots == 0:
+			# No tray at all: a solution exists exactly when one needs no tray use.
+			if r.fewest_tray_uses == 0:
+				return 0
+			continue
+		var s := Solver.search_only(with_tray(level, slots), max_states)
+		if not s.complete:
+			return -1
+		if s.solved:
+			return slots
+	return r.peak_tray
+
+
+## The same level with a tray of this many slots, 1 to LevelData.MAX_TRAY (for G10's searches
+## and the tools).
+static func with_tray(level: LevelData, slots: int) -> LevelData:
+	var errors := PackedStringArray()
+	return level.with_colors(level.screw_colors, level.queue, errors, {"tray": slots})
 
 
 ## G4: the novice result is the one the tier wants.
@@ -389,14 +457,19 @@ static func _closeness(plan: Plan, spec: Tuning.TierSpec, level: LevelData, r: S
 ## try that came nearest the tier (see _closeness), as a last resort.
 static func _try(plan: Plan, out: GeneratedLevel, max_attempts: int = -1) -> void:
 	var bp := LevelCatalog.blueprints[plan.blueprint]
-	var spec := Tuning.tier(plan.tier)
+	var spec := spec_for(plan)
 	var budget: int = MAX_STATES[plan.tier - 1]
 	var scale := budget_scale(plan.tier)
 	var variations := VARIATIONS * scale
 	var level_states := LEVEL_STATES * scale
 	if max_attempts < 0:
 		max_attempts = MAX_ATTEMPTS * scale
-	var pressure: int = START_PRESSURE[plan.tier - 1]
+	# A deep opening's depth (an even pressure) sets about how many screws must wait at once, so a
+	# peak of 2 or more starts at the smallest even pressure of at least the peak.
+	var start: int = START_PRESSURE[plan.tier - 1]
+	if plan.peak >= 2:
+		start = maxi(start, mini(MAX_PRESSURE, plan.peak + plan.peak % 2))
+	var pressure := start
 	var closest_score := -1
 	for v: int in variations:
 		if out.attempts >= max_attempts:
@@ -404,7 +477,7 @@ static func _try(plan: Plan, out: GeneratedLevel, max_attempts: int = -1) -> voi
 		var rng := RandomNumberGenerator.new()
 		rng.seed = Seeds.derive(plan.seed_value, VARY, v)
 		var va := _choose_variation(bp, spec, rng, v)
-		var board := _vary(bp, va)
+		var board := _vary(bp, va, plan.tray)
 		if not _fits_tier(board, spec) or not BlueprintValidator.check(board).is_empty():
 			out.attempts += 1
 			out.rejected_boards += 1
@@ -431,7 +504,7 @@ static func _try(plan: Plan, out: GeneratedLevel, max_attempts: int = -1) -> voi
 				if spec.novice == Tuning.NOVICE_WIN:
 					pressure = maxi(0, pressure - 1)
 				else:
-					pressure = _harder(pressure, plan.tier, spec)
+					pressure = _harder(pressure, start, spec)
 				continue
 			if SURVIVAL_TIERS.has(plan.tier) and not survives(level, novice):
 				out.short_survival += 1
@@ -457,7 +530,19 @@ static func _try(plan: Plan, out: GeneratedLevel, max_attempts: int = -1) -> voi
 			# G3.
 			if r.fewest_tray_uses < spec.tray_uses.x:
 				out.too_easy += 1
-				pressure = _harder(pressure, plan.tier, spec)
+				pressure = _harder(pressure, start, spec)
+				continue
+			# G10, right after the search: the replay (G10a), then the search at peak - 1 slots
+			# (G10b). A peak too low raises the pressure, like a too easy coloring.
+			var check := _peak_check(level, r, plan.peak, budget)
+			out.total_states += check.y
+			var peak := check.x
+			if peak == 0:
+				out.low_peak += 1
+				pressure = _harder(pressure, start, spec)
+				continue
+			if peak < 0:
+				out.peak_unknown += 1
 				continue
 			# G9b needs the solution.
 			if LATE_TRAY_TIERS.has(plan.tier) and not late_tray(level, r):
@@ -474,10 +559,10 @@ static func _try(plan: Plan, out: GeneratedLevel, max_attempts: int = -1) -> voi
 
 ## The next pressure after a try came out too easy. Tiers that need two or more tray uses
 ## only get them from deep openings (even levels, see _color), so they step by two. After the
-## top it starts over at the tier's first level.
-static func _harder(pressure: int, tier: int, spec: Tuning.TierSpec) -> int:
+## top it starts over at the level's first pressure, start.
+static func _harder(pressure: int, start: int, spec: Tuning.TierSpec) -> int:
 	var step := 2 if spec.tray_uses.x >= 2 else 1
-	return pressure + step if pressure + step <= MAX_PRESSURE else START_PRESSURE[tier - 1]
+	return pressure + step if pressure + step <= MAX_PRESSURE else start
 
 
 static func _choose_variation(bp: LevelData, spec: Tuning.TierSpec, rng: RandomNumberGenerator, v: int) -> Variation:
@@ -505,7 +590,7 @@ static func _choose_variation(bp: LevelData, spec: Tuning.TierSpec, rng: RandomN
 
 ## The varied board. Layers are renumbered to close a dropped plank's gap, then swapped; the
 ## shift is kept inside the room the board has (B4 and B7).
-static func _vary(bp: LevelData, va: Variation) -> LevelData:
+static func _vary(bp: LevelData, va: Variation, tray: int = 0) -> LevelData:
 	var kept: Array[PlankData] = []
 	for p: int in bp.planks.size():
 		if p != va.drop:
@@ -551,7 +636,7 @@ static func _vary(bp: LevelData, va: Variation) -> LevelData:
 	var planks: Array[PlankData] = []
 	for p: PlankData in kept:
 		planks.append(p.transformed(va.mirror, va.dx, va.dy, layer_map[p.layer]))
-	return LevelData.from_planks(bp.id, bp.name, bp.blueprint_kind, planks)
+	return LevelData.from_planks(bp.id, bp.name, bp.blueprint_kind, planks, tray)
 
 
 ## G1 for the board: screws and layers in the tier's ranges.
@@ -590,7 +675,7 @@ static func _color(board: LevelData, spec: Tuning.TierSpec, pressure: int, rng: 
 	if pressure >= 2 and pressure % 2 == 0:
 		color = _deep_opening(g, queue, pressure, rng)
 	if color.is_empty():
-		color = _planned(g, queue, pressure, rng)
+		color = _planned(g, queue, pressure, rng, board.tray_size)
 	if color.is_empty():
 		return null
 	# G5: some screw free at the start fits an open box.
@@ -631,7 +716,7 @@ static func _removal_order(g: BoardGeometry, rng: RandomNumberGenerator, free_at
 
 
 ## The planned solution (see _color). Empty if it cannot be built.
-static func _planned(g: BoardGeometry, queue: PackedInt32Array, trays: int, rng: RandomNumberGenerator) -> PackedInt32Array:
+static func _planned(g: BoardGeometry, queue: PackedInt32Array, trays: int, rng: RandomNumberGenerator, tray: int = 5) -> PackedInt32Array:
 	var n := g.screw_count
 	var boxes := queue.size()
 	var free_at := PackedInt32Array()
@@ -658,7 +743,7 @@ static func _planned(g: BoardGeometry, queue: PackedInt32Array, trays: int, rng:
 			if free_at[t] == i + 1:
 				key = true
 		var target := -1
-		if key and trayed < trays and waiting < Tuning.tray_size - 1 and i > 0:
+		if key and trayed < trays and waiting < tray - 1 and i > 0:
 			var options := PackedInt32Array()
 			for j: int in range(next + 1, boxes):
 				if room[j] == 0 or options.size() >= 3:
@@ -843,6 +928,8 @@ static func build_fallback(tier: int, count: int, max_attempts: int) -> Array[Ge
 		plan.slack = 0
 		plan.seed_value = Seeds.derive(stream, tier, k)
 		plan.blueprint = b
+		plan.tray = Tuning.tier(tier).tray
+		plan.peak = Tuning.tier(tier).peak.x
 		var g := GeneratedLevel.new()
 		_try(plan, g, max_attempts)
 		if g.level == null:
@@ -878,6 +965,11 @@ static func _fall_back(plan: Plan, out: GeneratedLevel) -> void:
 		return
 	var stored: GeneratedLevel = LevelCatalog.fallback[pool_tier - 1][stored_pick(plan.kind, plan.number, plan.band, {})]
 	var level := relabeled(stored.level, Seeds.derive(plan.seed_value, RELABEL, 0))
+	# A stored level keeps the tray it was made for, but grows to the plan's when that is larger
+	# (Relaxed has 5 slots of its own): more slots never make a solved level unsolvable, and its
+	# stored solution replays as before (its fewest tray uses is then only an upper bound).
+	if plan.tray > level.tray_size:
+		level = with_tray(level, plan.tray)
 	var fallback_plan := Plan.new()
 	fallback_plan.kind = plan.kind
 	fallback_plan.number = plan.number

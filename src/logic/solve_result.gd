@@ -29,6 +29,10 @@ var novice_taps: int = 0
 ## count, of its last tap that sends a screw to the tray. 0 if it makes none or nothing was
 ## solved.
 var last_tray_use: int = 0
+## The most screws in the tray at once along the solution (after each tap's jumps into arriving
+## boxes); 0 if nothing was solved. G10a reads it. The least peak over every solution can be
+## lower: see Generator.peak_holds.
+var peak_tray: int = 0
 ## The trap measure: the share of careless playouts that lose (see Solver).
 var trap: float = 0.0
 ## Wall-clock milliseconds, for reports only. Nothing may depend on it.

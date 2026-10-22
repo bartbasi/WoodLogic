@@ -148,6 +148,9 @@ func test_g1_to_g6_hold_and_every_level_is_solved() -> void:
 			check(not r.novice_won, "%s: G4, the novice must lose" % where)
 		# G9 where the tier requires it.
 		check(Generator.g9_holds(level.tier, level, r), "%s: G9 (novice taps %d of %d)" % [where, r.novice_taps, n])
+		# G10 and the level's own tray (GDD 6.8).
+		check_eq(level.tray_size, plan.tray, "%s: the tier's tray" % where)
+		check_eq(Generator.peak_holds(level, r, plan.peak, 400000), 1, "%s: G10, every solution holds at least %d in the tray at once" % [where, plan.peak])
 	print("        %d levels made, %d from a fallback" % [requests.size(), fell])
 
 
@@ -159,13 +162,16 @@ func test_g9a_survival_needed_follows_the_gdd_table() -> void:
 	check_eq(str(Generator.SURVIVAL_TIERS), "[7, 8]", "G9a is required on tiers 7 and 8 (GDD 6.4.1 as proposed)")
 	check(Generator.LATE_TRAY_TIERS.is_empty(), "G9b is reported only")
 	for t: int in range(1, 11):
-		check_eq(Generator.budget_scale(t), 2 if t == 7 or t == 8 else 1, "tier %d budget scale" % t)
+		var peak := Tuning.tier(t).peak.x >= 1
+		var survival := t == 7 or t == 8
+		var expected := 3 if survival and peak else (2 if survival or peak else 1)
+		check_eq(Generator.budget_scale(t), expected, "tier %d budget scale (G9 or a peak doubles it, both triple it)" % t)
 
 
 func test_g9a_tier_7_and_8_levels_let_the_novice_survive_a_third() -> void:
 	_ready_catalog()
 	var requests: Array[Array] = []
-	for n: int in range(111, 200):
+	for n: int in range(50, 100):
 		var t := Tuning.tier_for_level(n)
 		if Generator.SURVIVAL_TIERS.has(t) and requests.size() < 10:
 			requests.append([LevelData.NUMBERED, n, ""])
@@ -270,6 +276,62 @@ func test_4_1_generated_levels_read_back_from_json_with_the_same_fingerprint_and
 	print("        %d levels read back from JSON" % made.size())
 
 
+func test_6_8_plans_take_their_tiers_tray_and_peak() -> void:
+	_ready_catalog()
+	for n: int in range(FIRST, 401):
+		var plan := Generator.plan_for(LevelData.NUMBERED, n, "")
+		var spec := Tuning.tier(plan.tier)
+		if plan.tray != spec.tray or plan.peak != spec.peak.x:
+			check(false, "level %d: tray %d peak %d, the tier says %d and %d" % [n, plan.tray, plan.peak, spec.tray, spec.peak.x])
+	var daily := Generator.plan_for(LevelData.DAILY, 20261022, "")
+	check_eq([daily.tray, daily.peak], [Tuning.tier(Tuning.daily_tier).tray, Tuning.tier(Tuning.daily_tier).peak.x], "the daily takes its tier's tray and peak")
+	for band: String in Tuning.BANDS:
+		var relaxed := Generator.plan_for(LevelData.RELAXED, 4, band)
+		var tray: int = Tuning.relaxed_tray if Tuning.relaxed_tray > 0 else Tuning.tier(relaxed.tier).tray
+		check_eq([relaxed.tray, relaxed.peak], [tray, Tuning.tier(relaxed.tier).peak.x], "Relaxed %s: its own tray when the tuning has one, its tier's peak" % band)
+	for n: int in range(1, Tuning.tutorial_levels + 1):
+		check_eq(LevelCatalog.get_level(LevelData.NUMBERED, n, "").level.tray_size, 5, "tutorial level %d has 5 slots" % n)
+	# The widened range: a peak of p needs at least p tray uses, and one more is allowed.
+	var plan := Generator.plan_for(LevelData.NUMBERED, 104, "")
+	var widened := Generator.spec_for(plan)
+	check(widened.tray_uses.x >= plan.peak and widened.tray_uses.y >= plan.peak + 1, "level 104: tray uses %s for a peak of %d" % [widened.tray_uses, plan.peak])
+
+
+func test_6_8_a_stored_level_grows_to_a_larger_tray_but_never_shrinks() -> void:
+	_ready_catalog()
+	# Relaxed has 5 slots of its own; a stored hard level was made for 3. Handed out in Relaxed it
+	# gets 5, and its stored solution still wins. Numbered levels keep their tier's tray.
+	for i: int in 6:
+		var plan := Generator.plan_for(LevelData.RELAXED, i, "hard")
+		var g := GeneratedLevel.new()
+		Generator._fall_back(plan, g)
+		check_eq(g.level.tray_size, maxi(plan.tray, Tuning.tier(g.level.tier).tray), "Relaxed hard %d: the larger tray" % i)
+		check_eq(_replay(g.level, g.solve.solution) >= 0, true, "Relaxed hard %d: the stored solution still wins" % i)
+	for n: int in [52, 57, 104]:
+		var g := GeneratedLevel.new()
+		Generator._fall_back(Generator.plan_for(LevelData.NUMBERED, n, ""), g)
+		check_eq(g.level.tray_size, Tuning.tier(Tuning.tier_for_level(n)).tray, "level %d: its tier's tray" % n)
+
+
+func test_6_8_skipped_boards_are_never_dealt_on_their_tier() -> void:
+	_ready_catalog()
+	for t: int in range(1, 11):
+		for id: String in Tuning.tier(t).skip:
+			var b := LevelCatalog.blueprint_index(id)
+			check(b >= 0, "tier %d skips %s, a blueprint" % [t, id])
+			check(not LevelCatalog.suits[t - 1].has(b), "tier %d does not suit %s" % [t, id])
+	var bad := 0
+	for n: int in range(FIRST, 2000):
+		var t := Tuning.tier_for_level(n)
+		if Tuning.tier(t).skip.has(LevelCatalog.blueprints[Generator.blueprint_for(LevelData.NUMBERED, n, "")].id):
+			bad += 1
+	check_eq(bad, 0, "numbered levels 9 to 1999 dealt a board their tier skips")
+	for band: String in Tuning.BANDS:
+		for i: int in 120:
+			var t := Generator.relaxed_tier(band, i)
+			check(not Tuning.tier(t).skip.has(LevelCatalog.blueprints[Generator.blueprint_for(LevelData.RELAXED, i, band)].id), "Relaxed %s %d" % [band, i])
+
+
 func test_same_seed_same_level() -> void:
 	_ready_catalog()
 	for req: Array in [[LevelData.NUMBERED, 9, ""], [LevelData.NUMBERED, 25, ""], [LevelData.NUMBERED, 60, ""], [LevelData.DAILY, 20261019, ""], [LevelData.RELAXED, 11, "hard"]]:
@@ -298,6 +360,10 @@ func test_fallback_files_hold_good_levels_for_every_tier() -> void:
 			check_eq(r.novice_won, stored.solve.novice_won, "%s: the stored novice result" % level.id)
 			check_eq(r.novice_taps, stored.solve.novice_taps, "%s: the stored novice taps" % level.id)
 			check_eq(_last_tray_tap(level, stored.solve.solution), stored.solve.last_tray_use, "%s: the stored last tray use" % level.id)
+			# GDD 6.8: the tier's tray, and G10 for the tier's least peak.
+			check_eq(level.tray_size, Tuning.tier(t).tray, "%s: the tier's tray" % level.id)
+			check_eq(r.peak_tray, stored.solve.peak_tray, "%s: the stored solution's peak" % level.id)
+			check_eq(Generator.peak_holds(level, stored.solve, Tuning.tier(t).peak.x, 400000), 1, "%s: G10 for tier %d" % [level.id, t])
 			# GDD 6.4.1: the stored levels of tiers that require G9 hold it too.
 			check(Generator.g9_holds(t, level, stored.solve), "%s: G9 as tier %d requires it (novice taps %d of %d, last tray use %d)" % [level.id, t, stored.solve.novice_taps, level.screw_count(), stored.solve.last_tray_use])
 
@@ -394,17 +460,24 @@ func test_6_4_1_no_two_levels_within_5_hand_out_the_same_stored_level() -> void:
 	check_eq(too_close, 0, "picks nearer their blueprint than the pool allows")
 
 
-func test_deal_gives_distinct_blueprints_from_one_half() -> void:
+func test_g7_numbered_schedule_repeats_its_period_without_a_repeat_at_the_wrap() -> void:
 	_ready_catalog()
-	for block: int in 400:
-		var tiers := PackedInt32Array()
-		for p: int in Tuning.recent_blueprints_excluded:
-			tiers.append(Tuning.tier_for_level(FIRST + block * Tuning.recent_blueprints_excluded + p))
-		var half := LevelCatalog.halves[block % 2]
-		var picks := Generator.deal(half, tiers, block)
-		for p: int in picks.size():
-			check(half.has(picks[p]), "block %d: pick %d comes from its half" % [block, p])
-			check_eq(picks.count(picks[p]), 1, "block %d: pick %d is not repeated" % [block, p])
+	var schedule := LevelCatalog.numbered_schedule
+	var first: int = schedule[0]
+	var periodic: int = schedule[1]
+	var boards: PackedInt32Array = schedule[2]
+	check_eq(first, Tuning.tutorial_levels + 1, "it starts after the tutorial")
+	check_eq(boards.size(), periodic - first + Generator.NUMBERED_PERIOD, "the levels up to the repeating part, and one period")
+	for n: int in range(periodic, periodic + 3 * Generator.NUMBERED_PERIOD):
+		check_eq(Generator.blueprint_for(LevelData.NUMBERED, n, ""), Generator.blueprint_for(LevelData.NUMBERED, n + Generator.NUMBERED_PERIOD, ""), "level %d and one period later" % n)
+		check_eq(Tuning.tier_for_level(n), Tuning.tier_for_level(n + Generator.NUMBERED_PERIOD), "the same tier one period later (%d)" % n)
+	# Every blueprint that suits a tier from the repeating part on gets used there.
+	var used := {}
+	for n: int in range(periodic, periodic + Generator.NUMBERED_PERIOD):
+		used[Generator.blueprint_for(LevelData.NUMBERED, n, "")] = true
+	for t: int in [Tuning.tier_for_level(periodic), Tuning.tier_for_level(periodic + 1)]:
+		for b: int in LevelCatalog.suits[t - 1]:
+			check(used.has(b), "%s (tier %d) is dealt in the repeating part" % [LevelCatalog.blueprints[b].id, t])
 
 
 func _replay(level: LevelData, solution: PackedInt32Array) -> int:

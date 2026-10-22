@@ -17,9 +17,7 @@ func test_load_all_reads_tuning_blueprints_tutorials_and_fallbacks() -> void:
 		check(LevelCatalog.blueprints[i - 1].id < LevelCatalog.blueprints[i].id, "blueprints sorted by id")
 	check_eq(LevelCatalog.tutorials.size(), Tuning.tutorial_levels, "every tutorial level")
 	check_eq(LevelCatalog.fallback.size(), Tuning.tiers.size(), "a fallback list per tier")
-	check_eq(LevelCatalog.halves.size(), 2, "two halves")
-	var both := LevelCatalog.halves[0].size() + LevelCatalog.halves[1].size()
-	check_eq(both, LevelCatalog.blueprints.size(), "every blueprint in one half")
+	check(not (LevelCatalog.numbered_schedule[2] as PackedInt32Array).is_empty(), "a schedule for the numbered levels")
 	check(LevelCatalog.load_all(), "a second call does nothing and is fine")
 
 
@@ -30,12 +28,7 @@ func test_suits_need_screws_layers_and_enough_cover_for_tray_tiers() -> void:
 	check(not LevelCatalog.suits[3].has(robot), "robot (nothing covered) does not suit tier 4, which needs the tray")
 	check(LevelCatalog.suits[4].has(bricks), "bricks (12 covered) suits tier 5")
 	for t: int in Tuning.tiers.size():
-		for h: int in 2:
-			var count := 0
-			for b: int in LevelCatalog.suits[t]:
-				if LevelCatalog.halves[h].has(b):
-					count += 1
-			check(count >= 1, "tier %d has a blueprint in half %d" % [t + 1, h])
+		check(LevelCatalog.suits[t].size() > Tuning.recent_blueprints_excluded, "tier %d has more blueprints than G7 looks back (%d)" % [t + 1, LevelCatalog.suits[t].size()])
 
 
 func test_get_level_serves_the_tutorial_for_levels_1_to_8() -> void:
