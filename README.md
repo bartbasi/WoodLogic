@@ -82,3 +82,19 @@ saved table:
 ```bash
 C:/Android/Sdk/platform-tools/adb.exe shell run-as io.github.bartbasi.woodlogic.timing cat files/timing.txt
 ```
+
+## Releasing
+
+The first public release is version 1.0.0 (code 1). The full steps, the Play Console checklist and
+the privacy policy address are in [docs/release.md](docs/release.md). In short:
+
+```bash
+bash tools/build/android-release.sh      # build/woodlogic.aab (Google Play) and build/woodlogic.apk (GitHub)
+bash tools/build/make_store_graphics.sh  # build/store/: icon, feature graphic and phone screenshots
+```
+
+The release script stops with a message until the release key exists. The key lives outside the
+repo, is made only when Bart says so, and must be backed up (docs/release.md, section 1). The
+script refuses a build that is debuggable, asks for any permission, or ships tests, tools or docs.
+The store text is in [docs/store/listing.md](docs/store/listing.md), and the privacy policy in
+[docs/store/privacy-policy.md](docs/store/privacy-policy.md).

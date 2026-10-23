@@ -1,0 +1,53 @@
+# WoodLogic. Copyright 2026 Play, Inc.
+# Free software under the GNU GPL v3 with additional terms: see LICENSE and NOTICE.
+# Publishes docs/store (the privacy policy and a short index) to GitHub Pages at
+# https://bartbasi.github.io/WoodLogic/ whenever it changes on main. Nothing else in the
+# repo is published. Each job gets only the permissions it needs.
+name: Pages
+
+on:
+  push:
+    branches: [main]
+    paths: ["docs/store/**", ".github/workflows/pages.yml"]
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      # actions/checkout v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          sparse-checkout: docs/store
+          persist-credentials: false
+      # No configure-pages step: it calls the Pages API, which needs more than contents: read, and
+      # this plain Jekyll build and the upload and deploy steps do not need what it returns.
+      # actions/jekyll-build-pages v1
+      - uses: actions/jekyll-build-pages@44a6e6beabd48582f863aeeb6cb2151cc1716697
+        with:
+          source: ./docs/store
+          destination: ./_site
+      # actions/upload-pages-artifact v3
+      - uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      # actions/deploy-pages v4
+      - id: deployment
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e

@@ -1,0 +1,8 @@
+# WoodLogic. Copyright 2026 Play, Inc.
+# The GitHub Pages site (https://bartbasi.github.io/WoodLogic/): only the privacy policy and a
+# short index, built from this folder by .github/workflows/pages.yml.
+title: WoodLogic
+description: A free screw puzzle by Play, Inc.
+theme: jekyll-theme-primer
+exclude:
+  - listing.md
